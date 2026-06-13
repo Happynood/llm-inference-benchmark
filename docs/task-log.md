@@ -106,3 +106,29 @@
 
 **Next iteration**:
 - `llama-cpp-python` backend (GGUF quantization)
+
+## 2026-06-14 — v0.5: Run manifest and environment fingerprint
+
+**Goal**: Save a JSON manifest per benchmark run for full reproducibility.
+
+**Delivered**:
+- `manifest.py`: `RunManifest` frozen dataclass; `collect_manifest(config_path, cfg)`
+  gathers git commit + dirty flag, SHA256 of config + prompts files, Python version,
+  platform, CPU model/count, and dep versions (package, torch, transformers, psutil);
+  `write_manifest(manifest, path)` writes pretty-printed JSON; all subprocess/import
+  calls are guarded — manifest collection never crashes a benchmark run
+- `cli.py`: `--manifest` option added to `main`; manifest is written after `run_benchmark`
+  completes; CSV output and all existing options remain backward-compatible
+- `tests/test_manifest.py` — 23 new tests covering field types, SHA256 format, ISO
+  timestamp, git state, write output, JSON structure, CLI integration, and backward compat
+- `docs/metrics.md`: "Reproducing a Run" section with field reference table
+- README: manifest demo block + `--manifest` in How-to section; roadmap item checked off
+
+**Quality checks passed**:
+- `uv run pytest -v` — 84/84 tests pass
+- `uv run ruff check .` — no issues
+- `uv run ruff format --check .` — no issues
+- `uv run pyright` — 0 errors
+
+**Next iteration**:
+- `llama-cpp-python` backend (GGUF quantization)

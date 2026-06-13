@@ -113,3 +113,35 @@ Config: `requests=10`, `warmup_requests=2`, `max_new_tokens=50`, `device=cpu`, `
 - p95/p50 spread (~14%) reflects OS scheduling jitter, expected on CPU without process pinning.
 
 Real backend results will be updated here after each new backend lands.
+
+## Reproducing a Run
+
+Pass `--manifest <path>.json` to save a full environment snapshot alongside the CSV:
+
+```bash
+uv run llm-bench --config configs/transformers-cpu.yaml \
+    --output results.csv \
+    --manifest manifest.json
+```
+
+The manifest contains everything needed to reproduce or compare runs:
+
+| Field | Description |
+|-------|-------------|
+| `git_commit` | SHA of HEAD at run time; `null` if not in a git repo |
+| `git_dirty` | `true` if the working tree had uncommitted changes |
+| `config_sha256` | SHA256 of the raw YAML config bytes |
+| `prompts_sha256` | SHA256 of the raw prompts file bytes |
+| `python_version` | Full `sys.version` string |
+| `platform_info` | OS and kernel from `platform.platform()` |
+| `cpu_model` | CPU model name from `/proc/cpuinfo` (Linux) or `platform.processor()` |
+| `cpu_count` | Logical CPU count from `os.cpu_count()` |
+| `package_version` | `llm-inference-benchmark` package version |
+| `torch_version` | `torch` version, or `null` if not installed |
+| `transformers_version` | `transformers` version, or `null` if not installed |
+| `psutil_version` | `psutil` version |
+
+**To verify a reproduced run matches the original**: compare `config_sha256` and
+`prompts_sha256`. If they match, the config and prompts are byte-identical.
+If `git_dirty` was `true` at run time, the working tree had changes not captured
+in `git_commit` — results may not be fully reproducible from that commit alone.

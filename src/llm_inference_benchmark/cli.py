@@ -28,7 +28,19 @@ from llm_inference_benchmark.runner import load_prompts, run_benchmark
     type=click.Path(),
     help="CSV output path (default: stdout summary only)",
 )
-def main(ctx: click.Context, config_path: str | None, output_path: str | None) -> None:
+@click.option(
+    "--manifest",
+    "manifest_path",
+    default=None,
+    type=click.Path(),
+    help="JSON manifest path for environment fingerprint and reproducibility",
+)
+def main(
+    ctx: click.Context,
+    config_path: str | None,
+    output_path: str | None,
+    manifest_path: str | None,
+) -> None:
     """LLM inference benchmark toolkit.
 
     Run without a subcommand to execute a benchmark:
@@ -59,6 +71,13 @@ def main(ctx: click.Context, config_path: str | None, output_path: str | None) -
             writer.writeheader()
             writer.writerow(row)
         click.echo(f"Results written to {output_path}")
+
+    if manifest_path:
+        from llm_inference_benchmark.manifest import collect_manifest, write_manifest
+
+        manifest = collect_manifest(config_path, cfg)
+        write_manifest(manifest, manifest_path)
+        click.echo(f"Manifest written to {manifest_path}")
 
     click.echo("\n=== Benchmark Results ===")
     for k, v in asdict(report).items():
