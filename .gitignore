@@ -18,10 +18,11 @@ htmlcov/
 !.env.sample
 !.env.template
 
-# Project outputs
+# Project outputs — generated artifacts, never commit
 benchmark.csv
 benchmark_*.csv
 benchmark-*.csv
+results/
 
 # Model artifacts (never commit)
 *.gguf
