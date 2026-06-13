@@ -16,6 +16,22 @@ from llm_inference_benchmark.config import BenchmarkConfig
 
 
 @dataclass(frozen=True)
+class GpuInfo:
+    """NVIDIA GPU fingerprint collected from nvidia-smi and torch.cuda.
+
+    All fields are None when the relevant source is unavailable — the manifest
+    is always written successfully even on CPU-only machines.
+    """
+
+    name: str | None
+    driver_version: str | None
+    cuda_version: str | None
+    vram_total_mb: int | None
+    torch_cuda_available: bool | None
+    torch_cuda_device_name: str | None
+
+
+@dataclass(frozen=True)
 class RunManifest:
     timestamp: str
     backend: str
@@ -32,6 +48,7 @@ class RunManifest:
     torch_version: str | None
     transformers_version: str | None
     psutil_version: str | None
+    gpu: GpuInfo | None
 
 
 def collect_manifest(config_path: str | Path, cfg: BenchmarkConfig) -> RunManifest:
@@ -52,6 +69,7 @@ def collect_manifest(config_path: str | Path, cfg: BenchmarkConfig) -> RunManife
         torch_version=_pkg_version("torch"),
         transformers_version=_pkg_version("transformers"),
         psutil_version=_pkg_version("psutil"),
+        gpu=_collect_gpu_info(),
     )
 
 
@@ -115,3 +133,76 @@ def _pkg_version(name: str) -> str | None:
         return version(name)
     except Exception:
         return None
+
+
+def _collect_gpu_info() -> GpuInfo | None:
+    """Try nvidia-smi and torch.cuda; return None when neither is available.
+
+    Takes GPU 0 only when multiple GPUs are present. All subprocess and
+    import calls are guarded — this function never raises.
+    """
+    name: str | None = None
+    driver_version: str | None = None
+    cuda_version: str | None = None
+    vram_total_mb: int | None = None
+    torch_cuda_available: bool | None = None
+    torch_cuda_device_name: str | None = None
+
+    # --- nvidia-smi ---
+    try:
+        r = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=name,driver_version,cuda_version,memory.total",
+                "--format=csv,noheader,nounits",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
+        )
+        if r.returncode == 0 and r.stdout.strip():
+            first_line = r.stdout.strip().splitlines()[0]
+            parts = [p.strip() for p in first_line.split(",")]
+            if len(parts) >= 4:
+                name = parts[0]
+                driver_version = parts[1]
+                cuda_version = parts[2]
+                try:
+                    vram_total_mb = int(parts[3])
+                except ValueError:
+                    pass
+    except Exception:
+        pass
+
+    # --- torch.cuda ---
+    try:
+        import torch  # noqa: PLC0415
+
+        torch_cuda_available = torch.cuda.is_available()
+        if torch_cuda_available:
+            torch_cuda_device_name = torch.cuda.get_device_name(0)
+    except Exception:
+        pass
+
+    # Return None only when we obtained nothing at all.
+    if all(
+        v is None
+        for v in (
+            name,
+            driver_version,
+            cuda_version,
+            vram_total_mb,
+            torch_cuda_available,
+            torch_cuda_device_name,
+        )
+    ):
+        return None
+
+    return GpuInfo(
+        name=name,
+        driver_version=driver_version,
+        cuda_version=cuda_version,
+        vram_total_mb=vram_total_mb,
+        torch_cuda_available=torch_cuda_available,
+        torch_cuda_device_name=torch_cuda_device_name,
+    )

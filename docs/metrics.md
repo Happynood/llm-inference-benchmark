@@ -140,6 +140,16 @@ The manifest contains everything needed to reproduce or compare runs:
 | `torch_version` | `torch` version, or `null` if not installed |
 | `transformers_version` | `transformers` version, or `null` if not installed |
 | `psutil_version` | `psutil` version |
+| `gpu` | Nested object with GPU fingerprint, or `null` when no GPU is detected |
+| `gpu.name` | GPU model name from `nvidia-smi`, or `null` |
+| `gpu.driver_version` | NVIDIA driver version from `nvidia-smi`, or `null` |
+| `gpu.cuda_version` | CUDA version reported by the driver, or `null` |
+| `gpu.vram_total_mb` | Total VRAM in MiB from `nvidia-smi`, or `null` |
+| `gpu.torch_cuda_available` | `torch.cuda.is_available()` result, or `null` if torch absent |
+| `gpu.torch_cuda_device_name` | `torch.cuda.get_device_name(0)` when CUDA is available, else `null` |
+
+All `gpu.*` fields are `null` when their source (`nvidia-smi` or `torch`) is unavailable.
+The `gpu` object itself is `null` when neither source provides any information.
 
 **To verify a reproduced run matches the original**: compare `config_sha256` and
 `prompts_sha256`. If they match, the config and prompts are byte-identical.
