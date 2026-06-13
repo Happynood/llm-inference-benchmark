@@ -79,3 +79,30 @@
 
 **Next iteration**:
 - `llama-cpp-python` backend (GGUF quantization)
+
+## 2026-06-13 — v0.4: Markdown comparison table
+
+**Goal**: `llm-bench compare *.csv` turns saved benchmark CSVs into a GFM table.
+
+**Delivered**:
+- `compare.py`: `RunRow` dataclass, `load_csv` (validates required columns, handles empty
+  CUDA field), `sort_rows` (by p95/backend/model), `render_table` (padded GFM),
+  `build_comparison_table` (load + sort + render)
+- `cli.py`: converted from `@click.command` to `@click.group(invoke_without_command=True)`;
+  added `compare` subcommand with `--sort` (p95/backend/model) and `--output` options;
+  `llm-bench --config ...` remains fully backward-compatible
+- `tests/fixtures/mock_run.csv`, `tests/fixtures/transformers_run.csv` — committed fixtures
+- `tests/test_compare.py` — 24 new tests covering load, sort, render, CLI subcommand,
+  backward-compat, and error paths (incl. whitespace CUDA and empty-paths guards)
+- README: comparison table demo updated with N column + single-run caveat;
+  transformers demo numbers corrected to match fixture values
+- `docs/metrics.md`: ~1193 → ~1211 tok/s in interpretation
+
+**Quality checks passed**:
+- `uv run pytest -v` — 61/61 tests pass
+- `uv run ruff check .` — no issues
+- `uv run ruff format --check .` — no issues
+- `uv run pyright` — 0 errors
+
+**Next iteration**:
+- `llama-cpp-python` backend (GGUF quantization)

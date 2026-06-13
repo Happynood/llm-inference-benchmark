@@ -1,0 +1,2 @@
+request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,timestamp
+10,40.95,44.67,1211.23,598,transformers,sshleifer/tiny-gpt2,721.37,0.0,2026-01-01T00:01:00+00:00

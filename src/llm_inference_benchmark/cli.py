@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 from dataclasses import asdict
+from pathlib import Path
 
 import click
 
@@ -11,11 +12,12 @@ from llm_inference_benchmark.config import BenchmarkConfig, load_config
 from llm_inference_benchmark.runner import load_prompts, run_benchmark
 
 
-@click.command()
+@click.group(invoke_without_command=True)
+@click.pass_context
 @click.option(
     "--config",
     "config_path",
-    required=True,
+    default=None,
     type=click.Path(exists=True),
     help="YAML benchmark config file",
 )
@@ -26,8 +28,23 @@ from llm_inference_benchmark.runner import load_prompts, run_benchmark
     type=click.Path(),
     help="CSV output path (default: stdout summary only)",
 )
-def main(config_path: str, output_path: str | None) -> None:
-    """Run LLM inference benchmark."""
+def main(ctx: click.Context, config_path: str | None, output_path: str | None) -> None:
+    """LLM inference benchmark toolkit.
+
+    Run without a subcommand to execute a benchmark:
+
+        llm-bench --config configs/example.yaml --output results.csv
+
+    Use the compare subcommand to generate a Markdown table from saved CSVs:
+
+        llm-bench compare results_a.csv results_b.csv
+    """
+    if ctx.invoked_subcommand is not None:
+        return
+
+    if config_path is None:
+        raise click.UsageError("--config is required when running a benchmark")
+
     cfg = load_config(config_path)
     backend = _build_backend(cfg)
     prompts = load_prompts(cfg.prompts_file)
@@ -51,6 +68,40 @@ def main(config_path: str, output_path: str | None) -> None:
             click.echo(f"  {k}: N/A")
         else:
             click.echo(f"  {k}: {v}")
+
+
+@main.command("compare")
+@click.argument("csv_files", nargs=-1, required=True, type=click.Path(exists=True))
+@click.option(
+    "--sort",
+    "sort_by",
+    default="p95",
+    show_default=True,
+    type=click.Choice(["backend", "model", "p95"], case_sensitive=False),
+    help="Sort rows by this column",
+)
+@click.option(
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(),
+    help="Write Markdown to file instead of stdout",
+)
+def compare_cmd(csv_files: tuple[str, ...], sort_by: str, output_path: str | None) -> None:
+    """Generate a Markdown comparison table from benchmark CSV files.
+
+    Accepts one or more CSV files produced by llm-bench --output:
+
+        llm-bench compare mock.csv transformers.csv --sort p95
+    """
+    from llm_inference_benchmark.compare import build_comparison_table
+
+    table = build_comparison_table(list(csv_files), sort_by=sort_by)
+    if output_path:
+        Path(output_path).write_text(table + "\n")
+        click.echo(f"Table written to {output_path}")
+    else:
+        click.echo(table)
 
 
 def _build_backend(cfg: BenchmarkConfig) -> Backend:
