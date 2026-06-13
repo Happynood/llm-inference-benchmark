@@ -1,0 +1,9 @@
+backend: mock
+model: mock-gpt2
+requests: 20
+concurrency: 1
+prompts_file: data/prompts/smoke.txt
+warmup_requests: 2
+mock:
+  latency_ms: 5.0
+  tokens_per_response: 50

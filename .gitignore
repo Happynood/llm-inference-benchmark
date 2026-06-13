@@ -1,0 +1,38 @@
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+*.egg-info/
+dist/
+build/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+
+# Environments
+.env
+*.env
+!.env.example
+!.env.sample
+!.env.template
+
+# Project outputs
+benchmark.csv
+benchmark_*.csv
+
+# Model artifacts (never commit)
+*.gguf
+*.bin
+*.pt
+*.ckpt
+*.safetensors
+data/generated/
+data/outputs/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+*.swo

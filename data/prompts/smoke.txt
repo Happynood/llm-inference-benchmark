@@ -1,0 +1,5 @@
+What is the capital of France?
+Explain the concept of gradient descent in machine learning.
+Write a brief summary of the transformer architecture.
+What are the main differences between BERT and GPT?
+How does the attention mechanism work in neural networks?
