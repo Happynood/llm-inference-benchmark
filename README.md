@@ -53,6 +53,30 @@ Backend: transformers  Model: sshleifer/tiny-gpt2  Requests: 10
   model: sshleifer/tiny-gpt2
 ```
 
+**Run manifest (environment fingerprint):**
+```bash
+uv run llm-bench --config configs/example.yaml --output results.csv --manifest results/manifest.json
+```
+```json
+{
+  "timestamp": "2026-06-14T10:00:00+00:00",
+  "backend": "mock",
+  "model": "mock-gpt2",
+  "git_commit": "a43a16f...",
+  "git_dirty": false,
+  "config_sha256": "e3b0c442...",
+  "prompts_sha256": "d4a3c1f...",
+  "python_version": "3.12.13",
+  "platform_info": "Linux-7.0.0-x86_64",
+  "cpu_model": "Intel(R) Core(TM) i5-11400H @ 2.70GHz",
+  "cpu_count": 12,
+  "package_version": "0.1.0",
+  "torch_version": "2.12.0",
+  "transformers_version": "5.12.0",
+  "psutil_version": "6.1.1"
+}
+```
+
 **Comparison table (across saved CSVs):**
 ```bash
 llm-bench compare mock.csv transformers.csv --sort p95
@@ -75,6 +99,7 @@ llm-bench compare mock.csv transformers.csv --sort p95
 - **p50/p95 latency, tokens/sec, total tokens** per run
 - **Peak memory reporting** — CPU RSS via `psutil`, CUDA peak via `torch.cuda` when available
 - **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
+- **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU, dep versions (`--manifest`)
 - **Optimization-oriented roadmap** — run manifests, workload profiles, quality checks, Pareto
   analysis, and constraint-based recommendations
 - **Pluggable backends** — add a new backend by subclassing one abstract class
@@ -177,6 +202,11 @@ make install-hf  # uv sync --extra transformers
 make run-hf      # llm-bench --config configs/transformers-cpu.yaml
 ```
 
+**Save a run manifest (environment fingerprint):**
+```bash
+llm-bench --config configs/example.yaml --output results.csv --manifest manifest.json
+```
+
 **Compare multiple runs into a Markdown table:**
 ```bash
 llm-bench compare results_a.csv results_b.csv --sort p95
@@ -214,7 +244,7 @@ make typecheck  # pyright
 - [x] Markdown comparison table across runs (`llm-bench compare`) (v0.4)
 - [ ] Async concurrent request execution
 - [ ] Benchmark comparison table across backends in README
-- [ ] Run manifest and environment fingerprint per benchmark
+- [x] Run manifest and environment fingerprint per benchmark (`--manifest`) (v0.5)
 - [ ] Workload profiles for short chat, summarization, code completion, and longer-context smoke tests
 - [ ] Lightweight output sanity / quality-retention checks
 - [ ] Pareto analysis and constraint-based recommendation report
