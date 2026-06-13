@@ -4,7 +4,7 @@ from pathlib import Path
 from typing import Literal
 
 import yaml
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 
 class MockBackendConfig(BaseModel):
@@ -25,9 +25,30 @@ class BenchmarkConfig(BaseModel):
     requests: int = Field(default=20, ge=1)
     concurrency: int = Field(default=1, ge=1)
     prompts_file: str = "data/prompts/smoke.txt"
+    workload_profile: str | None = None
     warmup_requests: int = Field(default=2, ge=0)
     mock: MockBackendConfig = Field(default_factory=MockBackendConfig)
     hf: HFBackendConfig = Field(default_factory=HFBackendConfig)
+
+    @model_validator(mode="after")
+    def _validate_workload_profile(self) -> BenchmarkConfig:
+        if self.workload_profile is not None:
+            from llm_inference_benchmark.profiles import get_profile
+
+            get_profile(self.workload_profile)
+        return self
+
+    def resolve_prompts_file(self) -> str:
+        """Return the effective prompts file path.
+
+        When workload_profile is set the profile's path takes precedence.
+        Otherwise prompts_file is used directly (backward-compatible default).
+        """
+        if self.workload_profile is not None:
+            from llm_inference_benchmark.profiles import get_profile
+
+            return get_profile(self.workload_profile).prompts_file
+        return self.prompts_file
 
 
 def load_config(path: str | Path) -> BenchmarkConfig:

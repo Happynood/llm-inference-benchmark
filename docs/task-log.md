@@ -133,6 +133,40 @@
 **Next iteration**:
 - `llama-cpp-python` backend (GGUF quantization)
 
+## 2026-06-14 — v0.7: Workload profiles + GPU benchmark results
+
+**Goal**: Reproducible named prompt sets for cross-experiment comparisons; first GPU run.
+
+**Delivered**:
+- `profiles.py`: `WorkloadProfile` frozen dataclass; `_PROFILES` registry for `short_chat`,
+  `summarization`, `code_completion`, `long_context_smoke`; `get_profile()` with helpful error
+- `data/prompts/short_chat.txt`, `summarization.txt`, `code_completion.txt`, `long_context_smoke.txt`
+  — committed prompt fixtures for each profile
+- `config.py`: `workload_profile: str | None = None` field; `@model_validator` validates profile
+  name at parse time; `resolve_prompts_file()` returns profile path when set, else `prompts_file`
+  — existing `prompts_file` configs unchanged
+- `cli.py`, `manifest.py`: updated to call `cfg.resolve_prompts_file()` instead of `cfg.prompts_file`
+- `configs/profile-short-chat.yaml`, `configs/profile-summarization.yaml` — example configs
+- `configs/transformers-gpu.yaml` — GPU config (`device: cuda`, `torch_dtype: float16`)
+- `Makefile`: `run-gpu` target
+- `tests/test_profiles.py` — 20 tests: profile registry, config validation, YAML loading,
+  `resolve_prompts_file` logic, backward compat, CLI integration, manifest SHA256
+- `docs/metrics.md`: GPU results section + workload profiles table
+- README: GPU results side-by-side with CPU; profiles quick-start; roadmap updated
+
+**GPU run** (Intel i5-11400H + NVIDIA RTX 3050 Laptop 4 GB, `sshleifer/tiny-gpt2`, float16):
+- p50: 59.95 ms, p95: 61.86 ms, tok/s: 829.60, peak_cuda_memory_mb: 8.82
+- GPU is slower than CPU for this 2-layer toy model — kernel-launch overhead dominates.
+
+**Quality checks passed**:
+- `uv run pytest -v` — 118/118 tests pass
+- `uv run ruff check .` — no issues
+- `uv run ruff format --check .` — no issues
+- `uv run pyright` — 0 errors
+
+**Next iteration**:
+- `llama-cpp-python` backend (GGUF quantization, real production-size model)
+
 ## 2026-06-14 — v0.6: Optional NVIDIA GPU fingerprint in run manifest
 
 **Goal**: Extend `RunManifest` with an optional `gpu` section from `nvidia-smi` and `torch.cuda`.

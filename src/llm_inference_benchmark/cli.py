@@ -59,7 +59,7 @@ def main(
 
     cfg = load_config(config_path)
     backend = _build_backend(cfg)
-    prompts = load_prompts(cfg.prompts_file)
+    prompts = load_prompts(cfg.resolve_prompts_file())
 
     click.echo(f"Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
     report = run_benchmark(backend, cfg, prompts)

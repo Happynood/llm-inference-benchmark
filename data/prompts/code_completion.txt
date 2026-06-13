@@ -1,0 +1,7 @@
+Complete the Python function: def cosine_similarity(a: list[float], b: list[float]) -> float:
+Complete the Python function: def binary_search(arr: list[int], target: int) -> int:
+Complete the Python function: def flatten(nested: list) -> list:
+Complete the Python function: def chunk(lst: list, size: int) -> list[list]:
+Complete the Python function: def moving_average(values: list[float], window: int) -> list[float]:
+Complete the Python class: class RingBuffer:
+    def __init__(self, capacity: int) -> None:

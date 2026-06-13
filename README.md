@@ -85,6 +85,12 @@ uv run llm-bench --config configs/example.yaml --output results.csv --manifest r
 }
 ```
 
+**Workload profiles:**
+```bash
+uv run llm-bench --config configs/profile-short-chat.yaml --output results/short-chat.csv
+uv run llm-bench --config configs/profile-summarization.yaml --output results/summarization.csv
+```
+
 **Comparison table (across saved CSVs):**
 ```bash
 llm-bench compare mock.csv transformers.csv --sort p95
@@ -103,7 +109,8 @@ llm-bench compare mock.csv transformers.csv --sort p95
 
 ## Features
 
-- **YAML-driven config** — backend, model, request count, warmup, prompts file
+- **YAML-driven config** — backend, model, request count, warmup, prompts file or workload profile
+- **Workload profiles** — named prompt sets (`short_chat`, `summarization`, `code_completion`, `long_context_smoke`) for reproducible cross-experiment comparisons
 - **p50/p95 latency, tokens/sec, total tokens** per run
 - **Peak memory reporting** — CPU RSS via `psutil`, CUDA peak via `torch.cuda` when available
 - **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
@@ -169,25 +176,24 @@ Full metric definitions and hardware context: [docs/metrics.md](docs/metrics.md)
 | Output tokens/sec | ~10,000 (simulated) |
 | Backend | mock |
 
-### Transformers backend — `sshleifer/tiny-gpt2`, CPU
+### Transformers backend — `sshleifer/tiny-gpt2`
 
 > **Note**: `sshleifer/tiny-gpt2` is a 2-layer toy model (~4 MB, ~117 K params) used to
 > validate the harness produces real inference latency. It is not representative of
 > production-size models (GPT-2 medium 345 M, Llama 3 8B, etc.).
 > See [docs/metrics.md](docs/metrics.md) for the full run log and hardware details.
 
-| Metric | Value |
-|--------|-------|
-| p50 latency | 40.95 ms |
-| p95 latency | 44.67 ms |
-| Output tokens/sec | 1211.23 |
-| Peak CPU memory | 721 MB (total process RSS) |
-| Peak CUDA memory | 0 MB (CUDA present, inference on CPU) |
-| Backend | transformers |
-| Model | sshleifer/tiny-gpt2 |
-| Hardware | Intel i5-11400H, CPU only |
-| max_new_tokens | 50 |
-| device | cpu |
+| Metric | CPU | GPU (RTX 3050) |
+|--------|-----|----------------|
+| p50 latency | 40.95 ms | 59.95 ms |
+| p95 latency | 44.67 ms | 61.86 ms |
+| Output tokens/sec | 1211.23 | 829.60 |
+| Peak CPU memory | 721 MB | 1383 MB |
+| Peak CUDA memory | 0 MB | **8.82 MB** |
+| device | cpu | cuda (float16) |
+
+> GPU is slower than CPU here — expected for a 2-layer toy model where kernel-launch overhead
+> exceeds compute savings. Production models (Llama 3 8B+) reverse this decisively.
 
 ## How to Run
 
@@ -208,6 +214,12 @@ make run        # llm-bench --config configs/example.yaml
 ```bash
 make install-hf  # uv sync --extra transformers
 make run-hf      # llm-bench --config configs/transformers-cpu.yaml
+```
+
+**GPU benchmark (requires CUDA):**
+```bash
+make install-hf
+make run-gpu   # llm-bench --config configs/transformers-gpu.yaml ...
 ```
 
 **Save a run manifest (environment fingerprint):**
@@ -254,6 +266,7 @@ make typecheck  # pyright
 - [ ] Benchmark comparison table across backends in README
 - [x] Run manifest and environment fingerprint per benchmark (`--manifest`) (v0.5)
 - [x] Optional NVIDIA GPU fingerprint in manifest (`gpu` section, `nvidia-smi` + `torch.cuda`) (v0.6)
-- [ ] Workload profiles for short chat, summarization, code completion, and longer-context smoke tests
+- [x] Workload profiles (`short_chat`, `summarization`, `code_completion`, `long_context_smoke`) (v0.7)
+- [x] GPU benchmark results — RTX 3050 Laptop (v0.7)
 - [ ] Lightweight output sanity / quality-retention checks
 - [ ] Pareto analysis and constraint-based recommendation report

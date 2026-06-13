@@ -61,7 +61,7 @@ def collect_manifest(config_path: str | Path, cfg: BenchmarkConfig) -> RunManife
         git_commit=_git_commit(),
         git_dirty=_git_dirty(),
         config_sha256=_file_sha256(config_path),
-        prompts_sha256=_file_sha256(cfg.prompts_file),
+        prompts_sha256=_file_sha256(cfg.resolve_prompts_file()),
         python_version=sys.version,
         platform_info=platform.platform(),
         cpu_model=_cpu_model(),

@@ -1,4 +1,4 @@
-.PHONY: install install-hf test test-hf lint format typecheck run run-hf clean
+.PHONY: install install-hf test test-hf lint format typecheck run run-hf run-gpu clean
 
 install:
 	uv sync
@@ -26,6 +26,9 @@ run:
 
 run-hf:
 	uv run llm-bench --config configs/transformers-cpu.yaml --output benchmark-hf.csv
+
+run-gpu:
+	uv run llm-bench --config configs/transformers-gpu.yaml --output benchmark-gpu.csv --manifest results/manifest-gpu.json
 
 clean:
 	rm -f benchmark.csv benchmark-hf.csv
