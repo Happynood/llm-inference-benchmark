@@ -48,3 +48,34 @@
 
 **Next iteration**:
 - `llama-cpp-python` backend (GGUF quantization, real production-size model)
+
+## 2026-06-13 — v0.3: Peak memory metrics
+
+**Goal**: Report peak CPU RSS and CUDA memory for every benchmark run.
+
+**Delivered**:
+- `memory.py`: `MemorySampler` (RSS polling via background thread + `threading.Lock`),
+  `reset_cuda_peak()`, `cuda_peak_mb()` (lazy import, None when CUDA absent)
+- `MetricsReport`: `peak_cpu_memory_mb: float`, `peak_cuda_memory_mb: float | None`
+- `compute_metrics()`: backward-compatible default args; p50 now uses `_percentile_sorted`
+  consistently with p95 (was `statistics.median`, numerically identical but inconsistent)
+- `runner.py`: warmup excluded from measurement window; `reset_cuda_peak()` called inside
+  `MemorySampler` context so CPU and CUDA windows are co-incident
+- `cli.py`: `None → ""` in CSV; `N/A` in stdout for absent CUDA
+- 6 new tests in `test_memory.py`; 3 new tests in `test_metrics.py`; 2 new tests in `test_runner.py`
+- `psutil>=5.9` added as required dependency
+- `docs/metrics.md`: Memory Measurement section with caveats and CUDA interpretation table
+- README: stale "No peak memory measurement yet" removed; roadmap updated; real run numbers added
+
+**Quality checks passed**:
+- `uv run pytest -v` — 37/37 tests pass
+- `uv run ruff check .` — no issues
+- `uv run ruff format --check .` — no issues
+- `uv run pyright` — no errors
+
+**Real benchmark** (Intel i5-11400H, CPU, `sshleifer/tiny-gpt2`):
+- peak_cpu_memory_mb: 721.37 (dominated by PyTorch runtime, not model weights)
+- peak_cuda_memory_mb: 0.00 (CUDA toolkit present, inference ran on CPU device)
+
+**Next iteration**:
+- `llama-cpp-python` backend (GGUF quantization)

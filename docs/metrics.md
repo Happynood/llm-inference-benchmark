@@ -11,13 +11,47 @@
 | `total_tokens` | count | Sum of input + output tokens across all requests |
 | `backend` | string | Backend name (`mock`, `transformers`, `llama-cpp`, ...) |
 | `model` | string | Model identifier as passed in config |
+| `peak_cpu_memory_mb` | MB | Peak process RSS during the benchmark run (warmup + benchmark loop) |
+| `peak_cuda_memory_mb` | MB | Peak CUDA memory allocated during the run; empty when no GPU |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
+
+## Memory Measurement
+
+### CPU peak (`peak_cpu_memory_mb`)
+
+Captured by polling `psutil.Process.memory_info().rss` in a background daemon thread every
+50 ms. RSS (Resident Set Size) is the OS-level physical memory used by the process, which
+includes model weights, PyTorch tensors, and all C-extension allocations — unlike
+`tracemalloc`, which only tracks the Python heap.
+
+The measurement window covers the full `run_benchmark` call: warmup requests + benchmark
+requests. Because model weights are loaded in `Backend.__init__` before `run_benchmark` is
+called, the RSS at the start of the window already includes the model. Peak values therefore
+reflect model weights + maximum inference-time activations.
+
+**Limitation**: at 50 ms poll interval, very short-lived spikes (<50 ms) may be missed.
+For CPU inference where each request takes tens–hundreds of ms this is accurate enough.
+
+### CUDA peak (`peak_cuda_memory_mb`)
+
+Captured via `torch.cuda.max_memory_allocated()`. The counter is reset and MemorySampler is
+started together inside `run_benchmark`, so CPU and CUDA measurement windows are co-incident
+(benchmark loop only; warmup excluded from both).
+
+- **`None` / blank in CSV**: torch not installed, or CUDA toolkit not available.
+- **`0.0`**: CUDA available but inference ran on a CPU device (no GPU allocations made).
+- **`>0`**: GPU inference; value reflects allocator-tracked memory only — fragmentation and
+  reserved-but-unallocated pages are excluded.
+
+**Limitation**: measures PyTorch allocator-tracked memory, not raw VRAM at the driver level.
+Reserved-but-free memory pages are not reflected in this number.
 
 ## Computation Notes
 
-- **p95 latency**: linear interpolation between adjacent sorted samples
-  (`idx = 0.95 * (N-1)`, interpolated between `sorted[floor(idx)]` and `sorted[ceil(idx)]`).
-  This is the C1 method, matching NumPy's default interpolation.
+- **p50/p95 latency**: both use C1 linear interpolation
+  (`idx = (p/100) * (N-1)`, interpolated between `sorted[floor(idx)]` and `sorted[ceil(idx)]`).
+  This matches NumPy's default (`np.percentile(..., interpolation='linear')`).
+  For p50 with even N this is equivalent to the arithmetic mean of the two central values.
 - **tokens/sec**: output-only tokens divided by sum of per-request latencies
   (`output_tokens_total / sum(latency_ms) * 1000`).
   For v0.1 sequential execution, sum-of-latencies equals wall-clock elapsed time.
@@ -63,10 +97,12 @@ Config: `requests=10`, `warmup_requests=2`, `max_new_tokens=50`, `device=cpu`, `
 | model | sshleifer/tiny-gpt2 |
 | requests | 10 |
 | warmup_requests | 2 |
-| p50_latency_ms | 40.70 |
-| p95_latency_ms | 46.19 |
-| tokens_per_second | 1192.87 |
+| p50_latency_ms | 40.95 |
+| p95_latency_ms | 44.67 |
+| tokens_per_second | 1211.23 |
 | total_tokens | 598 |
+| peak_cpu_memory_mb | 721.37 |
+| peak_cuda_memory_mb | 0.00 (CUDA toolkit present, inference on CPU device) |
 
 ### Interpretation
 

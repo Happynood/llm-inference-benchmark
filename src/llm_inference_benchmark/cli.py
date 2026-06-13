@@ -36,7 +36,7 @@ def main(config_path: str, output_path: str | None) -> None:
     report = run_benchmark(backend, cfg, prompts)
 
     if output_path:
-        row = asdict(report)
+        row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
         with open(output_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=list(row.keys()))
             writer.writeheader()
@@ -47,6 +47,8 @@ def main(config_path: str, output_path: str | None) -> None:
     for k, v in asdict(report).items():
         if isinstance(v, float):
             click.echo(f"  {k}: {v:.2f}")
+        elif v is None:
+            click.echo(f"  {k}: N/A")
         else:
             click.echo(f"  {k}: {v}")
 

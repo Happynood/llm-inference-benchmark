@@ -41,3 +41,25 @@ def test_report_has_timestamp() -> None:
     report = compute_metrics(_results([5.0]), backend="mock", model="t")
     assert report.timestamp  # non-empty ISO string
     assert "T" in report.timestamp
+
+
+def test_memory_fields_passed_through() -> None:
+    report = compute_metrics(
+        _results([10.0]),
+        backend="mock",
+        model="t",
+        peak_cpu_memory_mb=42.5,
+        peak_cuda_memory_mb=128.0,
+    )
+    assert report.peak_cpu_memory_mb == pytest.approx(42.5)
+    assert report.peak_cuda_memory_mb == pytest.approx(128.0)
+
+
+def test_cuda_memory_defaults_to_none() -> None:
+    report = compute_metrics(_results([10.0]), backend="mock", model="t", peak_cpu_memory_mb=1.0)
+    assert report.peak_cuda_memory_mb is None
+
+
+def test_cpu_memory_defaults_to_zero() -> None:
+    report = compute_metrics(_results([10.0]), backend="mock", model="t")
+    assert report.peak_cpu_memory_mb == pytest.approx(0.0)
