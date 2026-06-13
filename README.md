@@ -10,13 +10,12 @@ This project wraps the benchmark loop in a typed, config-driven CLI so every run
 
 ## Demo
 
+**Mock backend (no deps):**
 ```bash
 uv run llm-bench --config configs/example.yaml --output benchmark.csv
 ```
-
 ```
 Backend: mock  Model: mock-gpt2  Requests: 20
-Results written to benchmark.csv
 
 === Benchmark Results ===
   request_count: 20
@@ -26,21 +25,38 @@ Results written to benchmark.csv
   total_tokens: 1100
   backend: mock
   model: mock-gpt2
-  timestamp: 2026-06-13T10:30:00+00:00
 ```
 
-> **v0.1 uses a deterministic mock backend.** No model weights or GPU required.
-> Real backend results (`transformers`, `llama-cpp`, `onnxruntime`) are in the roadmap.
+**Transformers backend (CPU, real inference):**
+```bash
+make install-hf   # uv sync --extra transformers
+uv run llm-bench --config configs/transformers-cpu.yaml --output benchmark-hf.csv
+```
+```
+Backend: transformers  Model: sshleifer/tiny-gpt2  Requests: 10
+
+=== Benchmark Results ===
+  request_count: 10
+  p50_latency_ms: 40.70
+  p95_latency_ms: 46.19
+  tokens_per_second: 1192.87
+  total_tokens: 598
+  backend: transformers
+  model: sshleifer/tiny-gpt2
+```
+
+> See [docs/metrics.md](docs/metrics.md) for benchmark results and hardware context.
 
 ## Features
 
 - **YAML-driven config** — backend, model, request count, warmup, prompts file
 - **p50/p95 latency, tokens/sec, total tokens** per run
 - **CSV output** for downstream comparison tables
-- **Pluggable backends** — add a backend by implementing one abstract class
+- **Pluggable backends** — add a new backend by subclassing one abstract class
 - **Mock backend** — deterministic, zero-dependency, CI-friendly
-- **Type-checked and tested** — Pyright (basic) + Ruff + pytest, 80%+ coverage
-- **GitHub Actions CI** — runs on every push and PR
+- **Transformers backend** — real CPU inference via `AutoModelForCausalLM` (optional extra)
+- **Type-checked and tested** — Pyright (basic) + Ruff + pytest
+- **GitHub Actions CI** — lint + type-check + mock tests on every push
 
 ## Tech Stack
 
@@ -49,6 +65,7 @@ Results written to benchmark.csv
 | Runtime | Python 3.11+, [uv](https://docs.astral.sh/uv/) |
 | Config | Pydantic v2, PyYAML |
 | CLI | Click |
+| Transformers backend | HuggingFace `transformers` + PyTorch (optional) |
 | Tests | pytest, pytest-cov |
 | Lint/format | Ruff |
 | Type checking | Pyright |
@@ -57,17 +74,17 @@ Results written to benchmark.csv
 ## Architecture
 
 ```
-configs/example.yaml
+configs/*.yaml
         │
         ▼
   load_config() → BenchmarkConfig (Pydantic v2)
         │
         ▼
   _build_backend() → Backend (ABC)
-                         ├── MockBackend         ← v0.1 ✓
-                         ├── HFBackend           ← roadmap
-                         ├── LlamaCppBackend     ← roadmap
-                         └── ONNXBackend         ← roadmap
+                         ├── MockBackend     ← zero-dep, CI-safe    ✓ v0.1
+                         ├── HFBackend       ← transformers extra   ✓ v0.2
+                         ├── LlamaCppBackend ← GGUF quantization    roadmap
+                         └── ONNXBackend     ← ONNX export          roadmap
         │
         ▼
   run_benchmark(backend, config, prompts)
@@ -83,33 +100,60 @@ configs/example.yaml
 
 ## Results
 
-> v0.1 results use a mock backend only. Numbers validate the harness, not real inference.
+Full metric definitions and hardware context: [docs/metrics.md](docs/metrics.md).
 
-| Metric | Mock backend |
-|--------|-------------|
+### Mock backend (harness validation)
+
+| Metric | Value |
+|--------|-------|
 | p50 latency | ~5 ms |
 | p95 latency | ~5 ms |
 | Output tokens/sec | ~10,000 (simulated) |
 | Backend | mock |
 
-Real backend tables will be added as backends ship. See [docs/metrics.md](docs/metrics.md).
+### Transformers backend — `sshleifer/tiny-gpt2`, CPU
+
+> **Note**: `sshleifer/tiny-gpt2` is a 2-layer toy model (~4 MB, ~117 K params) used to
+> validate the harness produces real inference latency. It is not representative of
+> production-size models (GPT-2 medium 345 M, Llama 3 8B, etc.).
+> See [docs/metrics.md](docs/metrics.md) for the full run log and hardware details.
+
+| Metric | Value |
+|--------|-------|
+| p50 latency | 40.70 ms |
+| p95 latency | 46.19 ms |
+| Output tokens/sec | 1192.87 |
+| Backend | transformers |
+| Model | sshleifer/tiny-gpt2 |
+| Hardware | Intel i5-11400H, CPU only |
+| max_new_tokens | 50 |
+| device | cpu |
 
 ## How to Run
 
 **Prerequisites**: Python 3.11+, [uv](https://docs.astral.sh/uv/)
 
 ```bash
-git clone https://github.com/yourusername/llm-inference-benchmark
+git clone https://github.com/happynood/llm-inference-benchmark
 cd llm-inference-benchmark
-uv sync
-uv run llm-bench --config configs/example.yaml --output benchmark.csv
 ```
 
-Run all checks:
-
+**Mock backend (no downloads):**
 ```bash
 make install    # uv sync
-make test       # pytest -v
+make run        # llm-bench --config configs/example.yaml
+```
+
+**Transformers backend (downloads ~4 MB model on first run):**
+```bash
+make install-hf  # uv sync --extra transformers
+make run-hf      # llm-bench --config configs/transformers-cpu.yaml
+```
+
+**Run all checks:**
+```bash
+make test       # pytest -v (mock tests only, CI-safe)
+make test-hf    # pytest -m integration (requires install-hf)
 make lint       # ruff check .
 make format     # ruff format .
 make typecheck  # pyright
@@ -117,19 +161,22 @@ make typecheck  # pyright
 
 ## Limitations
 
-- **v0.1 is mock-only** — no real model inference yet
-- Concurrency is config-exposed but not yet implemented (sequential execution)
-- No peak memory measurement yet
-- Tested on Linux (Ubuntu 22.04); macOS should work, Windows untested
-- `prompts_file` path resolves relative to the working directory — run from the project root
+- Transformers backend tested only with GPT-2 architecture models on CPU.
+  Real-world latency for production models (Llama 3, Mistral 7B) is 100–1000× higher.
+- Concurrency > 1 is config-exposed but not yet implemented (sequential execution only).
+- No peak memory measurement yet.
+- `sshleifer/tiny-gpt2` results are harness validation, not production benchmarks.
+- Tested on Linux x86-64; macOS should work, Windows untested.
+- `prompts_file` resolves relative to the working directory — run from the project root.
 
 ## Roadmap
 
-- [ ] `transformers` backend (HuggingFace hub, CPU/GPU, auto device selection)
-- [ ] `llama-cpp-python` backend (GGUF quantization via llama.cpp)
+- [x] Mock backend (v0.1)
+- [x] `transformers` backend — CPU inference (v0.2)
+- [ ] `llama-cpp-python` backend (GGUF quantization)
 - [ ] `onnxruntime` backend (ONNX export + quantization)
 - [ ] `vllm` backend (high-throughput GPU serving)
 - [ ] Async concurrent request execution
 - [ ] Peak memory profiling (`tracemalloc` / `psutil`)
-- [ ] Multi-run comparison table auto-generated in README
+- [ ] Benchmark comparison table across backends in README
 - [ ] Gradio demo for interactive backend comparison

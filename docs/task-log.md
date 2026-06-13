@@ -22,3 +22,29 @@
 
 **Next iteration**:
 - `transformers` backend (CPU inference, real latency numbers)
+
+## 2026-06-13 — v0.2: HuggingFace Transformers backend
+
+**Goal**: First real inference backend using `AutoModelForCausalLM`; keep mock for CI.
+
+**Delivered**:
+- `HFBackend` (optional extra, excluded from pyright CI check)
+- `HFBackendConfig` in Pydantic config (`max_new_tokens`, `device`, `torch_dtype`, `do_sample`)
+- Lazy import in `_build_backend()` — ImportError only on actual use, not on `mock` config
+- `configs/transformers-cpu.yaml` with `sshleifer/tiny-gpt2`
+- 6 integration tests (`pytest -m integration`), auto-skipped without extras
+- `conftest.py` + `hf.py` both clear `ALL_PROXY`/`all_proxy` (bare `socks://` rejected by httpx 0.28)
+- `Makefile`: `install-hf`, `test-hf`, `run-hf`
+- README and `docs/metrics.md` updated with real run numbers
+
+**Quality checks passed**:
+- `uv run pytest -v` — 26/26 tests pass (20 mock + 6 HF integration)
+- `uv run ruff check .` — no issues
+- `uv run ruff format --check .` — no issues
+- `uv run pyright` — no errors
+
+**Real benchmark** (Intel i5-11400H, CPU, `sshleifer/tiny-gpt2`):
+- p50: 40.70 ms, p95: 46.19 ms, tokens/sec: 1192.87
+
+**Next iteration**:
+- `llama-cpp-python` backend (GGUF quantization, real production-size model)

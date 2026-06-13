@@ -42,5 +42,38 @@
 | p95_latency_ms | ~5 ms |
 | tokens_per_second | ~10,000 (simulated) |
 
-Real backend results will be added here after each backend implementation.
-Update this file and commit when benchmark numbers change (per CLAUDE.md).
+## v0.2 Results — `transformers` backend, CPU
+
+> Hardware: Intel Core i5-11400H @ 2.70 GHz, 12 logical cores, CPU-only (no GPU).
+> Software: Python 3.14.4, torch 2.12.0, transformers 5.12.0.
+> Model: `sshleifer/tiny-gpt2` — 2-layer GPT-2 toy model, ~102 K params, ~4 MB.
+> **Not representative of production models.** Used here to validate that the harness
+> correctly measures end-to-end inference latency and token throughput.
+
+Command:
+```bash
+uv run llm-bench --config configs/transformers-cpu.yaml --output benchmark-hf.csv
+```
+
+Config: `requests=10`, `warmup_requests=2`, `max_new_tokens=50`, `device=cpu`, `do_sample=false`.
+
+| metric | value |
+|--------|-------|
+| backend | transformers |
+| model | sshleifer/tiny-gpt2 |
+| requests | 10 |
+| warmup_requests | 2 |
+| p50_latency_ms | 40.70 |
+| p95_latency_ms | 46.19 |
+| tokens_per_second | 1192.87 |
+| total_tokens | 598 |
+
+### Interpretation
+
+- p50 of ~41 ms for a 2-layer toy model on CPU; a full GPT-2 (12 layers, 117 M params) would
+  be ~10–20× slower (~400–800 ms). Llama 3 8B would be 100–1000× slower.
+- ~1193 output tokens/sec on this model is meaningless as a production throughput figure —
+  production models on CPU produce 5–50 tok/s.
+- p95/p50 spread (~14%) reflects OS scheduling jitter, expected on CPU without process pinning.
+
+Real backend results will be updated here after each new backend lands.

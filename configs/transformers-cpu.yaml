@@ -1,0 +1,11 @@
+backend: transformers
+model: sshleifer/tiny-gpt2
+requests: 10
+concurrency: 1
+prompts_file: data/prompts/smoke.txt
+warmup_requests: 2
+hf:
+  max_new_tokens: 50
+  device: cpu
+  torch_dtype: float32
+  do_sample: false
