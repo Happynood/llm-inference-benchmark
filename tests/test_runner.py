@@ -49,3 +49,25 @@ def test_run_benchmark_wraps_prompts(tmp_prompts: Path) -> None:
     cfg = BenchmarkConfig(requests=10, warmup_requests=0, prompts_file=str(tmp_prompts))
     report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
     assert report.request_count == 10
+
+
+def test_run_benchmark_has_cpu_memory(tmp_prompts: Path) -> None:
+    backend = MockBackend(model="test", latency_ms=0, tokens_per_response=10)
+    cfg = BenchmarkConfig(requests=5, warmup_requests=0, prompts_file=str(tmp_prompts))
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.peak_cpu_memory_mb > 0
+
+
+def test_run_benchmark_cuda_memory_absent_without_gpu(tmp_prompts: Path) -> None:
+    """On a CPU-only machine (CI), CUDA memory should be None."""
+    import importlib.util
+
+    if importlib.util.find_spec("torch") is not None:
+        import torch  # type: ignore[import-untyped]
+
+        if torch.cuda.is_available():
+            return  # skip assertion on real GPU machines
+    backend = MockBackend(model="test", latency_ms=0)
+    cfg = BenchmarkConfig(requests=3, warmup_requests=0, prompts_file=str(tmp_prompts))
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.peak_cuda_memory_mb is None

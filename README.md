@@ -51,6 +51,7 @@ Backend: transformers  Model: sshleifer/tiny-gpt2  Requests: 10
 
 - **YAML-driven config** — backend, model, request count, warmup, prompts file
 - **p50/p95 latency, tokens/sec, total tokens** per run
+- **Peak memory reporting** — CPU RSS via `psutil`, CUDA peak via `torch.cuda` when available
 - **CSV output** for downstream comparison tables
 - **Pluggable backends** — add a new backend by subclassing one abstract class
 - **Mock backend** — deterministic, zero-dependency, CI-friendly
@@ -120,9 +121,11 @@ Full metric definitions and hardware context: [docs/metrics.md](docs/metrics.md)
 
 | Metric | Value |
 |--------|-------|
-| p50 latency | 40.70 ms |
-| p95 latency | 46.19 ms |
-| Output tokens/sec | 1192.87 |
+| p50 latency | 40.95 ms |
+| p95 latency | 44.67 ms |
+| Output tokens/sec | 1211.23 |
+| Peak CPU memory | 721 MB (total process RSS) |
+| Peak CUDA memory | 0 MB (CUDA present, inference on CPU) |
 | Backend | transformers |
 | Model | sshleifer/tiny-gpt2 |
 | Hardware | Intel i5-11400H, CPU only |
@@ -164,7 +167,8 @@ make typecheck  # pyright
 - Transformers backend tested only with GPT-2 architecture models on CPU.
   Real-world latency for production models (Llama 3, Mistral 7B) is 100–1000× higher.
 - Concurrency > 1 is config-exposed but not yet implemented (sequential execution only).
-- No peak memory measurement yet.
+- `peak_cpu_memory_mb` is total process RSS (interpreter + PyTorch runtime + model weights +
+  activations). For tiny models, PyTorch runtime overhead dominates (~700 MB for tiny-gpt2).
 - `sshleifer/tiny-gpt2` results are harness validation, not production benchmarks.
 - Tested on Linux x86-64; macOS should work, Windows untested.
 - `prompts_file` resolves relative to the working directory — run from the project root.
@@ -176,7 +180,7 @@ make typecheck  # pyright
 - [ ] `llama-cpp-python` backend (GGUF quantization)
 - [ ] `onnxruntime` backend (ONNX export + quantization)
 - [ ] `vllm` backend (high-throughput GPU serving)
+- [x] Peak memory reporting — CPU RSS (`psutil`) + CUDA peak (`torch.cuda`) (v0.3)
 - [ ] Async concurrent request execution
-- [ ] Peak memory profiling (`tracemalloc` / `psutil`)
 - [ ] Benchmark comparison table across backends in README
 - [ ] Gradio demo for interactive backend comparison

@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import statistics
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -21,10 +20,18 @@ class MetricsReport:
     total_tokens: int
     backend: str
     model: str
+    peak_cpu_memory_mb: float
+    peak_cuda_memory_mb: float | None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
-def compute_metrics(results: list[RequestMetrics], backend: str, model: str) -> MetricsReport:
+def compute_metrics(
+    results: list[RequestMetrics],
+    backend: str,
+    model: str,
+    peak_cpu_memory_mb: float = 0.0,
+    peak_cuda_memory_mb: float | None = None,
+) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
         raise ValueError("No results to compute metrics from")
@@ -38,12 +45,14 @@ def compute_metrics(results: list[RequestMetrics], backend: str, model: str) -> 
 
     return MetricsReport(
         request_count=len(results),
-        p50_latency_ms=statistics.median(latencies),
+        p50_latency_ms=_percentile_sorted(latencies, 50),
         p95_latency_ms=_percentile_sorted(latencies, 95),
         tokens_per_second=total_output_tokens / total_latency_s if total_latency_s > 0 else 0.0,
         total_tokens=total_tokens,
         backend=backend,
         model=model,
+        peak_cpu_memory_mb=peak_cpu_memory_mb,
+        peak_cuda_memory_mb=peak_cuda_memory_mb,
     )
 
 
