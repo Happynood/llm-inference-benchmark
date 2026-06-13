@@ -123,6 +123,86 @@ def compare_cmd(csv_files: tuple[str, ...], sort_by: str, output_path: str | Non
         click.echo(table)
 
 
+@main.command("matrix")
+@click.option(
+    "--config",
+    "matrix_path",
+    required=True,
+    type=click.Path(exists=True),
+    help="YAML matrix config file",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="List runs without executing them",
+)
+def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
+    """Execute all benchmark runs defined in a matrix config file.
+
+    Each run writes a CSV and a manifest into the results directory:
+
+        llm-bench matrix --config configs/matrix-example.yaml
+
+    Preview what would run without executing:
+
+        llm-bench matrix --config configs/matrix-example.yaml --dry-run
+
+    Compare outputs afterwards:
+
+        llm-bench compare results/*.csv
+    """
+    from llm_inference_benchmark.manifest import collect_manifest, write_manifest
+    from llm_inference_benchmark.matrix import load_matrix
+    from llm_inference_benchmark.runner import load_prompts, run_benchmark
+
+    matrix = load_matrix(matrix_path)
+    results_dir = Path(matrix.results_dir)
+    n = len(matrix.runs)
+
+    if dry_run:
+        click.echo(f"Matrix: {n} run(s) → {results_dir}/")
+        for idx, run in enumerate(matrix.runs, 1):
+            click.echo(f"  [{idx}/{n}] {run.name}")
+            click.echo(f"        config: {run.config}")
+            if run.workload_profile:
+                click.echo(f"        workload_profile: {run.workload_profile}")
+            click.echo(f"        output: {results_dir / run.name}.csv")
+        return
+
+    results_dir.mkdir(parents=True, exist_ok=True)
+    click.echo(f"Matrix: {n} run(s) → {results_dir}/")
+
+    for idx, run in enumerate(matrix.runs, 1):
+        click.echo(f"\n[{idx}/{n}] {run.name}")
+        cfg = load_config(run.config)
+        if run.workload_profile is not None:
+            cfg = cfg.model_copy(update={"workload_profile": run.workload_profile})
+
+        backend = _build_backend(cfg)
+        prompts = load_prompts(cfg.resolve_prompts_file())
+        click.echo(f"  Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
+        report = run_benchmark(backend, cfg, prompts)
+
+        csv_path = results_dir / f"{run.name}.csv"
+        manifest_path = results_dir / f"{run.name}.manifest.json"
+
+        row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
+        with open(csv_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+            writer.writeheader()
+            writer.writerow(row)
+
+        manifest = collect_manifest(run.config, cfg)
+        write_manifest(manifest, manifest_path)
+
+        click.echo(f"  → {csv_path}")
+        click.echo(f"  → {manifest_path}")
+
+    click.echo("\nDone. Compare with:")
+    click.echo(f"  llm-bench compare {results_dir}/*.csv")
+
+
 def _build_backend(cfg: BenchmarkConfig) -> Backend:
     if cfg.backend == "mock":
         return MockBackend(

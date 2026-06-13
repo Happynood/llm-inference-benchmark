@@ -133,6 +133,38 @@
 **Next iteration**:
 - `llama-cpp-python` backend (GGUF quantization)
 
+## 2026-06-14 — v0.8: Run matrix for multi-experiment configs
+
+**Goal**: Run multiple benchmark configurations sequentially from one YAML file.
+
+**Delivered**:
+- `matrix.py`: `MatrixRunConfig(BaseModel)` with `name`, `config`, optional `workload_profile`
+  (validated against the profile registry at parse time); `MatrixConfig(BaseModel)` with
+  `results_dir` (default `"results"`) and `runs: list[MatrixRunConfig]` with unique-name
+  validator; `load_matrix()` loader
+- `cli.py`: `matrix` subcommand — `--config` (matrix YAML, required) and `--dry-run` (list
+  without executing); runs each entry sequentially using existing `_build_backend` + `run_benchmark`
+  flow; writes `{results_dir}/{name}.csv` and `{results_dir}/{name}.manifest.json` per run;
+  prints `compare` hint on completion; existing `--config` / `compare` paths unchanged
+- `configs/matrix-example.yaml` — four-profile mock matrix ready to run with `make run-matrix`
+- `Makefile`: `run-matrix` target
+- `.gitignore`: `results/` added
+- `tests/test_matrix.py` — 24 tests: config parsing, validation (empty runs, duplicate names,
+  bad profile), `load_matrix`, dry-run (no files created, lists all runs, shows profile), full
+  execution (CSV + manifest per run, nested results dir creation, compare hint), backward compat
+  (single-run CLI and compare subcommand still work)
+- `docs/metrics.md`: Run Matrix section with YAML schema and output structure
+- README: matrix demo block, feature bullet, `run-matrix` make target, roadmap item
+
+**Quality checks passed**:
+- `uv run pytest -v` — 142/142 tests pass
+- `uv run ruff check .` — no issues
+- `uv run ruff format --check .` — no issues
+- `uv run pyright` — 0 errors
+
+**Next iteration**:
+- `llama-cpp-python` backend (GGUF quantization)
+
 ## 2026-06-14 — v0.7: Workload profiles + GPU benchmark results
 
 **Goal**: Reproducible named prompt sets for cross-experiment comparisons; first GPU run.

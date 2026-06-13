@@ -153,6 +153,48 @@ uv run llm-bench --config configs/transformers-gpu.yaml --output benchmark-gpu.c
   the run environment.
 - `torch_dtype: float16` reduces GPU memory usage vs float32 at identical accuracy for this model.
 
+## Run Matrix
+
+The `matrix` subcommand runs multiple benchmark configurations sequentially from a single YAML
+file and writes one CSV + manifest per run into a shared results directory.
+
+```yaml
+# configs/matrix-example.yaml
+results_dir: results
+
+runs:
+  - name: mock-short-chat
+    config: configs/example.yaml
+    workload_profile: short_chat
+
+  - name: mock-summarization
+    config: configs/example.yaml
+    workload_profile: summarization
+```
+
+Run the matrix:
+```bash
+llm-bench matrix --config configs/matrix-example.yaml
+# Preview without running:
+llm-bench matrix --config configs/matrix-example.yaml --dry-run
+```
+
+After completion, compare all runs in one table:
+```bash
+llm-bench compare results/*.csv --sort p95
+```
+
+**Output structure:**
+```
+results/
+├── mock-short-chat.csv
+├── mock-short-chat.manifest.json
+├── mock-summarization.csv
+└── mock-summarization.manifest.json
+```
+
+The `results/` directory is gitignored — only configs and fixtures live in source control.
+
 ## Workload Profiles
 
 Named profiles standardize the prompt set across experiment runs so backend and parameter

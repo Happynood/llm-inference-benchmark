@@ -1,0 +1,22 @@
+# Run matrix: all four workload profiles with the mock backend.
+# Run with: llm-bench matrix --config configs/matrix-example.yaml
+# Compare outputs: llm-bench compare results/*.csv
+
+results_dir: results
+
+runs:
+  - name: mock-short-chat
+    config: configs/example.yaml
+    workload_profile: short_chat
+
+  - name: mock-summarization
+    config: configs/example.yaml
+    workload_profile: summarization
+
+  - name: mock-code-completion
+    config: configs/example.yaml
+    workload_profile: code_completion
+
+  - name: mock-long-context
+    config: configs/example.yaml
+    workload_profile: long_context_smoke

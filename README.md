@@ -91,6 +91,15 @@ uv run llm-bench --config configs/profile-short-chat.yaml --output results/short
 uv run llm-bench --config configs/profile-summarization.yaml --output results/summarization.csv
 ```
 
+**Run matrix (multiple configs in one command):**
+```bash
+uv run llm-bench matrix --config configs/matrix-example.yaml
+# Preview without running:
+uv run llm-bench matrix --config configs/matrix-example.yaml --dry-run
+# Compare all results:
+uv run llm-bench compare results/*.csv --sort p95
+```
+
 **Comparison table (across saved CSVs):**
 ```bash
 llm-bench compare mock.csv transformers.csv --sort p95
@@ -111,6 +120,7 @@ llm-bench compare mock.csv transformers.csv --sort p95
 
 - **YAML-driven config** — backend, model, request count, warmup, prompts file or workload profile
 - **Workload profiles** — named prompt sets (`short_chat`, `summarization`, `code_completion`, `long_context_smoke`) for reproducible cross-experiment comparisons
+- **Run matrix** — define multiple experiment runs in one YAML; `llm-bench matrix` executes all sequentially with one CSV + manifest per run
 - **p50/p95 latency, tokens/sec, total tokens** per run
 - **Peak memory reporting** — CPU RSS via `psutil`, CUDA peak via `torch.cuda` when available
 - **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
@@ -222,6 +232,11 @@ make install-hf
 make run-gpu   # llm-bench --config configs/transformers-gpu.yaml ...
 ```
 
+**Run matrix (all four profiles, one command):**
+```bash
+make run-matrix  # llm-bench matrix --config configs/matrix-example.yaml
+```
+
 **Save a run manifest (environment fingerprint):**
 ```bash
 llm-bench --config configs/example.yaml --output results.csv --manifest manifest.json
@@ -268,5 +283,6 @@ make typecheck  # pyright
 - [x] Optional NVIDIA GPU fingerprint in manifest (`gpu` section, `nvidia-smi` + `torch.cuda`) (v0.6)
 - [x] Workload profiles (`short_chat`, `summarization`, `code_completion`, `long_context_smoke`) (v0.7)
 - [x] GPU benchmark results — RTX 3050 Laptop (v0.7)
+- [x] Run matrix: multi-experiment YAML with `llm-bench matrix` (v0.8)
 - [ ] Lightweight output sanity / quality-retention checks
 - [ ] Pareto analysis and constraint-based recommendation report
