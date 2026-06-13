@@ -21,6 +21,7 @@ htmlcov/
 # Project outputs
 benchmark.csv
 benchmark_*.csv
+benchmark-*.csv
 
 # Model artifacts (never commit)
 *.gguf

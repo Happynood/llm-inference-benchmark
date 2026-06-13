@@ -1,6 +1,15 @@
+from __future__ import annotations
+
+import os
 from pathlib import Path
 
 import pytest
+
+# HF Hub (via httpx) rejects the socks:// scheme in ALL_PROXY during commit-hash
+# validation even when files are fully cached. Clear it for the test session;
+# http_proxy / https_proxy remain set and still serve as the HTTP forward proxy.
+os.environ.pop("ALL_PROXY", None)
+os.environ.pop("all_proxy", None)
 
 
 @pytest.fixture

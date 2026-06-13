@@ -14,6 +14,12 @@ dependencies = [
 [project.scripts]
 llm-bench = "llm_inference_benchmark.cli:main"
 
+[project.optional-dependencies]
+transformers = [
+    "transformers>=4.40",
+    "torch>=2.0",
+]
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -38,6 +44,8 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pyright]
 pythonVersion = "3.11"
 include = ["src", "tests"]
+# hf.py uses optional heavy deps (torch, transformers); excluded from CI type-check
+ignore = ["src/llm_inference_benchmark/backends/hf.py"]
 venvPath = "."
 venv = ".venv"
 typeCheckingMode = "basic"
@@ -45,3 +53,4 @@ typeCheckingMode = "basic"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--import-mode=importlib"]
+markers = ["integration: marks integration tests that require optional deps or network access"]

@@ -58,4 +58,14 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             latency_ms=cfg.mock.latency_ms,
             tokens_per_response=cfg.mock.tokens_per_response,
         )
+    if cfg.backend == "transformers":
+        from llm_inference_benchmark.backends.hf import HFBackend  # lazy: optional dep
+
+        return HFBackend(
+            model_id=cfg.model,
+            max_new_tokens=cfg.hf.max_new_tokens,
+            device=cfg.hf.device,
+            torch_dtype=cfg.hf.torch_dtype,
+            do_sample=cfg.hf.do_sample,
+        )
     raise ValueError(f"Unknown backend: {cfg.backend!r}")
