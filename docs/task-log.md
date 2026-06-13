@@ -132,3 +132,27 @@
 
 **Next iteration**:
 - `llama-cpp-python` backend (GGUF quantization)
+
+## 2026-06-14 — v0.6: Optional NVIDIA GPU fingerprint in run manifest
+
+**Goal**: Extend `RunManifest` with an optional `gpu` section from `nvidia-smi` and `torch.cuda`.
+
+**Delivered**:
+- `manifest.py`: `GpuInfo` frozen dataclass (name, driver_version, cuda_version,
+  vram_total_mb, torch_cuda_available, torch_cuda_device_name); `_collect_gpu_info()`
+  tries `nvidia-smi --query-gpu` then `torch.cuda`; returns `None` when both are
+  unavailable; all subprocess/import calls guarded
+- `RunManifest`: new `gpu: GpuInfo | None` field; `dataclasses.asdict` serializes
+  it as a nested dict or `null`
+- `tests/test_gpu_fingerprint.py` — 14 tests; `subprocess.run` and `sys.modules["torch"]`
+  mocked so all tests pass on CPU-only CI machines
+- README and `docs/metrics.md` updated with GPU fields and optional-field caveats
+
+**Quality checks passed**:
+- `uv run pytest -v` — 98/98 tests pass
+- `uv run ruff check .` — no issues
+- `uv run ruff format --check .` — no issues
+- `uv run pyright` — 0 errors
+
+**Next iteration**:
+- `llama-cpp-python` backend (GGUF quantization)

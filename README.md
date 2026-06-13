@@ -73,7 +73,15 @@ uv run llm-bench --config configs/example.yaml --output results.csv --manifest r
   "package_version": "0.1.0",
   "torch_version": "2.12.0",
   "transformers_version": "5.12.0",
-  "psutil_version": "6.1.1"
+  "psutil_version": "6.1.1",
+  "gpu": {
+    "name": "NVIDIA GeForce RTX 3050 Laptop GPU",
+    "driver_version": "535.183.01",
+    "cuda_version": "12.2",
+    "vram_total_mb": 4096,
+    "torch_cuda_available": true,
+    "torch_cuda_device_name": "NVIDIA GeForce RTX 3050 Laptop GPU"
+  }
 }
 ```
 
@@ -99,7 +107,7 @@ llm-bench compare mock.csv transformers.csv --sort p95
 - **p50/p95 latency, tokens/sec, total tokens** per run
 - **Peak memory reporting** — CPU RSS via `psutil`, CUDA peak via `torch.cuda` when available
 - **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
-- **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU, dep versions (`--manifest`)
+- **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU, dep versions, optional GPU fingerprint (`--manifest`)
 - **Optimization-oriented roadmap** — run manifests, workload profiles, quality checks, Pareto
   analysis, and constraint-based recommendations
 - **Pluggable backends** — add a new backend by subclassing one abstract class
@@ -245,6 +253,7 @@ make typecheck  # pyright
 - [ ] Async concurrent request execution
 - [ ] Benchmark comparison table across backends in README
 - [x] Run manifest and environment fingerprint per benchmark (`--manifest`) (v0.5)
+- [x] Optional NVIDIA GPU fingerprint in manifest (`gpu` section, `nvidia-smi` + `torch.cuda`) (v0.6)
 - [ ] Workload profiles for short chat, summarization, code completion, and longer-context smoke tests
 - [ ] Lightweight output sanity / quality-retention checks
 - [ ] Pareto analysis and constraint-based recommendation report
