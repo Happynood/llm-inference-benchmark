@@ -108,7 +108,7 @@ Config: `requests=10`, `warmup_requests=2`, `max_new_tokens=50`, `device=cpu`, `
 
 - p50 of ~41 ms for a 2-layer toy model on CPU; a full GPT-2 (12 layers, 117 M params) would
   be ~10–20× slower (~400–800 ms). Llama 3 8B would be 100–1000× slower.
-- ~1193 output tokens/sec on this model is meaningless as a production throughput figure —
+- ~1211 output tokens/sec on this model is meaningless as a production throughput figure —
   production models on CPU produce 5–50 tok/s.
 - p95/p50 spread (~14%) reflects OS scheduling jitter, expected on CPU without process pinning.
 

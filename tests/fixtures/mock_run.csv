@@ -1,0 +1,2 @@
+request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,timestamp
+20,5.01,5.09,9971.18,1100,mock,mock-gpt2,45.2,,2026-01-01T00:00:00+00:00

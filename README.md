@@ -1,12 +1,20 @@
 # LLM Inference Benchmark
 
-A reproducible harness for comparing LLM inference backends — latency, throughput, and memory — across backends and quantization modes.
+A reproducible harness for LLM inference optimization experiments: compare backends,
+quantization modes, runtime parameters, latency, throughput, memory, and eventually quality under
+identical workloads.
+
+Project direction is fixed in [docs/project-charter.md](docs/project-charter.md): start with a
+small benchmark harness, then grow toward configuration comparison, Pareto analysis, and
+constraint-based recommendations.
 
 ## Problem
 
-Choosing between `transformers`, `llama.cpp`, `onnxruntime`, and `vllm` for production requires apples-to-apples benchmarks under identical prompts and hardware.
+Choosing between `transformers`, `llama.cpp`, `onnxruntime`, `vllm`, precision modes, and runtime
+parameters requires apples-to-apples experiments under identical prompts and hardware.
 Ad-hoc timing scripts per experiment produce inconsistent results that can't be compared or reproduced later.
-This project wraps the benchmark loop in a typed, config-driven CLI so every run is reproducible and comparable.
+This project wraps the benchmark loop in a typed, config-driven CLI so every run is reproducible,
+comparable, and suitable for later recommendation logic.
 
 ## Demo
 
@@ -37,13 +45,27 @@ Backend: transformers  Model: sshleifer/tiny-gpt2  Requests: 10
 
 === Benchmark Results ===
   request_count: 10
-  p50_latency_ms: 40.70
-  p95_latency_ms: 46.19
-  tokens_per_second: 1192.87
+  p50_latency_ms: 40.95
+  p95_latency_ms: 44.67
+  tokens_per_second: 1211.23
   total_tokens: 598
   backend: transformers
   model: sshleifer/tiny-gpt2
 ```
+
+**Comparison table (across saved CSVs):**
+```bash
+llm-bench compare mock.csv transformers.csv --sort p95
+```
+```
+| Backend      | Model               | N  | p50 (ms) | p95 (ms) | tok/s  | CPU mem (MB) | CUDA mem (MB) |
+|--------------|---------------------|----|----------|----------|--------|--------------|---------------|
+| mock         | mock-gpt2           | 20 | 5.01     | 5.09     | 9971.2 | 45.2         | N/A           |
+| transformers | sshleifer/tiny-gpt2 | 10 | 40.95    | 44.67    | 1211.2 | 721.4        | 0.0           |
+```
+
+> **Note**: Each row is one unrepeated benchmark run. p95 at N=10 requests is the single
+> worst-latency observation, not a stable statistical estimate.
 
 > See [docs/metrics.md](docs/metrics.md) for benchmark results and hardware context.
 
@@ -52,7 +74,9 @@ Backend: transformers  Model: sshleifer/tiny-gpt2  Requests: 10
 - **YAML-driven config** — backend, model, request count, warmup, prompts file
 - **p50/p95 latency, tokens/sec, total tokens** per run
 - **Peak memory reporting** — CPU RSS via `psutil`, CUDA peak via `torch.cuda` when available
-- **CSV output** for downstream comparison tables
+- **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
+- **Optimization-oriented roadmap** — run manifests, workload profiles, quality checks, Pareto
+  analysis, and constraint-based recommendations
 - **Pluggable backends** — add a new backend by subclassing one abstract class
 - **Mock backend** — deterministic, zero-dependency, CI-friendly
 - **Transformers backend** — real CPU inference via `AutoModelForCausalLM` (optional extra)
@@ -153,6 +177,12 @@ make install-hf  # uv sync --extra transformers
 make run-hf      # llm-bench --config configs/transformers-cpu.yaml
 ```
 
+**Compare multiple runs into a Markdown table:**
+```bash
+llm-bench compare results_a.csv results_b.csv --sort p95
+llm-bench compare results_a.csv results_b.csv --sort backend --output table.md
+```
+
 **Run all checks:**
 ```bash
 make test       # pytest -v (mock tests only, CI-safe)
@@ -181,6 +211,10 @@ make typecheck  # pyright
 - [ ] `onnxruntime` backend (ONNX export + quantization)
 - [ ] `vllm` backend (high-throughput GPU serving)
 - [x] Peak memory reporting — CPU RSS (`psutil`) + CUDA peak (`torch.cuda`) (v0.3)
+- [x] Markdown comparison table across runs (`llm-bench compare`) (v0.4)
 - [ ] Async concurrent request execution
 - [ ] Benchmark comparison table across backends in README
-- [ ] Gradio demo for interactive backend comparison
+- [ ] Run manifest and environment fingerprint per benchmark
+- [ ] Workload profiles for short chat, summarization, code completion, and longer-context smoke tests
+- [ ] Lightweight output sanity / quality-retention checks
+- [ ] Pareto analysis and constraint-based recommendation report
