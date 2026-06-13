@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 import platform
@@ -176,11 +177,14 @@ def _collect_gpu_info() -> GpuInfo | None:
 
     # --- torch.cuda ---
     try:
-        import torch  # noqa: PLC0415
-
-        torch_cuda_available = torch.cuda.is_available()
-        if torch_cuda_available:
-            torch_cuda_device_name = torch.cuda.get_device_name(0)
+        torch_module = importlib.import_module("torch")
+        cuda = getattr(torch_module, "cuda", None)
+        is_available = getattr(cuda, "is_available", None)
+        get_device_name = getattr(cuda, "get_device_name", None)
+        if callable(is_available):
+            torch_cuda_available = bool(is_available())
+            if torch_cuda_available and callable(get_device_name):
+                torch_cuda_device_name = str(get_device_name(0))
     except Exception:
         pass
 
