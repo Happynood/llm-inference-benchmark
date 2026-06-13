@@ -1,0 +1,10 @@
+What is the difference between supervised and unsupervised learning?
+How does a neural network learn from data?
+What does the term "overfitting" mean?
+Explain what a learning rate does during training.
+What is the purpose of a validation set?
+How does dropout help prevent overfitting?
+What is a hyperparameter?
+Explain what batch normalization does.
+What is the difference between a model's training loss and validation loss?
+How do you choose the number of layers in a neural network?

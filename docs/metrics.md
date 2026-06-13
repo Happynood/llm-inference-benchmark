@@ -114,6 +114,66 @@ Config: `requests=10`, `warmup_requests=2`, `max_new_tokens=50`, `device=cpu`, `
 
 Real backend results will be updated here after each new backend lands.
 
+## v0.7 Results — `transformers` backend, GPU (NVIDIA RTX 3050 Laptop)
+
+> Hardware: Intel Core i5-11400H @ 2.70 GHz, NVIDIA GeForce RTX 3050 Laptop GPU (4 GB VRAM).
+> Software: Python 3.12.13, torch 2.12.0, transformers 5.12.0.
+> Model: `sshleifer/tiny-gpt2` — 2-layer GPT-2 toy model.
+> Config: `requests=10`, `warmup_requests=2`, `max_new_tokens=50`, `device=cuda`, `torch_dtype=float16`, `do_sample=false`.
+
+Command:
+```bash
+uv run llm-bench --config configs/transformers-gpu.yaml --output benchmark-gpu.csv --manifest results/manifest-gpu.json
+```
+
+| metric | value |
+|--------|-------|
+| backend | transformers |
+| model | sshleifer/tiny-gpt2 |
+| requests | 10 |
+| warmup_requests | 2 |
+| p50_latency_ms | 59.95 |
+| p95_latency_ms | 61.86 |
+| tokens_per_second | 829.60 |
+| total_tokens | 598 |
+| peak_cpu_memory_mb | 1382.92 |
+| peak_cuda_memory_mb | 8.82 |
+
+### Interpretation
+
+- GPU (59.95 ms p50) is **slower than CPU (40.95 ms)** for this toy model. This is expected:
+  `sshleifer/tiny-gpt2` has only 2 layers and 117 K parameters. At this scale, GPU kernel-launch
+  overhead and CPU-GPU data transfer dominate. Real production models (Llama 3 8B+) reverse this
+  decisively — GPU inference is 10–100× faster than CPU there.
+- `peak_cuda_memory_mb`: 8.82 MB confirms that this tiny model fits in GPU RAM with a negligible
+  footprint. A full GPT-2 small (117 M params) in float16 uses ~250 MB; Llama 3 8B uses ~8 GB+.
+- The `gpu` section in the manifest correctly captured `torch_cuda_available: true` and
+  `torch_cuda_device_name: "NVIDIA GeForce RTX 3050 Laptop GPU"`. The `nvidia-smi` sub-fields
+  (name, driver_version, etc.) were `null` in this run — `nvidia-smi` was not accessible in
+  the run environment.
+- `torch_dtype: float16` reduces GPU memory usage vs float32 at identical accuracy for this model.
+
+## Workload Profiles
+
+Named profiles standardize the prompt set across experiment runs so backend and parameter
+comparisons are apples-to-apples. Select a profile with `workload_profile:` in the YAML config.
+
+| Profile | Input | Output | Use when |
+|---------|-------|--------|----------|
+| `short_chat` | short | short | Benchmarking interactive latency (chat, QA) |
+| `summarization` | medium | short | Comparing models on read-heavy tasks |
+| `code_completion` | short | medium | Benchmarking code generation throughput |
+| `long_context_smoke` | long | short | Stressing the prefill pass; context window capacity |
+
+**Quick start:**
+```bash
+uv run llm-bench --config configs/profile-short-chat.yaml --output results/short-chat.csv
+uv run llm-bench --config configs/profile-summarization.yaml --output results/summarization.csv
+```
+
+Backward compatibility: `prompts_file:` continues to work unchanged. If `workload_profile:` is
+set, it takes precedence and points to a committed prompt fixture under `data/prompts/`.
+
 ## Reproducing a Run
 
 Pass `--manifest <path>.json` to save a full environment snapshot alongside the CSV:
