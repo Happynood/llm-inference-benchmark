@@ -36,6 +36,7 @@ def test_load_csv_mock_fixture() -> None:
     assert row.tokens_per_second == pytest.approx(9971.18)
     assert row.peak_cpu_memory_mb == pytest.approx(45.2)
     assert row.peak_cuda_memory_mb is None  # empty string in CSV → None
+    assert row.peak_vram_memory_mb is None  # column absent in older CSV → None
 
 
 def test_load_csv_transformers_fixture() -> None:
@@ -73,6 +74,25 @@ def test_load_csv_whitespace_cuda_raises(tmp_path: Path) -> None:
         load_csv(p)
 
 
+def test_load_csv_with_vram_column(tmp_path: Path) -> None:
+    """CSVs that include peak_vram_memory_mb load the value correctly."""
+    p = tmp_path / "vram.csv"
+    header = "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,peak_vram_memory_mb,timestamp\n"  # noqa: E501
+    p.write_text(header + "10,900.0,940.0,53.71,500,llama-cpp,llama3,800.0,,2361.0,2026-01-01\n")
+    row = load_csv(p)
+    assert row.peak_vram_memory_mb == pytest.approx(2361.0)
+    assert row.peak_cuda_memory_mb is None
+
+
+def test_load_csv_whitespace_vram_raises(tmp_path: Path) -> None:
+    """Whitespace-only peak_vram_memory_mb is rejected as invalid."""
+    p = tmp_path / "bad_vram.csv"
+    header = "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,peak_vram_memory_mb,timestamp\n"  # noqa: E501
+    p.write_text(header + "10,5.0,5.1,9000,500,mock,m,45.0,,   ,2026-01-01\n")
+    with pytest.raises(ValueError, match="invalid peak_vram_memory_mb"):
+        load_csv(p)
+
+
 def test_build_comparison_table_empty_paths_raises() -> None:
     with pytest.raises(ValueError, match="At least one CSV path"):
         build_comparison_table([])
@@ -83,9 +103,9 @@ def test_build_comparison_table_empty_paths_raises() -> None:
 # ---------------------------------------------------------------------------
 
 _ROWS = [
-    RunRow("transformers", "tiny-gpt2", 10, 40.0, 44.0, 1200.0, 720.0, 0.0),
-    RunRow("mock", "mock-gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None),
-    RunRow("onnx", "bert-base", 15, 10.0, 12.0, 5000.0, 200.0, None),
+    RunRow("transformers", "tiny-gpt2", 10, 40.0, 44.0, 1200.0, 720.0, 0.0, 1024.0),
+    RunRow("mock", "mock-gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None),
+    RunRow("onnx", "bert-base", 15, 10.0, 12.0, 5000.0, 200.0, None, None),
 ]
 
 
@@ -136,20 +156,32 @@ def test_render_table_contains_expected_columns() -> None:
         "tok/s",
         "CPU mem (MB)",
         "CUDA mem (MB)",
-    ]:  # noqa: E501
+        "VRAM mem (MB)",
+    ]:
         assert col in table
 
 
 def test_render_table_cuda_none_shows_na() -> None:
-    rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None)]
+    rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None)]
     assert "N/A" in render_table(rows)
 
 
 def test_render_table_cuda_zero_shows_value() -> None:
-    rows = [RunRow("transformers", "tiny", 10, 40.0, 44.0, 1200.0, 720.0, 0.0)]
+    rows = [RunRow("transformers", "tiny", 10, 40.0, 44.0, 1200.0, 720.0, 0.0, 0.0)]
     table = render_table(rows)
     assert "0.0" in table
     assert "N/A" not in table
+
+
+def test_render_table_vram_none_shows_na() -> None:
+    rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None)]
+    assert "N/A" in render_table(rows)
+
+
+def test_render_table_vram_value_shown() -> None:
+    rows = [RunRow("llama-cpp", "llama3", 10, 900.0, 940.0, 53.0, 800.0, None, 2361.0)]
+    table = render_table(rows)
+    assert "2361.0" in table
 
 
 def test_render_table_row_count() -> None:

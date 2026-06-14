@@ -1,4 +1,5 @@
 from pathlib import Path
+from unittest.mock import patch
 
 import pytest
 
@@ -71,3 +72,12 @@ def test_run_benchmark_cuda_memory_absent_without_gpu(tmp_prompts: Path) -> None
     cfg = BenchmarkConfig(requests=3, warmup_requests=0, prompts_file=str(tmp_prompts))
     report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
     assert report.peak_cuda_memory_mb is None
+
+
+def test_run_benchmark_vram_none_without_nvidia_smi(tmp_prompts: Path) -> None:
+    """peak_vram_memory_mb is None when nvidia-smi is not available."""
+    with patch("llm_inference_benchmark.memory.subprocess.run", side_effect=FileNotFoundError):
+        backend = MockBackend(model="test", latency_ms=0)
+        cfg = BenchmarkConfig(requests=3, warmup_requests=0, prompts_file=str(tmp_prompts))
+        report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.peak_vram_memory_mb is None

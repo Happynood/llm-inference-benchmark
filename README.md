@@ -109,11 +109,15 @@ uv run llm-bench compare results/*.csv --sort p95
 llm-bench compare mock.csv transformers.csv --sort p95
 ```
 ```
-| Backend      | Model               | N  | p50 (ms) | p95 (ms) | tok/s  | CPU mem (MB) | CUDA mem (MB) |
-|--------------|---------------------|----|----------|----------|--------|--------------|---------------|
-| mock         | mock-gpt2           | 20 | 5.01     | 5.09     | 9971.2 | 45.2         | N/A           |
-| transformers | sshleifer/tiny-gpt2 | 10 | 40.95    | 44.67    | 1211.2 | 721.4        | 0.0           |
+| Backend      | Model               | N  | p50 (ms) | p95 (ms) | tok/s  | CPU mem (MB) | CUDA mem (MB) | VRAM mem (MB) |
+|--------------|---------------------|----|----------|----------|--------|--------------|---------------|---------------|
+| mock         | mock-gpt2           | 20 | 5.01     | 5.09     | 9971.2 | 45.2         | N/A           | N/A           |
+| transformers | sshleifer/tiny-gpt2 | 10 | 40.95    | 44.67    | 1211.2 | 721.4        | 0.0           | N/A           |
 ```
+
+> `CUDA mem` is PyTorch allocator memory (zero for CPU runs, absent when torch unavailable).
+> `VRAM mem` is driver-level VRAM from `nvidia-smi` — captures llama.cpp GPU usage that
+> `peak_cuda_memory_mb` misses. `N/A` when `nvidia-smi` is not available.
 
 > **Note**: Each row is one unrepeated benchmark run. p95 at N=10 requests is the single
 > worst-latency observation, not a stable statistical estimate.
@@ -126,7 +130,7 @@ llm-bench compare mock.csv transformers.csv --sort p95
 - **Workload profiles** — named prompt sets (`short_chat`, `summarization`, `code_completion`, `long_context_smoke`) for reproducible cross-experiment comparisons
 - **Run matrix** — define multiple experiment runs in one YAML; `llm-bench matrix` executes all sequentially with one CSV + manifest per run
 - **p50/p95 latency, tokens/sec, total tokens** per run
-- **Peak memory reporting** — CPU RSS via `psutil`, CUDA peak via `torch.cuda` when available
+- **Peak memory reporting** — CPU RSS via `psutil`; PyTorch allocator CUDA peak via `torch.cuda`; driver-level VRAM via `nvidia-smi` (`peak_vram_memory_mb`) for non-PyTorch GPU backends such as llama.cpp
 - **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
 - **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU, dep versions, optional GPU fingerprint (`--manifest`)
 - **Optimization-oriented roadmap** — run manifests, workload profiles, quality checks, Pareto
@@ -322,7 +326,8 @@ make typecheck  # pyright
 - `n_gpu_layers` must be tuned to your VRAM budget. For Llama 3.2 3B Q4\_K\_M, `n_gpu_layers: 99`
   offloads all 28 layers (2361 MiB VRAM on RTX 3050). For larger models, increase gradually.
 - `peak_cuda_memory_mb` will be `0.0` even on GPU runs — llama-cpp uses its own VRAM allocator,
-  not PyTorch's. Measure VRAM with `nvidia-smi` while the benchmark runs.
+  not PyTorch's. Use `peak_vram_memory_mb` instead: it captures driver-level VRAM via `nvidia-smi`
+  automatically during the benchmark loop (blank when `nvidia-smi` is not on `PATH`).
 
 ## Roadmap
 

@@ -20,7 +20,9 @@ try:
     from llama_cpp import Llama  # type: ignore[import-untyped]
 
     _AVAILABLE = True
-except ImportError:
+except (ImportError, RuntimeError):
+    # RuntimeError is raised when the pre-built wheel finds the package installed
+    # but cannot load the shared library (e.g. missing CUDA .so files).
     Llama = None  # type: ignore[assignment, misc]
     _AVAILABLE = False
 

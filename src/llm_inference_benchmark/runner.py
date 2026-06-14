@@ -4,7 +4,12 @@ from pathlib import Path
 
 from llm_inference_benchmark.backends.base import Backend
 from llm_inference_benchmark.config import BenchmarkConfig
-from llm_inference_benchmark.memory import MemorySampler, cuda_peak_mb, reset_cuda_peak
+from llm_inference_benchmark.memory import (
+    MemorySampler,
+    NvidiaSmiSampler,
+    cuda_peak_mb,
+    reset_cuda_peak,
+)
 from llm_inference_benchmark.metrics import MetricsReport, RequestMetrics, compute_metrics
 
 
@@ -27,7 +32,7 @@ def run_benchmark(backend: Backend, config: BenchmarkConfig, prompts: list[str])
         backend.generate(prompts[i % len(prompts)])
 
     results: list[RequestMetrics] = []
-    with MemorySampler() as mem:
+    with MemorySampler() as mem, NvidiaSmiSampler() as vram:
         reset_cuda_peak()
         for i in range(config.requests):
             result = backend.generate(prompts[i % len(prompts)])
@@ -45,4 +50,5 @@ def run_benchmark(backend: Backend, config: BenchmarkConfig, prompts: list[str])
         model=config.model,
         peak_cpu_memory_mb=mem.peak_cpu_mb,
         peak_cuda_memory_mb=cuda_peak_mb(),
+        peak_vram_memory_mb=vram.peak_vram_mb,
     )

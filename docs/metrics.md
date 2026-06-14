@@ -12,7 +12,8 @@
 | `backend` | string | Backend name (`mock`, `transformers`, `llama-cpp`, ...) |
 | `model` | string | Model identifier as passed in config |
 | `peak_cpu_memory_mb` | MB | Peak process RSS during the benchmark run (warmup + benchmark loop) |
-| `peak_cuda_memory_mb` | MB | Peak CUDA memory allocated during the run; empty when no GPU |
+| `peak_cuda_memory_mb` | MB | Peak PyTorch allocator CUDA memory during the run; blank when torch/CUDA absent |
+| `peak_vram_memory_mb` | MiB | Peak GPU VRAM from `nvidia-smi` during the run; blank when `nvidia-smi` unavailable |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
 
 ## Memory Measurement
@@ -43,8 +44,33 @@ started together inside `run_benchmark`, so CPU and CUDA measurement windows are
 - **`>0`**: GPU inference; value reflects allocator-tracked memory only — fragmentation and
   reserved-but-unallocated pages are excluded.
 
-**Limitation**: measures PyTorch allocator-tracked memory, not raw VRAM at the driver level.
-Reserved-but-free memory pages are not reflected in this number.
+**Limitation**: measures PyTorch allocator-tracked memory only — reserved-but-free pages are
+excluded, and allocations made by non-PyTorch GPU backends (such as llama-cpp's own CUDA
+allocator) are not captured here at all. For those cases, use `peak_vram_memory_mb`.
+
+### Driver-level VRAM peak (`peak_vram_memory_mb`)
+
+Captured by polling `nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits`
+in a background daemon thread every 500 ms. Reports total VRAM used on the GPU as seen by
+the NVIDIA driver — model weights, KV cache, CUDA workspace, and all other GPU allocations,
+regardless of which library or backend made them.
+
+This metric is the right one for llama-cpp GPU inference: llama.cpp manages VRAM through
+its own allocator rather than PyTorch's, so `peak_cuda_memory_mb` shows `0.0` even during
+active GPU inference. `peak_vram_memory_mb` captures the true VRAM footprint in that case.
+
+- **`None` / blank in CSV**: `nvidia-smi` was not found or failed on the first probe.
+  No NVIDIA GPU present, driver not installed, or `nvidia-smi` not on `PATH`.
+- **`>0`**: VRAM in MiB used during the benchmark loop. On machines with an NVIDIA GPU,
+  includes baseline OS/driver idle usage (~10–50 MiB) even for CPU-only runs, because
+  the metric reflects total driver-visible VRAM across all processes.
+
+**Limitation**: at a 500 ms poll interval, very short-lived VRAM spikes may be missed.
+The value reflects total GPU VRAM across all processes — other GPU workloads running
+concurrently will inflate the reported peak.
+
+> **Older runs**: CSVs captured before this metric was added have a blank
+> `peak_vram_memory_mb` column. `llm-bench compare` treats missing or blank as `N/A`.
 
 ## Computation Notes
 
@@ -89,6 +115,11 @@ They do **not** measure model inference speed. The mock backend sleeps for a con
 Results in this section come from real inference backends on real hardware.
 Full curated reports with config, software versions, and interpretation are in
 [docs/results/](results/).
+
+> **`peak_vram_memory_mb` note**: runs in the transformers-backend subsections below were
+> captured before driver-level VRAM sampling was added. Their CSVs do not contain that column
+> and `llm-bench compare` will show `N/A` for it. The llama-cpp run has `peak_vram_memory_mb`
+> measured via nvidia-smi; see its curated report for the value.
 
 ### `sshleifer/tiny-gpt2` — CPU (i5-11400H, float32)
 
