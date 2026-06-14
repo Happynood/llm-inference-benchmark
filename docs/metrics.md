@@ -126,6 +126,54 @@ truncating before any real content is produced.
 
 ---
 
+## Pareto Analysis
+
+`llm-bench pareto results/*.csv` reads saved benchmark CSVs and classifies each run as
+**optimal** or **dominated** using Pareto dominance.
+
+### Dominance rule
+
+Run A dominates run B when A is **no worse** on every available metric and **strictly
+better** on at least one:
+
+| Metric | Direction | Participation |
+|--------|-----------|---------------|
+| `p95_latency_ms` | minimise | always |
+| `tokens_per_second` | maximise | always |
+| `peak_vram_memory_mb` | minimise | only when both rows have a value |
+| `sanity_pass_rate` | maximise | only when both rows have a value |
+
+Optional metrics are excluded from any comparison where one or both rows carry `None`
+for that field.  This means an older CSV without VRAM data is not penalised — the
+comparison narrows to the metrics both runs share.
+
+### Output
+
+```bash
+uv run llm-bench pareto results/quant-q4km.csv results/quant-q8.csv
+```
+
+```
+| Backend   | Model                                  | N  | p95 (ms) | tok/s | CPU mem (MB) | VRAM mem (MB) | Sanity % | Pareto  |
+|-----------|----------------------------------------|----|----------|-------|--------------|---------------|----------|---------|
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf | 10 | 904.33   | 55.3  | 1289.8       | 2361.0        | 100.0%   | optimal |
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf   | 10 | 1185.23  | 42.2  | 1418.4       | 3697.0        | 100.0%   | -       |
+```
+
+Q4\_K\_M is strictly better than Q8\_0 on p95 latency, throughput, and VRAM, so Q4\_K\_M
+is the sole Pareto-optimal configuration in this two-run comparison.
+
+### Limitations
+
+- **N matters**: Pareto analysis at N=10 requests inherits all limitations of the raw
+  metrics — p95 at N=10 is the single worst observation, not a stable tail-latency
+  estimate.
+- **No quality dimension**: output quality (perplexity, task accuracy) is not a metric.
+  Pareto optimality here means "efficient on speed/memory/sanity", not "best model".
+- **No aggregation**: each CSV is one run.  Run-to-run variance is not considered.
+
+---
+
 ## CI / Harness Validation
 
 Results from the mock backend validate that the measurement pipeline is wired up correctly.

@@ -122,6 +122,22 @@ llm-bench compare mock.csv transformers.csv --sort p95
 > **Note**: Each row is one unrepeated benchmark run. p95 at N=10 requests is the single
 > worst-latency observation, not a stable statistical estimate.
 
+**Pareto analysis (identify efficient configurations):**
+```bash
+llm-bench pareto results/quant-q4km.csv results/quant-q8.csv
+```
+```
+| Backend   | Model                                  | N  | p95 (ms) | tok/s | CPU mem (MB) | VRAM mem (MB) | Sanity % | Pareto  |
+|-----------|----------------------------------------|----|----------|-------|--------------|---------------|----------|---------|
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf | 10 | 904.33   | 55.3  | 1289.8       | 2361.0        | 100.0%   | optimal |
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf   | 10 | 1185.23  | 42.2  | 1418.4       | 3697.0        | 100.0%   | -       |
+```
+
+> A run is **optimal** when no other run is at least as good on every metric and strictly
+> better on at least one (lower p95, higher tok/s, lower VRAM, higher sanity).  Missing
+> optional metrics (VRAM, sanity) are excluded from comparisons rather than penalising
+> either run.
+
 > See [docs/metrics.md](docs/metrics.md) for benchmark results and hardware context.
 
 ## Features
@@ -132,6 +148,7 @@ llm-bench compare mock.csv transformers.csv --sort p95
 - **p50/p95 latency, tokens/sec, total tokens** per run
 - **Peak memory reporting** — CPU RSS via `psutil`; PyTorch allocator CUDA peak via `torch.cuda`; driver-level VRAM via `nvidia-smi` (`peak_vram_memory_mb`) for non-PyTorch GPU backends such as llama.cpp
 - **Output sanity checks** — `empty_output_count`, `min/mean_output_chars`, `repeated_output_count`, `sanity_pass_rate` computed per run; shown as `Sanity %` in `llm-bench compare`
+- **Pareto analysis** — `llm-bench pareto` classifies configurations as optimal or dominated across p95 latency, throughput, VRAM, and sanity; missing optional metrics narrow the comparison rather than crashing
 - **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
 - **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU, dep versions, optional GPU fingerprint (`--manifest`)
 - **Optimization-oriented roadmap** — run manifests, workload profiles, quality checks, Pareto
