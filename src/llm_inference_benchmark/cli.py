@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import gc
 from dataclasses import asdict
 from pathlib import Path
 
@@ -205,6 +206,10 @@ def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
 
         click.echo(f"  → {csv_path}")
         click.echo(f"  → {manifest_path}")
+
+        # Release backend resources (GPU memory, file handles) before the next run.
+        del backend
+        gc.collect()
 
     click.echo("\nDone. Compare with:")
     click.echo(f"  llm-bench compare {results_dir}/*.csv")

@@ -1,0 +1,25 @@
+# n_gpu_layers sweep matrix — Llama 3.2 3B Q4_K_M on RTX 3050 4 GB
+#
+# Three sweep points: CPU-only, partial offload (20/28 layers), full offload (28/28).
+# Requires CUDA-compiled llama-cpp-python wheel and LD_LIBRARY_PATH set to CUDA libs.
+#
+# Run:
+#   CUDA_LIBS=$(find .venv/lib/python3.12/site-packages/nvidia -name "*.so*" \
+#     | xargs -I{} dirname {} | sort -u | tr '\n' ':')
+#   LD_LIBRARY_PATH="${CUDA_LIBS}${LD_LIBRARY_PATH}" \
+#     uv run llm-bench matrix --config configs/llama-cpp-vram-sweep.yaml
+#
+# Compare results:
+#   uv run llm-bench compare results/sweep-gpu0.csv results/sweep-gpu20.csv results/sweep-gpu99.csv
+
+results_dir: results
+
+runs:
+  - name: sweep-gpu0
+    config: configs/llama-cpp-sweep-gpu0.yaml
+
+  - name: sweep-gpu20
+    config: configs/llama-cpp-sweep-gpu20.yaml
+
+  - name: sweep-gpu99
+    config: configs/llama-cpp-sweep-gpu99.yaml
