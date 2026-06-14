@@ -248,6 +248,21 @@ Real-run curated reports: [docs/results/](docs/results/).
 > speedup at 78% of the VRAM cost. Full offload uses 2361/4096 MiB (57.6%).
 > `peak_cuda_memory_mb = 0.0` for all llama.cpp runs — use `peak_vram_memory_mb` instead.
 
+### Real Hardware — Q4\_K\_M vs Q8\_0 Quantization Comparison, RTX 3050 (llama.cpp)
+
+> Same model, same prompts, same GPU offload — different quantization.
+> Full report: [docs/results/llama-cpp-rtx3050-quant-compare.md](docs/results/llama-cpp-rtx3050-quant-compare.md)
+
+| Quantization | n\_gpu\_layers | p50 (ms) | p95 (ms) | tok/s | Peak VRAM (MiB) |
+|---|---|---|---|---|---|
+| Q4\_K\_M | 99 (28/28) | **929.77** | **960.76** | **53.56** | 2361 (57.6%) |
+| Q8\_0 | 99 (28/28) | 1194.74 | 1198.34 | 41.85 | 3697 (90.2%) |
+
+> Q4\_K\_M is **1.28× faster** and uses **1.57× less VRAM** than Q8\_0. The speedup comes from
+> memory bandwidth: fewer bits per weight = fewer bytes read from VRAM per forward pass.
+> Q8\_0 fits in 4 GB but leaves only 399 MiB headroom — practical for benchmarking,
+> tight for interactive use with longer contexts.
+
 ## How to Run
 
 **Prerequisites**: Python 3.11+, [uv](https://docs.astral.sh/uv/)
@@ -292,6 +307,26 @@ make run-llama-cpp-gpu
 **Run matrix (all four profiles, one command):**
 ```bash
 make run-matrix  # llm-bench matrix --config configs/matrix-example.yaml
+```
+
+**Quantization comparison — Q4\_K\_M vs Q8\_0 (llama.cpp, CUDA):**
+```bash
+# 1. Download both quantizations (Llama 3.2 3B Instruct example):
+#    huggingface-cli download bartowski/Llama-3.2-3B-Instruct-GGUF \
+#      Llama-3.2-3B-Instruct-Q4_K_M.gguf --local-dir ~/models/
+#    huggingface-cli download bartowski/Llama-3.2-3B-Instruct-GGUF \
+#      Llama-3.2-3B-Instruct-Q8_0.gguf   --local-dir ~/models/
+
+# 2. Set model: paths in configs/llama-cpp-q4km-best.yaml and configs/llama-cpp-q8-best.yaml
+
+# 3. Run the comparison matrix (CUDA 12/13 workaround for pre-built cu124 wheel):
+CUDA_LIBS=$(find .venv/lib/python3.12/site-packages/nvidia -name "*.so*" \
+  | xargs -I{} dirname {} | sort -u | tr '\n' ':')
+LD_LIBRARY_PATH="${CUDA_LIBS}${LD_LIBRARY_PATH}" \
+  uv run llm-bench matrix --config configs/llama-cpp-quant-compare.yaml
+
+# 4. Compare results:
+uv run llm-bench compare results/quant-q4km.csv results/quant-q8.csv
 ```
 
 **Save a run manifest (environment fingerprint):**
@@ -363,7 +398,7 @@ make typecheck  # pyright
 - [x] `llama-cpp-python` backend — GGUF quantization, `n_gpu_layers` for partial GPU offload (v0.10)
 - [x] First real run: Llama 3.2 3B Instruct Q4\_K\_M on RTX 3050 — curated results report (v0.11)
 - [x] n\_gpu\_layers sweep (0 / 20 / 99) via `llm-bench matrix` — VRAM scaling and latency documented
-- [ ] Quantization comparison: Q4\_K\_M vs Q8\_0, same prompts, same hardware
+- [x] Quantization comparison: Q4\_K\_M vs Q8\_0 — 1.28× speed difference, 1.57× VRAM difference documented
 
 **Optimization analysis (planned)**
 - [ ] Lightweight output quality checks (perplexity or judge scoring) so speed isn't reported without correctness

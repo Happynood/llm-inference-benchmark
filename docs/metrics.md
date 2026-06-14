@@ -263,12 +263,14 @@ CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
 
 ### VRAM budget for RTX 3050 4 GB
 
-| Model | Quantization | Size | n_gpu_layers for 4 GB |
-|-------|-------------|------|----------------------|
-| Llama 3 8B | Q4_K_M | ~4.7 GB | 20–24 (partial) |
-| Llama 3 8B | Q4_K_S | ~4.3 GB | 24–28 (partial) |
-| Mistral 7B | Q4_K_M | ~4.1 GB | 28–32 (most/all) |
-| TinyLlama 1.1B | Q4_K_M | ~0.65 GB | 22 (all layers) |
+| Model | Quantization | GGUF size | Peak VRAM (observed) | n_gpu_layers for 4 GB |
+|-------|-------------|-----------|---------------------|----------------------|
+| Llama 3.2 3B | Q4\_K\_M | ~1.9 GB | **2361 MiB** (measured) | 99 (all 28 layers) |
+| Llama 3.2 3B | Q8\_0 | ~3.2 GB | **3697 MiB** (measured) | 99 (all 28 layers, 399 MiB headroom) |
+| Llama 3 8B | Q4\_K\_M | ~4.7 GB | — | 20–24 (partial) |
+| Llama 3 8B | Q4\_K\_S | ~4.3 GB | — | 24–28 (partial) |
+| Mistral 7B | Q4\_K\_M | ~4.1 GB | — | 28–32 (most/all) |
+| TinyLlama 1.1B | Q4\_K\_M | ~0.65 GB | — | 22 (all layers) |
 
 Start with `n_gpu_layers: 0` to confirm the model loads, then increase until VRAM is
 nearly full (leaving ~300–500 MB headroom for KV cache and OS).
@@ -397,3 +399,88 @@ The `gpu` object itself is `null` when neither source provides any information.
 `prompts_sha256`. If they match, the config and prompts are byte-identical.
 If `git_dirty` was `true` at run time, the working tree had changes not captured
 in `git_commit` — results may not be fully reproducible from that commit alone.
+
+---
+
+## Quantization Comparison Methodology
+
+Comparing quantizations of the same model measures the accuracy–memory–speed trade-off
+inherent in post-training quantization. This section defines the methodology used in
+curated quantization comparison reports in `docs/results/`.
+
+### What is quantization?
+
+GGUF quantization reduces model weight precision to decrease file size and VRAM footprint.
+Lower precision = less VRAM and faster inference, but potentially lower output quality.
+Common GGUF quantization formats compared in this benchmark:
+
+| Format | Bits/weight (approx) | File size (Llama 3.2 3B) | Typical use |
+|--------|---------------------|--------------------------|-------------|
+| Q4_K_M | ~4.5 bits | ~1.9 GB | Fast inference on 4–8 GB VRAM; good quality–speed trade-off |
+| Q8_0 | 8 bits | ~3.4 GB | Near-lossless; reference baseline for quality comparisons |
+
+Q8_0 is the practical upper bound for GGUF quality — weights are stored at 8-bit
+precision with minimal quantization error. Q4_K_M uses K-quant methods that apply
+different precision to different weight groups to maintain output quality while
+achieving ~2× compression vs Q8_0.
+
+### Comparison protocol
+
+Runs are considered comparable when:
+
+1. **Same model family and parameter count** — e.g., both `Llama-3.2-3B-Instruct`.
+2. **Same prompt fixture** — same `prompts_file` or `workload_profile` in both configs,
+   ensuring identical input tokens.
+3. **Same generation parameters** — `max_tokens`, `temperature`, `n_ctx` identical
+   across runs; `temperature: 0.0` (greedy) for deterministic output.
+4. **Best stable GPU offload per quantization** — use the highest `n_gpu_layers` that
+   fits within the VRAM budget for each quantization, leaving ≥300 MiB headroom.
+   If both fit at `n_gpu_layers=99` (all layers), use the same value.
+   If they differ, document the constraint explicitly — do not force identical
+   `n_gpu_layers` if one quantization would OOM.
+5. **Produced by the repository CLI** — `uv run llm-bench matrix --config ...`.
+
+### VRAM budget estimation for llama-cpp
+
+From the n_gpu_layers sweep evidence on RTX 3050 with Llama 3.2 3B Q4_K_M:
+
+- CUDA-init baseline: **~655 MiB** (CUDA context + workspace; present even at `n_gpu_layers=0`)
+- Per-layer VRAM (Q4_K_M, 28-layer model): **~60 MiB/layer**
+- Per-layer VRAM (Q8_0, estimated): **~107 MiB/layer** (Q8_0 is ~1.78× denser than Q4_K_M)
+
+To estimate safe `n_gpu_layers` for a new quantization on a 4 GB card:
+
+```
+available = total_vram_mib - cuda_baseline_mib - headroom_mib
+             = 4096 - 655 - 300 = ~3141 MiB
+max_layers = floor(available / per_layer_mib)
+```
+
+These are estimates. Probe with `n_gpu_layers=99` first; if context creation fails with
+`ValueError: Failed to create llama_context`, reduce in steps of 4 until stable.
+
+### What this comparison does and does not measure
+
+| Measured | Not measured |
+|----------|-------------|
+| Inference latency (p50, p95) | Output quality / perplexity |
+| Throughput (tok/s) | Accuracy on downstream tasks |
+| Peak VRAM (`peak_vram_memory_mb`) | Long-context behaviour |
+| Peak CPU RSS (`peak_cpu_memory_mb`) | Batch or concurrent request throughput |
+
+Quality evaluation (perplexity, benchmark accuracy) is a planned addition to the roadmap.
+The quantization comparison in this project reports speed and memory only — the implicit
+assumption is that Q8_0 serves as a high-quality reference and Q4_K_M trades a small
+accuracy loss for ~2× smaller VRAM footprint and proportionally faster inference.
+
+### Run command
+
+```bash
+# Set model: path in each config, then:
+CUDA_LIBS=$(find .venv/lib/python3.12/site-packages/nvidia -name "*.so*" \
+  | xargs -I{} dirname {} | sort -u | tr '\n' ':')
+LD_LIBRARY_PATH="${CUDA_LIBS}${LD_LIBRARY_PATH}" \
+  uv run llm-bench matrix --config configs/llama-cpp-quant-compare.yaml
+
+uv run llm-bench compare results/quant-q4km.csv results/quant-q8.csv
+```

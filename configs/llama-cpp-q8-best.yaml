@@ -1,0 +1,23 @@
+# llama.cpp — Q8_0, best GPU offload config (RTX 3050 4 GB)
+#
+# All 28 layers on GPU. Probed to fit at ~3697 MiB peak VRAM (90.2% of 4096 MiB).
+# Part of the quantization comparison:
+#   uv run llm-bench matrix --config configs/llama-cpp-quant-compare.yaml
+#
+# Set model: to your local GGUF path:
+#   huggingface-cli download bartowski/Llama-3.2-3B-Instruct-GGUF \
+#     Llama-3.2-3B-Instruct-Q8_0.gguf --local-dir ~/models/
+
+backend: llama-cpp
+model: /path/to/model.gguf
+requests: 10
+warmup_requests: 2
+prompts_file: data/prompts/smoke.txt
+
+llama_cpp:
+  n_ctx: 512
+  n_gpu_layers: 99      # all 28 layers on GPU; peak VRAM ~3697 MiB on RTX 3050
+  max_tokens: 50
+  temperature: 0.0      # greedy/deterministic
+  n_threads: null
+  verbose: false
