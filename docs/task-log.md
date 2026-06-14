@@ -133,6 +133,46 @@
 **Next iteration**:
 - `llama-cpp-python` backend (GGUF quantization)
 
+## 2026-06-14 — v0.10: llama.cpp GGUF backend
+
+**Goal**: Add `llama-cpp` backend for quantized inference on production-size models;
+keep CI safe with mock-based unit tests (no GGUF download, no GPU required).
+
+**Delivered**:
+- `backends/llama_cpp.py`: `LlamaCppBackend` implementing `Backend` ABC via `llama-cpp-python`;
+  lazy import guarded by `_AVAILABLE`; `n_gpu_layers` for partial GPU offload on 4 GB VRAM;
+  `n_threads` omitted from kwargs when `None` (llama.cpp auto-detect); `echo=False` so
+  completion text excludes the prompt; `time.perf_counter()` latency measurement consistent
+  with HFBackend
+- `config.py`: `LlamaCppBackendConfig` with `n_ctx`, `n_gpu_layers`, `max_tokens`,
+  `temperature`, `n_threads`, `verbose`; `backend` Literal extended to include `"llama-cpp"`;
+  `BenchmarkConfig.llama_cpp` sub-config field (default-factory, backward-compatible)
+- `cli.py`: `_build_backend()` case for `"llama-cpp"` with lazy import (same pattern as HF)
+- `pyproject.toml`: `[llama-cpp]` optional extra (`llama-cpp-python>=0.2`); added
+  `backends/llama_cpp.py` to pyright ignore list (optional dep pattern)
+- `configs/llama-cpp-cpu.yaml`: CPU config with placeholder model path and install instructions
+- `configs/llama-cpp-gpu.yaml`: partial GPU offload config for RTX 3050 4 GB with VRAM
+  budget notes and CUDA build instructions
+- `Makefile`: `install-llama-cpp`, `install-llama-cpp-cuda`, `run-llama-cpp-cpu`,
+  `run-llama-cpp-gpu` targets
+- `tests/test_llama_cpp_backend.py`: 23 mock-based unit tests + 1 skipped integration
+  test; covers ImportError path, constructor kwargs, `generate()` output, config validation,
+  YAML loading, CLI dispatch, full `run_benchmark` integration — zero GGUF downloads
+- `docs/metrics.md`: llama.cpp backend section with config schema, install steps, VRAM budget
+  table for RTX 3050 4 GB, CUDA memory caveat
+- `README.md`: demo block, feature bullet, How-to-Run instructions, Limitations section,
+  Roadmap item checked off, architecture diagram updated
+
+**Quality checks passed**:
+- `uv run pytest -v` — 179/179 pass (23 new llama-cpp tests, 1 skipped integration)
+- `uv run ruff check .` — no issues
+- `uv run ruff format --check .` — no issues
+- `uv run pyright` — 0 errors
+
+**Next iteration**:
+- Real run: Llama 3 8B Q4_K_M on RTX 3050 with llama-cpp GPU build; curated report in
+  `docs/results/`; quantization comparison Q4_K_M vs Q8_0
+
 ## 2026-06-14 — v0.9: Security hardening + CI/real-evidence separation
 
 **Goal**: Fix path-traversal risk in run names; make portfolio clearly distinguish mock

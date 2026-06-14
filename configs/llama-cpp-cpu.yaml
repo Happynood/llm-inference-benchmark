@@ -1,0 +1,25 @@
+# llama.cpp backend — CPU-only inference
+#
+# Replace 'model:' with the absolute path to your local GGUF file.
+# Download example (Llama 3 8B Q4_K_M, ~4.7 GB):
+#   huggingface-cli download bartowski/Meta-Llama-3-8B-Instruct-GGUF \
+#     Meta-Llama-3-8B-Instruct-Q4_K_M.gguf --local-dir ~/models/
+#
+# Install backend:
+#   uv sync --extra llama-cpp
+# Run:
+#   uv run llm-bench --config configs/llama-cpp-cpu.yaml --output results/llama-cpp-cpu.csv
+
+backend: llama-cpp
+model: /path/to/model.gguf
+requests: 10
+warmup_requests: 2
+prompts_file: data/prompts/smoke.txt
+
+llama_cpp:
+  n_ctx: 2048
+  n_gpu_layers: 0       # CPU only — no GPU offload
+  max_tokens: 50
+  temperature: 0.0      # greedy decode (deterministic)
+  n_threads: null       # null = llama.cpp auto-detect
+  verbose: false

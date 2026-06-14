@@ -1,0 +1,33 @@
+# llama.cpp backend — partial GPU offload (NVIDIA RTX 3050 Laptop 4 GB)
+#
+# Replace 'model:' with the absolute path to your local GGUF file.
+# Download example (Llama 3 8B Q4_K_M, ~4.7 GB):
+#   huggingface-cli download bartowski/Meta-Llama-3-8B-Instruct-GGUF \
+#     Meta-Llama-3-8B-Instruct-Q4_K_M.gguf --local-dir ~/models/
+#
+# VRAM budget notes for RTX 3050 4 GB:
+#   Llama 3 8B Q4_K_M total: ~4.7 GB (model weights only, at ~117 MB/layer)
+#   KV cache at n_ctx=512: ~256 MB
+#   Safe GPU budget: ~3.5 GB → approx 24–26 layers on GPU, remainder on CPU
+#   Set n_gpu_layers to 0 first, check VRAM, then increase until you hit the limit.
+#   For smaller models (TinyLlama 1.1B Q4 ~650 MB), set n_gpu_layers: 99 (all layers).
+#
+# Install backend with CUDA support:
+#   CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
+# Run:
+#   uv run llm-bench --config configs/llama-cpp-gpu.yaml --output results/llama-cpp-gpu.csv \
+#     --manifest results/llama-cpp-gpu.manifest.json
+
+backend: llama-cpp
+model: /path/to/model.gguf
+requests: 10
+warmup_requests: 2
+prompts_file: data/prompts/smoke.txt
+
+llama_cpp:
+  n_ctx: 512            # smaller context = less KV-cache VRAM pressure
+  n_gpu_layers: 20      # start conservative for 4 GB; tune upward per model
+  max_tokens: 50
+  temperature: 0.0      # greedy decode (deterministic)
+  n_threads: null       # null = llama.cpp auto-detect
+  verbose: false

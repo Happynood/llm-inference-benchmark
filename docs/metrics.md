@@ -166,6 +166,74 @@ uv run llm-bench --config configs/transformers-gpu.yaml --output results/gpu.csv
   the run environment.
 - `torch_dtype: float16` reduces GPU memory usage vs float32 at identical accuracy for this model.
 
+## llama.cpp Backend
+
+The `llama-cpp` backend runs GGUF quantized models via `llama-cpp-python`. It is designed
+for production-size models (Llama 3 8B, Mistral 7B, Phi-2, etc.) that are too large for
+the `transformers` backend's memory footprint in float32.
+
+### Config schema
+
+```yaml
+backend: llama-cpp
+model: /absolute/path/to/model.gguf   # local file, not a HF model ID
+requests: 10
+warmup_requests: 2
+prompts_file: data/prompts/smoke.txt
+
+llama_cpp:
+  n_ctx: 2048         # context window (tokens); smaller = less VRAM for KV cache
+  n_gpu_layers: 0     # 0 = CPU only; positive = layers offloaded to GPU; -1 = all
+  max_tokens: 50      # max output tokens per request
+  temperature: 0.0    # 0.0 = greedy/deterministic
+  n_threads: null     # null = llama.cpp auto-detect; set to core count for best CPU perf
+  verbose: false      # true prints llama.cpp model load progress
+```
+
+### Install
+
+CPU-only (pure Python wheel, fast install):
+```bash
+uv sync --extra llama-cpp
+```
+
+GPU with CUDA (compiles from source, takes 2–5 min):
+```bash
+CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
+```
+
+### VRAM budget for RTX 3050 4 GB
+
+| Model | Quantization | Size | n_gpu_layers for 4 GB |
+|-------|-------------|------|----------------------|
+| Llama 3 8B | Q4_K_M | ~4.7 GB | 20–24 (partial) |
+| Llama 3 8B | Q4_K_S | ~4.3 GB | 24–28 (partial) |
+| Mistral 7B | Q4_K_M | ~4.1 GB | 28–32 (most/all) |
+| TinyLlama 1.1B | Q4_K_M | ~0.65 GB | 22 (all layers) |
+
+Start with `n_gpu_layers: 0` to confirm the model loads, then increase until VRAM is
+nearly full (leaving ~300–500 MB headroom for KV cache and OS).
+
+### CUDA memory note
+
+`peak_cuda_memory_mb` in the CSV will be `0.0` for llama-cpp GPU runs. llama.cpp manages
+VRAM through its own allocator, not via `torch.cuda`. To measure VRAM usage, check
+`nvidia-smi` while the benchmark is running, or read the `ggml_metal`/`ggml_cuda` log
+lines from `verbose: true`.
+
+### Result files
+
+```
+results/
+├── llama-cpp-cpu.csv
+├── llama-cpp-cpu.manifest.json
+├── llama-cpp-gpu.csv
+└── llama-cpp-gpu.manifest.json
+```
+
+The `results/` directory is gitignored. Curated reports go to `docs/results/` after
+a run is validated.
+
 ## Run Matrix
 
 The `matrix` subcommand runs multiple benchmark configurations sequentially from a single YAML

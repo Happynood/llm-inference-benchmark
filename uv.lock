@@ -236,6 +236,15 @@ nvtx = [
 ]
 
 [[package]]
+name = "diskcache"
+version = "5.6.3"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/3f/21/1c1ffc1a039ddcc459db43cc108658f32c57d271d7289a2794e401d0fdb6/diskcache-5.6.3.tar.gz", hash = "sha256:2c3a3fa2743d8535d832ec61c2054a1641f41775aa7c556758a109941e33e4fc", size = 67916, upload-time = "2023-08-31T06:12:00.316Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/3f/27/4570e78fc0bf5ea0ca45eb1de3818a23787af9b390c0b0a0033a1b8236f9/diskcache-5.6.3-py3-none-any.whl", hash = "sha256:5e31b2d5fbad117cc363ebaf6b689474db18a1f6438bc82358b024abd4c2ca19", size = 45550, upload-time = "2023-08-31T06:11:58.822Z" },
+]
+
+[[package]]
 name = "filelock"
 version = "3.29.4"
 source = { registry = "https://pypi.org/simple" }
@@ -374,6 +383,18 @@ wheels = [
 ]
 
 [[package]]
+name = "llama-cpp-python"
+version = "0.3.29"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "diskcache" },
+    { name = "jinja2" },
+    { name = "numpy" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/83/0f/8e03877aa9ea79890cf64f6d12d47f4daced663d0dd6abe482fe6483e7e6/llama_cpp_python-0.3.29.tar.gz", hash = "sha256:21122165951bdc25ba27c0483a2f44082c860d89422945548c64df08b6029ce4", size = 70016946, upload-time = "2026-06-13T19:42:12.153Z" }
+
+[[package]]
 name = "llm-inference-benchmark"
 version = "0.1.0"
 source = { editable = "." }
@@ -385,6 +406,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+llama-cpp = [
+    { name = "llama-cpp-python" },
+]
 transformers = [
     { name = "torch" },
     { name = "transformers" },
@@ -401,13 +425,14 @@ dev = [
 [package.metadata]
 requires-dist = [
     { name = "click", specifier = ">=8.0" },
+    { name = "llama-cpp-python", marker = "extra == 'llama-cpp'", specifier = ">=0.2" },
     { name = "psutil", specifier = ">=5.9" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "torch", marker = "extra == 'transformers'", specifier = ">=2.0" },
     { name = "transformers", marker = "extra == 'transformers'", specifier = ">=4.40" },
 ]
-provides-extras = ["transformers"]
+provides-extras = ["transformers", "llama-cpp"]
 
 [package.metadata.requires-dev]
 dev = [
