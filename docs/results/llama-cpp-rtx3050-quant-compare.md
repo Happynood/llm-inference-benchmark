@@ -1,7 +1,7 @@
 # llama.cpp — Quantization Comparison: Q4\_K\_M vs Q8\_0 (Llama 3.2 3B, RTX 3050)
 
 Comparison of two GGUF quantization formats for the same model, same prompts, and same
-GPU offload configuration. Produced via the repository CLI:
+GPU offload configuration. Produced via the repository CLI (v0.13, with output sanity metrics):
 
 ```bash
 CUDA_LIBS=$(find .venv/lib/python3.12/site-packages/nvidia -name "*.so*" \
@@ -62,32 +62,58 @@ Both quantizations fit at `n_gpu_layers=99` (all 28 layers on GPU):
 ## CLI Output — `llm-bench compare`
 
 ```
-| Backend   | Model                                  | N  | p50 (ms) | p95 (ms) | tok/s | CPU mem (MB) | CUDA mem (MB) | VRAM mem (MB) |
-|-----------|----------------------------------------|----|----------|----------|-------|--------------|---------------|---------------|
-| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf | 10 | 929.77   | 960.76   | 53.6  | 1277.9       | 0.0           | 2361.0        |
-| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf   | 10 | 1194.74  | 1198.34  | 41.9  | 1412.5       | 0.0           | 3697.0        |
+| Backend   | Model                                  | N  | p50 (ms) | p95 (ms) | tok/s | CPU mem (MB) | CUDA mem (MB) | VRAM mem (MB) | Sanity % |
+|-----------|----------------------------------------|----|----------|----------|-------|--------------|---------------|---------------|----------|
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf | 10 | 904.33   | 915.22   | 55.3  | 1289.8       | 0.0           | 2361.0        | 100.0%   |
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf   | 10 | 1185.23  | 1186.75  | 42.2  | 1418.4       | 0.0           | 3697.0        | 100.0%   |
 ```
 
 `CUDA mem` is always `0.0` for llama.cpp — it uses its own CUDA allocator, not PyTorch's.
 `VRAM mem` is `peak_vram_memory_mb` (nvidia-smi polling at 500 ms).
+`Sanity %` is `sanity_pass_rate × 100` — the fraction of non-empty completions.
 
 ## Results
 
 | Quantization | p50 (ms) | p95 (ms) | tok/s | CPU mem (MB) | Peak VRAM (MiB) |
 |---|---|---|---|---|---|
-| Q4\_K\_M (n\_gpu\_layers=99) | **929.77** | **960.76** | **53.56** | 1277.9 | **2361** |
-| Q8\_0 (n\_gpu\_layers=99) | 1194.74 | 1198.34 | 41.85 | 1412.5 | 3697 |
+| Q4\_K\_M (n\_gpu\_layers=99) | **904.33** | **915.22** | **55.28** | 1289.8 | **2361** |
+| Q8\_0 (n\_gpu\_layers=99) | 1185.23 | 1186.75 | 42.21 | 1418.4 | 3697 |
+
+Run date: 2026-06-14. See [Limitations](#limitations) for reproducibility caveats.
+
+## Output Sanity Metrics (v0.13)
+
+| Quantization | empty\_output\_count | min\_output\_chars | mean\_output\_chars | repeated\_output\_count | sanity\_pass\_rate |
+|---|---|---|---|---|---|
+| Q4\_K\_M | 0 | 202 | 253.4 | 10 | 1.0 |
+| Q8\_0 | 0 | 226 | 260.8 | 10 | 1.0 |
+
+**sanity\_pass\_rate = 1.0** for both: every completion contained non-whitespace text.
+No empty outputs — the model generated meaningful responses to all 10 requests.
+
+**repeated\_output\_count = 10** for both: this is expected behavior, not degeneration.
+The run uses 5 unique prompts (`data/prompts/smoke.txt`) with `requests=10` and
+`temperature=0.0` (greedy/deterministic). The prompt list cycles twice, so each prompt
+fires exactly twice and produces the identical output both times. Every output therefore
+appears exactly twice — `repeated_output_count = 10 = request_count`.
+
+To verify: re-run with `requests=5` (one pass through all 5 prompts) and
+`repeated_output_count` drops to 0.
+
+**min\_output\_chars and mean\_output\_chars** show that Q8\_0 produces slightly longer
+completions on average (260.8 vs 253.4 chars stripped). Both are well above 0 — the
+model fills its `max_tokens=50` budget on all requests.
 
 ## Interpretation
 
 ### Speed
 
-Q4\_K\_M is **1.28× faster** than Q8\_0 at the same GPU offload configuration:
+Q4\_K\_M is **1.31× faster** than Q8\_0 at the same GPU offload configuration:
 
 | Metric | Q4\_K\_M | Q8\_0 | Ratio (Q4K / Q8) |
 |--------|----------|-------|-----------------|
-| p50 latency | 929.77 ms | 1194.74 ms | **1.28× faster** |
-| tok/s | 53.56 | 41.85 | **1.28× higher** |
+| p50 latency | 904.33 ms | 1185.23 ms | **1.31× faster** |
+| tok/s | 55.28 | 42.21 | **1.31× higher** |
 
 This speedup is driven by **memory bandwidth**, not compute. At GPU inference speeds,
 the bottleneck is not arithmetic — it is how fast weight data can be loaded from VRAM
@@ -114,21 +140,34 @@ larger context windows, or concurrent processes competing for VRAM). Q4\_K\_M le
 
 | Quantization | p95 / p50 | Interpretation |
 |---|---|---|
-| Q4\_K\_M | 1.033 (3.3%) | Tight; slight scheduling variance visible |
-| Q8\_0 | 1.003 (0.3%) | Extremely tight; near-deterministic GPU execution |
+| Q4\_K\_M | 1.012 (1.2%) | Very tight; small scheduling variance |
+| Q8\_0 | 1.001 (0.1%) | Near-deterministic GPU execution |
 
-Q8\_0 shows tighter p95/p50 consistency than Q4\_K\_M (0.3% vs 3.3%). This is likely
-because Q8\_0's forward pass is more purely compute-bound (simple uniform 8-bit loads)
-while Q4\_K\_M's K-quant dequantization adds a small variable-cost step. Neither
-variance is operationally significant for this workload size.
+Q8\_0 shows tighter p95/p50 than Q4\_K\_M (0.1% vs 1.2%), consistent with the previous
+run. Q8\_0's uniform 8-bit weight loads are more compute-bound; Q4\_K\_M's K-quant
+dequantization step adds a small variable-cost component. Neither variance is
+operationally significant at this workload size.
+
+### Comparison to previous run (PR #27, 2026-05)
+
+| Metric | Q4\_K\_M prev | Q4\_K\_M now | Q8\_0 prev | Q8\_0 now |
+|--------|--------------|-------------|-----------|---------|
+| p50 (ms) | 929.77 | 904.33 | 1194.74 | 1185.23 |
+| tok/s | 53.56 | 55.28 | 41.85 | 42.21 |
+| VRAM (MiB) | 2361 | 2361 | 3697 | 3697 |
+
+VRAM is identical (expected — same model, same GPU). Latency is ~2–3% lower this run;
+variation is within the expected run-to-run range for 10-request benchmarks on a shared
+laptop GPU (OS scheduling, thermal state, background processes).
 
 ### Summary
 
 | Dimension | Winner | Magnitude |
 |-----------|--------|-----------|
-| Speed (tok/s) | Q4\_K\_M | 1.28× faster |
+| Speed (tok/s) | Q4\_K\_M | 1.31× faster |
 | VRAM footprint | Q4\_K\_M | 1.57× smaller (2361 vs 3697 MiB) |
-| Latency consistency | Q8\_0 | marginally (0.3% vs 3.3% p95/p50) |
+| Latency consistency | Q8\_0 | marginally (0.1% vs 1.2% p95/p50) |
+| Output sanity | Tied | Both 100% pass rate, no empty outputs |
 | Output quality (not measured) | Q8\_0 | near-lossless vs ~4.5-bit compression |
 
 **Recommendation for a 4 GB laptop GPU**: Q4\_K\_M is the better practical choice — it
@@ -149,3 +188,5 @@ quality is a hard requirement and 3.7 GB of dedicated VRAM is confirmed availabl
 - Prompts from `data/prompts/smoke.txt` are short (5 prompts, cycling). Longer prompts
   or larger `max_tokens` would increase KV cache pressure and may tighten the Q8\_0
   VRAM margin further.
+- `repeated_output_count = 10` is structural (cycling deterministic prompts), not
+  degeneration. See [Output Sanity Metrics](#output-sanity-metrics-v013) for details.

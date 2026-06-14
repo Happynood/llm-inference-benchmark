@@ -254,15 +254,16 @@ Real-run curated reports: [docs/results/](docs/results/).
 > Same model, same prompts, same GPU offload — different quantization.
 > Full report: [docs/results/llama-cpp-rtx3050-quant-compare.md](docs/results/llama-cpp-rtx3050-quant-compare.md)
 
-| Quantization | n\_gpu\_layers | p50 (ms) | p95 (ms) | tok/s | Peak VRAM (MiB) |
-|---|---|---|---|---|---|
-| Q4\_K\_M | 99 (28/28) | **929.77** | **960.76** | **53.56** | 2361 (57.6%) |
-| Q8\_0 | 99 (28/28) | 1194.74 | 1198.34 | 41.85 | 3697 (90.2%) |
+| Quantization | n\_gpu\_layers | p50 (ms) | p95 (ms) | tok/s | Peak VRAM (MiB) | Sanity % |
+|---|---|---|---|---|---|---|
+| Q4\_K\_M | 99 (28/28) | **904.33** | **915.22** | **55.28** | 2361 (57.6%) | 100% |
+| Q8\_0 | 99 (28/28) | 1185.23 | 1186.75 | 42.21 | 3697 (90.2%) | 100% |
 
-> Q4\_K\_M is **1.28× faster** and uses **1.57× less VRAM** than Q8\_0. The speedup comes from
+> Q4\_K\_M is **1.31× faster** and uses **1.57× less VRAM** than Q8\_0. The speedup comes from
 > memory bandwidth: fewer bits per weight = fewer bytes read from VRAM per forward pass.
 > Q8\_0 fits in 4 GB but leaves only 399 MiB headroom — practical for benchmarking,
-> tight for interactive use with longer contexts.
+> tight for interactive use with longer contexts. Sanity % = fraction of non-empty completions
+> (100% = all outputs contained text; repeated outputs due to deterministic cycling are expected).
 
 ## How to Run
 
