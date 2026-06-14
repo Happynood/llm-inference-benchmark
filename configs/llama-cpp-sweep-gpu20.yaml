@@ -1,0 +1,18 @@
+# llama.cpp — n_gpu_layers=20 (partial offload, 20/28 layers on GPU)
+#
+# Part of the n_gpu_layers sweep. Run via:
+#   uv run llm-bench matrix --config configs/llama-cpp-vram-sweep.yaml
+
+backend: llama-cpp
+model: ~/models/Llama-3.2-3B-Instruct-Q4_K_M.gguf
+requests: 10
+warmup_requests: 2
+prompts_file: data/prompts/smoke.txt
+
+llama_cpp:
+  n_ctx: 512
+  n_gpu_layers: 20
+  max_tokens: 50
+  temperature: 0.0
+  n_threads: null
+  verbose: false

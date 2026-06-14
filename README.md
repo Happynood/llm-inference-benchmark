@@ -229,8 +229,24 @@ Real-run curated reports: [docs/results/](docs/results/).
 | Peak VRAM | — | 2361 MiB |
 
 > GPU is **2.95× faster** — all 28 model layers offloaded to CUDA0. 53.7 tok/s is
-> real-time capable for interactive inference. This is the first production-size benchmark
-> on this hardware.
+> real-time capable for interactive inference.
+
+### Real Hardware — n\_gpu\_layers Sweep (0 / 20 / 99), RTX 3050 (llama.cpp)
+
+> Three-point sweep via `llm-bench matrix`. Quantifies the latency and VRAM trade-off
+> from CPU-only to full GPU offload.
+> Full report: [docs/results/llama-cpp-rtx3050-vram-sweep.md](docs/results/llama-cpp-rtx3050-vram-sweep.md)
+
+| `n_gpu_layers` | Layers on GPU | p50 (ms) | p95 (ms) | tok/s | Peak VRAM (MiB) |
+|----------------|---------------|----------|----------|-------|-----------------|
+| 0 | 0 / 28 (CPU only) | 2836.98 | 3092.79 | 17.52 | 655 |
+| 20 | 20 / 28 (partial) | 1357.39 | 1420.41 | 36.59 | 1829 |
+| 99 | 28 / 28 (full) | **970.65** | **984.31** | **51.44** | **2361** |
+
+> VRAM scales **~60 MiB/layer** after a 655 MiB CUDA-init baseline (present even at
+> `n_gpu_layers=0`). Partial offload (20/28 layers) delivers 71% of the full-offload
+> speedup at 78% of the VRAM cost. Full offload uses 2361/4096 MiB (57.6%).
+> `peak_cuda_memory_mb = 0.0` for all llama.cpp runs — use `peak_vram_memory_mb` instead.
 
 ## How to Run
 
@@ -346,6 +362,7 @@ make typecheck  # pyright
 **Next: production-size models on 4 GB VRAM (active)**
 - [x] `llama-cpp-python` backend — GGUF quantization, `n_gpu_layers` for partial GPU offload (v0.10)
 - [x] First real run: Llama 3.2 3B Instruct Q4\_K\_M on RTX 3050 — curated results report (v0.11)
+- [x] n\_gpu\_layers sweep (0 / 20 / 99) via `llm-bench matrix` — VRAM scaling and latency documented
 - [ ] Quantization comparison: Q4\_K\_M vs Q8\_0, same prompts, same hardware
 
 **Optimization analysis (planned)**
