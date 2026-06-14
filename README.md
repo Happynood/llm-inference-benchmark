@@ -413,20 +413,20 @@ make typecheck  # pyright
 - [x] Run matrix — multi-experiment YAML (`llm-bench matrix`) (v0.8)
 - [x] CI/real-evidence separation — docs/results/ registry (v0.9)
 
-**Next: production-size models on 4 GB VRAM (active)**
+**Production-size models on 4 GB VRAM (complete)**
 - [x] `llama-cpp-python` backend — GGUF quantization, `n_gpu_layers` for partial GPU offload (v0.10)
 - [x] First real run: Llama 3.2 3B Instruct Q4\_K\_M on RTX 3050 — curated results report (v0.11)
 - [x] n\_gpu\_layers sweep (0 / 20 / 99) via `llm-bench matrix` — VRAM scaling and latency documented
-- [x] Quantization comparison: Q4\_K\_M vs Q8\_0 — 1.28× speed difference, 1.57× VRAM difference documented
+- [x] Quantization comparison: Q4\_K\_M vs Q8\_0 — 1.31× speed difference, 1.57× VRAM difference documented
+- [x] Output sanity checks — `empty_output_count`, `repeated_output_count`, `sanity_pass_rate` per run (v0.13)
+- [x] Pareto analysis — `llm-bench pareto` classifies configurations as optimal or dominated (v0.14)
 
-**Optimization analysis (planned)**
-- [ ] Lightweight output quality checks (perplexity or judge scoring) so speed isn't reported without correctness
+**Optimization analysis (active)**
+- [ ] Semantic quality evaluation (perplexity or judge scoring) — sanity checks are structural only
 - [ ] Parameter sweeps: batch size, concurrency, `max_new_tokens`, context length
-- [ ] Pareto table: latency vs memory vs quality across configurations
 - [ ] Constraint-based recommender: "best config under 4 GB VRAM, p95 < 2 s"
 
 **Additional backends (later)**
 - [ ] `onnxruntime` (ONNX export + quantization)
 - [ ] `vllm` (high-throughput GPU serving)
 - [ ] OpenAI-compatible endpoint (local or remote)
-- [ ] Pareto analysis and constraint-based recommendation report
