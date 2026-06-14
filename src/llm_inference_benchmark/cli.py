@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import gc
+import sys
 from dataclasses import asdict
 from pathlib import Path
 
@@ -151,6 +152,52 @@ def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None) -> None:
         click.echo(f"Pareto table written to {output_path}")
     else:
         click.echo(table)
+
+
+@main.command("recommend")
+@click.argument("csv_files", nargs=-1, required=True, type=click.Path(exists=True))
+@click.option("--max-vram-mb", type=float, default=None, help="Maximum peak VRAM in MB")
+@click.option("--max-p95-ms", type=float, default=None, help="Maximum p95 latency in ms")
+@click.option("--min-sanity", type=float, default=None, help="Minimum sanity pass rate [0, 1]")
+@click.option(
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(),
+    help="Write recommendation to file instead of stdout",
+)
+def recommend_cmd(
+    csv_files: tuple[str, ...],
+    max_vram_mb: float | None,
+    max_p95_ms: float | None,
+    min_sanity: float | None,
+    output_path: str | None,
+) -> None:
+    """Recommend the best benchmark configuration under explicit constraints.
+
+    Reads saved benchmark CSVs and returns the fastest Pareto-optimal
+    configuration that satisfies all given constraints.  Runs that violate
+    a constraint are listed with the reason they were excluded.
+
+    Exits with code 1 when no run satisfies all constraints.
+
+        llm-bench recommend results/*.csv --max-vram-mb 4096 --max-p95-ms 1000
+    """
+    from llm_inference_benchmark.recommend import Constraints, build_recommendation
+
+    constraints = Constraints(
+        max_vram_mb=max_vram_mb,
+        max_p95_ms=max_p95_ms,
+        min_sanity=min_sanity,
+    )
+    text, has_winner = build_recommendation(list(csv_files), constraints)
+    if output_path:
+        Path(output_path).write_text(text + "\n")
+        click.echo(f"Recommendation written to {output_path}")
+    else:
+        click.echo(text)
+    if not has_winner:
+        sys.exit(1)
 
 
 @main.command("matrix")
