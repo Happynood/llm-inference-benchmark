@@ -124,6 +124,35 @@ def compare_cmd(csv_files: tuple[str, ...], sort_by: str, output_path: str | Non
         click.echo(table)
 
 
+@main.command("pareto")
+@click.argument("csv_files", nargs=-1, required=True, type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(),
+    help="Write Markdown to file instead of stdout",
+)
+def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None) -> None:
+    """Identify Pareto-optimal benchmark configurations from CSV files.
+
+    A configuration is Pareto-optimal when no other configuration is at least
+    as good on every metric and strictly better on at least one.  Metrics:
+    lower p95 latency, higher tok/s, lower VRAM (when available), higher
+    sanity pass rate (when available).
+
+        llm-bench pareto results/q4km.csv results/q8.csv
+    """
+    from llm_inference_benchmark.pareto import build_pareto_table
+
+    table = build_pareto_table(list(csv_files))
+    if output_path:
+        Path(output_path).write_text(table + "\n")
+        click.echo(f"Pareto table written to {output_path}")
+    else:
+        click.echo(table)
+
+
 @main.command("matrix")
 @click.option(
     "--config",
