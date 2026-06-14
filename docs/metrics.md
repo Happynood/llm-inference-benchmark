@@ -62,31 +62,46 @@ Reserved-but-free memory pages are not reflected in this number.
   these values meaningfully.
 - **Warmup requests** are excluded from all metric calculations.
 
-## v0.1 Results (mock backend)
+---
 
-> Hardware: development laptop, CPU only, no actual inference.
-> These numbers validate the harness, not real model performance.
+## CI / Harness Validation
 
-| metric | value |
-|--------|-------|
-| backend | mock |
-| model | mock-gpt2 |
-| requests | 20 |
-| p50_latency_ms | ~5 ms |
-| p95_latency_ms | ~5 ms |
-| tokens_per_second | ~10,000 (simulated) |
+Results from the mock backend validate that the measurement pipeline is wired up correctly.
+They do **not** measure model inference speed. The mock backend sleeps for a configured
+`latency_ms` and returns a fixed token count — no model is loaded, no forward pass runs.
 
-## v0.2 Results — `transformers` backend, CPU
+> **Rule**: never compare mock results to real backend results in the same table.
+> Mock numbers belong in CI logs, not benchmark comparisons.
+
+### Mock backend (v0.1 — harness validation only)
+
+| metric | value | what it validates |
+|--------|-------|-------------------|
+| backend | mock | backend field is present |
+| p50_latency_ms | ~5 ms | configured `latency_ms` is measured |
+| p95_latency_ms | ~5 ms | p95 ≈ p50 for deterministic mock |
+| tokens_per_second | ~10,000 (simulated) | tokens/sec formula is correct |
+
+---
+
+## Real Hardware Evidence
+
+Results in this section come from real inference backends on real hardware.
+Full curated reports with config, software versions, and interpretation are in
+[docs/results/](results/).
+
+### `sshleifer/tiny-gpt2` — CPU (i5-11400H, float32)
 
 > Hardware: Intel Core i5-11400H @ 2.70 GHz, 12 logical cores, CPU-only (no GPU).
-> Software: Python 3.14.4, torch 2.12.0, transformers 5.12.0.
-> Model: `sshleifer/tiny-gpt2` — 2-layer GPT-2 toy model, ~102 K params, ~4 MB.
-> **Not representative of production models.** Used here to validate that the harness
-> correctly measures end-to-end inference latency and token throughput.
+> Software: Python 3.12.13, torch 2.12.0, transformers 5.12.0.
+> Model: `sshleifer/tiny-gpt2` — 2-layer GPT-2 toy model, ~117 K params, ~4 MB.
+> **Not representative of production models.** Validates that the harness measures real
+> inference latency (actual weights, tokenizer, CPU kernels — not simulated).
+> Full report: [docs/results/gpu-rtx3050-tiny-gpt2.md](results/gpu-rtx3050-tiny-gpt2.md)
 
 Command:
 ```bash
-uv run llm-bench --config configs/transformers-cpu.yaml --output benchmark-hf.csv
+uv run llm-bench --config configs/transformers-cpu.yaml --output results/cpu.csv
 ```
 
 Config: `requests=10`, `warmup_requests=2`, `max_new_tokens=50`, `device=cpu`, `do_sample=false`.
@@ -112,18 +127,16 @@ Config: `requests=10`, `warmup_requests=2`, `max_new_tokens=50`, `device=cpu`, `
   production models on CPU produce 5–50 tok/s.
 - p95/p50 spread (~14%) reflects OS scheduling jitter, expected on CPU without process pinning.
 
-Real backend results will be updated here after each new backend lands.
-
-## v0.7 Results — `transformers` backend, GPU (NVIDIA RTX 3050 Laptop)
+### `sshleifer/tiny-gpt2` — GPU (RTX 3050 Laptop, float16)
 
 > Hardware: Intel Core i5-11400H @ 2.70 GHz, NVIDIA GeForce RTX 3050 Laptop GPU (4 GB VRAM).
 > Software: Python 3.12.13, torch 2.12.0, transformers 5.12.0.
 > Model: `sshleifer/tiny-gpt2` — 2-layer GPT-2 toy model.
-> Config: `requests=10`, `warmup_requests=2`, `max_new_tokens=50`, `device=cuda`, `torch_dtype=float16`, `do_sample=false`.
+> Full report: [docs/results/gpu-rtx3050-tiny-gpt2.md](results/gpu-rtx3050-tiny-gpt2.md)
 
 Command:
 ```bash
-uv run llm-bench --config configs/transformers-gpu.yaml --output benchmark-gpu.csv --manifest results/manifest-gpu.json
+uv run llm-bench --config configs/transformers-gpu.yaml --output results/gpu.csv --manifest results/gpu.manifest.json
 ```
 
 | metric | value |

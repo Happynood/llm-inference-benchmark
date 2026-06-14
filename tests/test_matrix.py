@@ -61,6 +61,40 @@ def test_matrix_run_config_invalid_profile_fails() -> None:
 
 
 # ---------------------------------------------------------------------------
+# Name validation (path traversal prevention)
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "bad_name",
+    [
+        "../escaped",
+        "foo/bar",
+        "foo\\bar",
+        ".hidden",
+        "",
+        "run name",
+        "run!name",
+        "run\x00name",
+    ],
+)
+def test_matrix_run_config_rejects_bad_names(bad_name: str) -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        MatrixRunConfig(name=bad_name, config="configs/example.yaml")
+
+
+@pytest.mark.parametrize(
+    "good_name",
+    ["run-a", "run_b", "run.c", "Run1", "mock-short-chat", "v2.0-cpu"],
+)
+def test_matrix_run_config_accepts_valid_names(good_name: str) -> None:
+    r = MatrixRunConfig(name=good_name, config="configs/example.yaml")
+    assert r.name == good_name
+
+
+# ---------------------------------------------------------------------------
 # MatrixConfig
 # ---------------------------------------------------------------------------
 
