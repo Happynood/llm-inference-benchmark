@@ -32,6 +32,7 @@ and real hardware evidence.
 | Report | Hardware | Backend | Model | Date | Key result |
 |--------|----------|---------|-------|------|------------|
 | [RTX 3050 — tiny-gpt2 CPU vs GPU](gpu-rtx3050-tiny-gpt2.md) | i5-11400H + RTX 3050 4 GB | transformers | sshleifer/tiny-gpt2 | 2026-06-14 | GPU slower than CPU for 2-layer toy model; establishes GPU baseline |
+| [RTX 3050 — Llama 3.2 3B CPU vs GPU](llama-cpp-rtx3050-llama32-3b.md) | i5-11400H + RTX 3050 4 GB | llama-cpp | Llama-3.2-3B-Instruct-Q4\_K\_M | 2026-06-14 | GPU 2.95× faster; 53.7 tok/s vs 18.0 tok/s CPU; all 28 layers on CUDA0 |
 
 ## Planned runs
 
@@ -40,6 +41,6 @@ when committed prompt fixtures, configs, and curated reports exist.
 
 | Backend | Model | Purpose |
 |---------|-------|---------|
-| llama-cpp | Llama 3 8B Q4_K_M (4 GB VRAM) | First production-size model; CPU vs GPU at 4-bit quantization |
-| llama-cpp | Llama 3 8B Q8_0 | Quality–speed trade-off at higher precision |
+| llama-cpp | Llama 3.2 3B Q8_0 | Quality–speed trade-off at higher precision vs Q4\_K\_M |
+| llama-cpp | Llama 3 8B Q4_K_M (partial offload, 20–24 layers) | Larger model; partial GPU offload on 4 GB VRAM |
 | transformers | full GPT-2 (117 M) | Intermediate model to bridge toy → production |

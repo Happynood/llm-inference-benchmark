@@ -1,5 +1,36 @@
 # Task Log
 
+## 2026-06-14 — v0.11: Real llama.cpp run — Llama 3.2 3B Q4\_K\_M on RTX 3050
+
+**Goal**: Document the first production-size GGUF benchmark on the RTX 3050 Laptop GPU;
+commit curated docs only (no GGUF, no generated CSV/manifest, no results dir).
+
+**Real benchmark** (Intel i5-11400H + NVIDIA RTX 3050 Laptop, llama-cpp-python 0.3.29):
+- Model: `Llama-3.2-3B-Instruct-Q4_K_M.gguf`, ~1.9 GB, 28 layers
+- Prompts: 10 ML/AI questions, `n_ctx=512`, `max_tokens=50`, temperature=0.0
+
+| Config | p50 (ms) | p95 (ms) | tok/s | Peak VRAM |
+|--------|----------|----------|-------|-----------|
+| CPU (`n_gpu_layers=0`) | 2750.56 | 2939.79 | 18.01 | — |
+| GPU (`n_gpu_layers=99`, all 28 layers) | 931.18 | 939.69 | 53.71 | 2361 MiB |
+
+GPU speedup: **2.95× lower latency, 2.98× higher throughput.**
+
+**CUDA library note**: System has CUDA 13.x driver, no nvcc. Pre-built cu124 wheel
+(`llama-cpp-python 0.3.29`) links against `libcudart.so.12` and `libcublas.so.12`.
+Fix: install `nvidia-cublas-cu12 12.9.2.10` + `nvidia-cuda-runtime-cu12`, then set
+`LD_LIBRARY_PATH` to all `nvidia/*/lib/` dirs in the venv.
+
+**Delivered** (docs only — no model weights, GGUF files, or generated CSVs committed):
+- `docs/results/llama-cpp-rtx3050-llama32-3b.md`: curated report with hardware, software,
+  model info, full results table, interpretation, and reproduction instructions
+- `docs/results/README.md`: new registry entry
+- `docs/metrics.md`: Real Hardware Evidence section for llama-cpp CPU vs GPU
+- `README.md`: Results section with llama-cpp numbers; roadmap item checked off;
+  Limitations section updated with CUDA workaround note
+
+---
+
 ## 2026-06-13 — v0.1: Mock backend vertical slice
 
 **Goal**: Portfolio-ready scaffold with architecture, CLI, tests, CI — no model weights required.

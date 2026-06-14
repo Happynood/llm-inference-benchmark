@@ -212,11 +212,21 @@ Real-run curated reports: [docs/results/](docs/results/).
 > GPU is slower than CPU here — expected for a 2-layer toy model where kernel-launch overhead
 > exceeds compute savings. Production models (Llama 3 8B Q4) reverse this decisively.
 
-### Next: production-size model on the same hardware
+### Real Hardware — Llama 3.2 3B Instruct Q4\_K\_M, i5-11400H + RTX 3050 (llama.cpp)
 
-The next milestone is `llama-cpp-python` + Llama 3 8B Q4_K_M (~4 GB VRAM). This will
-produce the first numbers that are meaningful for real optimization decisions: latency
-under a realistic prompt load, throughput at 4-bit vs 8-bit, and CPU-GPU trade-off at scale.
+> 3B parameter production LLM, Q4\_K\_M quantization, 1.9 GB GGUF, all 28 layers on CUDA0.
+> Full report: [docs/results/llama-cpp-rtx3050-llama32-3b.md](docs/results/llama-cpp-rtx3050-llama32-3b.md)
+
+| Metric | CPU (`n_gpu_layers=0`) | GPU — RTX 3050 (`n_gpu_layers=99`) |
+|--------|----------------------|-------------------------------------|
+| p50 latency | 2750.56 ms | 931.18 ms |
+| p95 latency | 2939.79 ms | 939.69 ms |
+| tokens/sec | 18.01 | **53.71** |
+| Peak VRAM | — | 2361 MiB |
+
+> GPU is **2.95× faster** — all 28 model layers offloaded to CUDA0. 53.7 tok/s is
+> real-time capable for interactive inference. This is the first production-size benchmark
+> on this hardware.
 
 ## How to Run
 
@@ -303,15 +313,16 @@ make typecheck  # pyright
   project root.
 
 **llama.cpp backend**
-- Requires a local GGUF model file — no automatic download. Obtain models from Hugging Face
-  Hub separately (e.g. `huggingface-cli download`).
-- GPU support requires a CUDA-enabled build: `CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp`.
-  Pre-built wheels for CUDA are not available on PyPI as of this writing; the build may take
-  several minutes.
-- `n_gpu_layers` must be tuned to your VRAM budget. For Llama 3 8B Q4_K_M on RTX 3050 4 GB,
-  start at 20 layers and increase until you approach the VRAM limit.
-- Peak CUDA memory is not captured for llama-cpp inference; `peak_cuda_memory_mb` will be
-  `0.0` even on GPU runs (llama-cpp does not use the PyTorch allocator).
+- Requires a local GGUF model file — no automatic download. Obtain models from Hugging Face Hub
+  (e.g. `huggingface_hub.hf_hub_download`).
+- GPU support: pre-built cu124 wheels are available at `https://abetlen.github.io/llama-cpp-python/whl/cu124`.
+  On systems without nvcc (no CUDA toolkit), install `nvidia-cublas-cu12` + `nvidia-cuda-runtime-cu12`
+  alongside the wheel and set `LD_LIBRARY_PATH` to cover all `nvidia/*/lib/` dirs in the venv
+  (see [docs/results/llama-cpp-rtx3050-llama32-3b.md](docs/results/llama-cpp-rtx3050-llama32-3b.md)).
+- `n_gpu_layers` must be tuned to your VRAM budget. For Llama 3.2 3B Q4\_K\_M, `n_gpu_layers: 99`
+  offloads all 28 layers (2361 MiB VRAM on RTX 3050). For larger models, increase gradually.
+- `peak_cuda_memory_mb` will be `0.0` even on GPU runs — llama-cpp uses its own VRAM allocator,
+  not PyTorch's. Measure VRAM with `nvidia-smi` while the benchmark runs.
 
 ## Roadmap
 
@@ -329,8 +340,8 @@ make typecheck  # pyright
 
 **Next: production-size models on 4 GB VRAM (active)**
 - [x] `llama-cpp-python` backend — GGUF quantization, `n_gpu_layers` for partial GPU offload (v0.10)
-- [ ] First real run: Llama 3 8B Q4_K_M on RTX 3050 — curated results report
-- [ ] Quantization comparison: Q4_K_M vs Q8_0 vs float16, same prompts, same hardware
+- [x] First real run: Llama 3.2 3B Instruct Q4\_K\_M on RTX 3050 — curated results report (v0.11)
+- [ ] Quantization comparison: Q4\_K\_M vs Q8\_0, same prompts, same hardware
 
 **Optimization analysis (planned)**
 - [ ] Lightweight output quality checks (perplexity or judge scoring) so speed isn't reported without correctness
