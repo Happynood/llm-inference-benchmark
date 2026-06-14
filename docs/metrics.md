@@ -166,6 +166,34 @@ uv run llm-bench --config configs/transformers-gpu.yaml --output results/gpu.csv
   the run environment.
 - `torch_dtype: float16` reduces GPU memory usage vs float32 at identical accuracy for this model.
 
+### `Llama-3.2-3B-Instruct-Q4_K_M` — CPU vs GPU (RTX 3050, llama.cpp)
+
+> Hardware: Intel Core i5-11400H, NVIDIA GeForce RTX 3050 Laptop GPU (3772 MiB VRAM).
+> Software: Python 3.12.13, llama-cpp-python 0.3.29 (pre-built cu124 wheel).
+> Model: `Llama-3.2-3B-Instruct-Q4_K_M` — 3B parameters, Q4\_K\_M quantization, 1.9 GB GGUF, 28 layers.
+> Full report: [docs/results/llama-cpp-rtx3050-llama32-3b.md](results/llama-cpp-rtx3050-llama32-3b.md)
+
+| metric | CPU (`n_gpu_layers=0`) | GPU — RTX 3050 (`n_gpu_layers=99`) |
+|--------|----------------------|-------------------------------------|
+| backend | llama-cpp | llama-cpp |
+| model | Llama-3.2-3B-Instruct-Q4\_K\_M | Llama-3.2-3B-Instruct-Q4\_K\_M |
+| requests | 10 | 10 |
+| warmup_requests | 2 | 2 |
+| p50_latency_ms | 2750.56 | 931.18 |
+| p95_latency_ms | 2939.79 | 939.69 |
+| tokens_per_second | 18.01 | **53.71** |
+| peak_vram_mib | — | 2361 (nvidia-smi polling) |
+
+### Interpretation
+
+- GPU is **2.95× faster** than CPU for this 28-layer production model with Q4\_K\_M quantization.
+- GPU latency is highly consistent: p95/p50 = 1.009 — GPU execution is compute-bound.
+- CPU shows more variance: p95/p50 = 1.069 — memory-bandwidth-bound, subject to OS jitter.
+- 2361 MiB peak VRAM leaves ~1.4 GB headroom on the RTX 3050's 3772 MiB VRAM budget.
+- 53.7 tok/s on GPU is real-time capable; a 50-token response completes in under 1 second.
+
+---
+
 ## llama.cpp Backend
 
 The `llama-cpp` backend runs GGUF quantized models via `llama-cpp-python`. It is designed
