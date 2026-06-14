@@ -22,6 +22,7 @@ class MetricsReport:
     model: str
     peak_cpu_memory_mb: float
     peak_cuda_memory_mb: float | None
+    peak_vram_memory_mb: float | None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -31,6 +32,7 @@ def compute_metrics(
     model: str,
     peak_cpu_memory_mb: float = 0.0,
     peak_cuda_memory_mb: float | None = None,
+    peak_vram_memory_mb: float | None = None,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -53,6 +55,7 @@ def compute_metrics(
         model=model,
         peak_cpu_memory_mb=peak_cpu_memory_mb,
         peak_cuda_memory_mb=peak_cuda_memory_mb,
+        peak_vram_memory_mb=peak_vram_memory_mb,
     )
 
 

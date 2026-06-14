@@ -25,6 +25,7 @@ _HEADERS = [
     "tok/s",
     "CPU mem (MB)",
     "CUDA mem (MB)",
+    "VRAM mem (MB)",
 ]
 
 
@@ -38,6 +39,7 @@ class RunRow:
     tokens_per_second: float
     peak_cpu_memory_mb: float
     peak_cuda_memory_mb: float | None
+    peak_vram_memory_mb: float | None = None  # absent in older CSVs → None
 
 
 def load_csv(path: str | Path) -> RunRow:
@@ -67,6 +69,19 @@ def load_csv(path: str | Path) -> RunRow:
                 msg = f"{path}: invalid peak_cuda_memory_mb value: {cuda_raw!r}"
                 raise ValueError(msg) from exc
 
+    peak_vram: float | None = None
+    if "peak_vram_memory_mb" in row:
+        vram_raw = row["peak_vram_memory_mb"]
+        stripped = vram_raw.strip()
+        if vram_raw and not stripped:
+            raise ValueError(f"{path}: invalid peak_vram_memory_mb value: {vram_raw!r}")
+        if stripped:
+            try:
+                peak_vram = float(stripped)
+            except ValueError as exc:
+                msg = f"{path}: invalid peak_vram_memory_mb value: {vram_raw!r}"
+                raise ValueError(msg) from exc
+
     return RunRow(
         backend=row["backend"],
         model=row["model"],
@@ -76,6 +91,7 @@ def load_csv(path: str | Path) -> RunRow:
         tokens_per_second=float(row["tokens_per_second"]),
         peak_cpu_memory_mb=float(row["peak_cpu_memory_mb"]),
         peak_cuda_memory_mb=peak_cuda,
+        peak_vram_memory_mb=peak_vram,
     )
 
 
@@ -91,7 +107,7 @@ def sort_rows(rows: list[RunRow], sort_by: str = "p95") -> list[RunRow]:
 def render_table(rows: list[RunRow]) -> str:
     """Render RunRows as a GitHub-Flavored Markdown table string."""
 
-    def fmt_cuda(v: float | None) -> str:
+    def fmt_optional(v: float | None) -> str:
         return "N/A" if v is None else f"{v:.1f}"
 
     data: list[list[str]] = [
@@ -103,7 +119,8 @@ def render_table(rows: list[RunRow]) -> str:
             f"{r.p95_latency_ms:.2f}",
             f"{r.tokens_per_second:.1f}",
             f"{r.peak_cpu_memory_mb:.1f}",
-            fmt_cuda(r.peak_cuda_memory_mb),
+            fmt_optional(r.peak_cuda_memory_mb),
+            fmt_optional(r.peak_vram_memory_mb),
         ]
         for r in rows
     ]
