@@ -227,4 +227,16 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             torch_dtype=cfg.hf.torch_dtype,
             do_sample=cfg.hf.do_sample,
         )
+    if cfg.backend == "llama-cpp":
+        from llm_inference_benchmark.backends.llama_cpp import LlamaCppBackend  # lazy: optional dep
+
+        return LlamaCppBackend(
+            model_path=cfg.model,
+            n_ctx=cfg.llama_cpp.n_ctx,
+            n_gpu_layers=cfg.llama_cpp.n_gpu_layers,
+            max_tokens=cfg.llama_cpp.max_tokens,
+            temperature=cfg.llama_cpp.temperature,
+            n_threads=cfg.llama_cpp.n_threads,
+            verbose=cfg.llama_cpp.verbose,
+        )
     raise ValueError(f"Unknown backend: {cfg.backend!r}")

@@ -85,6 +85,16 @@ uv run llm-bench --config configs/profile-short-chat.yaml --output results/short
 uv run llm-bench --config configs/profile-summarization.yaml --output results/summarization.csv
 ```
 
+**llama.cpp backend (GGUF quantized inference, local model):**
+```bash
+make install-llama-cpp           # uv sync --extra llama-cpp
+# Edit configs/llama-cpp-cpu.yaml to set model: /path/to/model.gguf
+uv run llm-bench --config configs/llama-cpp-cpu.yaml --output results/llama-cpp.csv
+# GPU (CUDA build required):
+make install-llama-cpp-cuda     # CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
+uv run llm-bench --config configs/llama-cpp-gpu.yaml --output results/llama-cpp-gpu.csv
+```
+
 **Run matrix (multiple configs in one command):**
 ```bash
 uv run llm-bench matrix --config configs/matrix-example.yaml
@@ -123,7 +133,8 @@ llm-bench compare mock.csv transformers.csv --sort p95
   analysis, and constraint-based recommendations
 - **Pluggable backends** — add a new backend by subclassing one abstract class
 - **Mock backend** — deterministic, zero-dependency, CI-friendly
-- **Transformers backend** — real CPU inference via `AutoModelForCausalLM` (optional extra)
+- **Transformers backend** — real CPU/GPU inference via `AutoModelForCausalLM` (optional extra)
+- **llama.cpp backend** — GGUF quantized inference via `llama-cpp-python` (optional extra); GPU via CUDA build
 - **Type-checked and tested** — Pyright (basic) + Ruff + pytest
 - **GitHub Actions CI** — lint + type-check + mock tests on every push
 
@@ -152,7 +163,7 @@ configs/*.yaml
   _build_backend() → Backend (ABC)
                          ├── MockBackend     ← zero-dep, CI-safe    ✓ v0.1
                          ├── HFBackend       ← transformers extra   ✓ v0.2
-                         ├── LlamaCppBackend ← GGUF quantization    roadmap
+                         ├── LlamaCppBackend ← GGUF quantization    ✓ v0.10
                          └── ONNXBackend     ← ONNX export          roadmap
         │
         ▼
@@ -228,10 +239,24 @@ make install-hf  # uv sync --extra transformers
 make run-hf      # llm-bench --config configs/transformers-cpu.yaml
 ```
 
-**GPU benchmark (requires CUDA):**
+**GPU benchmark — transformers backend (requires CUDA):**
 ```bash
 make install-hf
 make run-gpu   # llm-bench --config configs/transformers-gpu.yaml ...
+```
+
+**llama.cpp backend — CPU:**
+```bash
+make install-llama-cpp         # uv sync --extra llama-cpp
+# set model: /path/to/model.gguf in configs/llama-cpp-cpu.yaml
+make run-llama-cpp-cpu
+```
+
+**llama.cpp backend — GPU (CUDA build):**
+```bash
+make install-llama-cpp-cuda   # CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
+# set model: /path/to/model.gguf in configs/llama-cpp-gpu.yaml, tune n_gpu_layers
+make run-llama-cpp-gpu
 ```
 
 **Run matrix (all four profiles, one command):**
@@ -277,6 +302,17 @@ make typecheck  # pyright
 - `prompts_file` and `config` paths resolve relative to the working directory. Run from the
   project root.
 
+**llama.cpp backend**
+- Requires a local GGUF model file — no automatic download. Obtain models from Hugging Face
+  Hub separately (e.g. `huggingface-cli download`).
+- GPU support requires a CUDA-enabled build: `CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp`.
+  Pre-built wheels for CUDA are not available on PyPI as of this writing; the build may take
+  several minutes.
+- `n_gpu_layers` must be tuned to your VRAM budget. For Llama 3 8B Q4_K_M on RTX 3050 4 GB,
+  start at 20 layers and increase until you approach the VRAM limit.
+- Peak CUDA memory is not captured for llama-cpp inference; `peak_cuda_memory_mb` will be
+  `0.0` even on GPU runs (llama-cpp does not use the PyTorch allocator).
+
 ## Roadmap
 
 **Harness foundation (complete)**
@@ -292,9 +328,9 @@ make typecheck  # pyright
 - [x] CI/real-evidence separation — docs/results/ registry (v0.9)
 
 **Next: production-size models on 4 GB VRAM (active)**
-- [ ] `llama-cpp-python` backend — GGUF quantization, Llama 3 8B Q4_K_M on RTX 3050
+- [x] `llama-cpp-python` backend — GGUF quantization, `n_gpu_layers` for partial GPU offload (v0.10)
+- [ ] First real run: Llama 3 8B Q4_K_M on RTX 3050 — curated results report
 - [ ] Quantization comparison: Q4_K_M vs Q8_0 vs float16, same prompts, same hardware
-- [ ] Curated results report for first production-size run
 
 **Optimization analysis (planned)**
 - [ ] Lightweight output quality checks (perplexity or judge scoring) so speed isn't reported without correctness

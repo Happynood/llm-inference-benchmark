@@ -19,8 +19,17 @@ class HFBackendConfig(BaseModel):
     do_sample: bool = False
 
 
+class LlamaCppBackendConfig(BaseModel):
+    n_ctx: int = Field(default=2048, ge=1)
+    n_gpu_layers: int = 0
+    max_tokens: int = Field(default=50, ge=1)
+    temperature: float = Field(default=0.0, ge=0.0)
+    n_threads: int | None = None
+    verbose: bool = False
+
+
 class BenchmarkConfig(BaseModel):
-    backend: Literal["mock", "transformers"] = "mock"
+    backend: Literal["mock", "transformers", "llama-cpp"] = "mock"
     model: str = "mock-gpt2"
     requests: int = Field(default=20, ge=1)
     concurrency: int = Field(default=1, ge=1)
@@ -29,6 +38,7 @@ class BenchmarkConfig(BaseModel):
     warmup_requests: int = Field(default=2, ge=0)
     mock: MockBackendConfig = Field(default_factory=MockBackendConfig)
     hf: HFBackendConfig = Field(default_factory=HFBackendConfig)
+    llama_cpp: LlamaCppBackendConfig = Field(default_factory=LlamaCppBackendConfig)
 
     @model_validator(mode="after")
     def _validate_workload_profile(self) -> BenchmarkConfig:
