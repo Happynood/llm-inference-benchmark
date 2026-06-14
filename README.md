@@ -109,10 +109,10 @@ uv run llm-bench compare results/*.csv --sort p95
 llm-bench compare mock.csv transformers.csv --sort p95
 ```
 ```
-| Backend      | Model               | N  | p50 (ms) | p95 (ms) | tok/s  | CPU mem (MB) | CUDA mem (MB) | VRAM mem (MB) |
-|--------------|---------------------|----|----------|----------|--------|--------------|---------------|---------------|
-| mock         | mock-gpt2           | 20 | 5.01     | 5.09     | 9971.2 | 45.2         | N/A           | N/A           |
-| transformers | sshleifer/tiny-gpt2 | 10 | 40.95    | 44.67    | 1211.2 | 721.4        | 0.0           | N/A           |
+| Backend      | Model               | N  | p50 (ms) | p95 (ms) | tok/s  | CPU mem (MB) | CUDA mem (MB) | VRAM mem (MB) | Sanity % |
+|--------------|---------------------|----|----------|----------|--------|--------------|---------------|---------------|----------|
+| mock         | mock-gpt2           | 20 | 5.01     | 5.09     | 9971.2 | 45.2         | N/A           | N/A           | 100.0%   |
+| transformers | sshleifer/tiny-gpt2 | 10 | 40.95    | 44.67    | 1211.2 | 721.4        | 0.0           | N/A           | 100.0%   |
 ```
 
 > `CUDA mem` is PyTorch allocator memory (zero for CPU runs, absent when torch unavailable).
@@ -131,6 +131,7 @@ llm-bench compare mock.csv transformers.csv --sort p95
 - **Run matrix** — define multiple experiment runs in one YAML; `llm-bench matrix` executes all sequentially with one CSV + manifest per run
 - **p50/p95 latency, tokens/sec, total tokens** per run
 - **Peak memory reporting** — CPU RSS via `psutil`; PyTorch allocator CUDA peak via `torch.cuda`; driver-level VRAM via `nvidia-smi` (`peak_vram_memory_mb`) for non-PyTorch GPU backends such as llama.cpp
+- **Output sanity checks** — `empty_output_count`, `min/mean_output_chars`, `repeated_output_count`, `sanity_pass_rate` computed per run; shown as `Sanity %` in `llm-bench compare`
 - **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
 - **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU, dep versions, optional GPU fingerprint (`--manifest`)
 - **Optimization-oriented roadmap** — run manifests, workload profiles, quality checks, Pareto

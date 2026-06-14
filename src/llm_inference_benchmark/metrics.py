@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from llm_inference_benchmark.quality import QualityReport
+
 
 @dataclass(frozen=True)
 class RequestMetrics:
@@ -23,6 +25,13 @@ class MetricsReport:
     peak_cpu_memory_mb: float
     peak_cuda_memory_mb: float | None
     peak_vram_memory_mb: float | None
+    # Output sanity fields — always populated for new runs; default to "no issues" so
+    # MetricsReport can be constructed in tests without providing a QualityReport.
+    empty_output_count: int = 0
+    min_output_chars: int = 0
+    mean_output_chars: float = 0.0
+    repeated_output_count: int = 0
+    sanity_pass_rate: float = 1.0
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -33,6 +42,7 @@ def compute_metrics(
     peak_cpu_memory_mb: float = 0.0,
     peak_cuda_memory_mb: float | None = None,
     peak_vram_memory_mb: float | None = None,
+    quality: QualityReport | None = None,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -56,6 +66,11 @@ def compute_metrics(
         peak_cpu_memory_mb=peak_cpu_memory_mb,
         peak_cuda_memory_mb=peak_cuda_memory_mb,
         peak_vram_memory_mb=peak_vram_memory_mb,
+        empty_output_count=quality.empty_output_count if quality is not None else 0,
+        min_output_chars=quality.min_output_chars if quality is not None else 0,
+        mean_output_chars=quality.mean_output_chars if quality is not None else 0.0,
+        repeated_output_count=quality.repeated_output_count if quality is not None else 0,
+        sanity_pass_rate=quality.sanity_pass_rate if quality is not None else 1.0,
     )
 
 

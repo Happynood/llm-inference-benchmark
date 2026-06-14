@@ -14,6 +14,11 @@
 | `peak_cpu_memory_mb` | MB | Peak process RSS during the benchmark run (warmup + benchmark loop) |
 | `peak_cuda_memory_mb` | MB | Peak PyTorch allocator CUDA memory during the run; blank when torch/CUDA absent |
 | `peak_vram_memory_mb` | MiB | Peak GPU VRAM from `nvidia-smi` during the run; blank when `nvidia-smi` unavailable |
+| `empty_output_count` | count | Completions whose stripped text is empty (whitespace-only counts as empty) |
+| `min_output_chars` | count | Minimum stripped character count across all completions |
+| `mean_output_chars` | count | Mean stripped character count across all completions |
+| `repeated_output_count` | count | Completions whose text is identical to at least one other in the same run |
+| `sanity_pass_rate` | ratio [0, 1] | Fraction of non-empty completions; 1.0 = all outputs contained text |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
 
 ## Memory Measurement
@@ -71,6 +76,37 @@ concurrently will inflate the reported peak.
 
 > **Older runs**: CSVs captured before this metric was added have a blank
 > `peak_vram_memory_mb` column. `llm-bench compare` treats missing or blank as `N/A`.
+
+## Output Sanity Metrics
+
+Five lightweight structural checks run on completion texts after every benchmark loop
+(warmup excluded). They detect degenerate outputs, not semantic quality.
+
+### `empty_output_count` / `sanity_pass_rate`
+
+`sanity_pass_rate = (requests - empty_output_count) / requests`.
+A completion is empty if its stripped text has zero characters — whitespace-only
+completions count as empty.
+
+`sanity_pass_rate = 1.0` means every output contained at least one non-whitespace
+character. Values below 1.0 indicate the backend produced silent or blank completions,
+which warrants investigation before trusting throughput numbers.
+
+### `repeated_output_count`
+
+Counts completions whose stripped text appears at least once more in the same run.
+With `temperature=0.0` and a cycling prompt set, repetition is mathematically expected
+(same prompt → same greedy output). Treat this as a degeneration signal rather than a
+pass/fail threshold.
+
+### `min_output_chars` / `mean_output_chars`
+
+Character counts after stripping whitespace. These provide a quick sanity check that the
+model is generating output of reasonable length, and that `max_tokens` is not silently
+truncating before any real content is produced.
+
+**Backward compatibility**: CSVs produced before v0.13 do not contain these columns.
+`llm-bench compare` shows `N/A` in the `Sanity %` column for such runs.
 
 ## Computation Notes
 

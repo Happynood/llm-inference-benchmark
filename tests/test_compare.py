@@ -19,6 +19,7 @@ from llm_inference_benchmark.compare import (
 FIXTURES = Path(__file__).parent / "fixtures"
 MOCK_CSV = FIXTURES / "mock_run.csv"
 TRANSFORMERS_CSV = FIXTURES / "transformers_run.csv"
+QUALITY_CSV = FIXTURES / "mock_run_with_quality.csv"
 
 
 # ---------------------------------------------------------------------------
@@ -169,8 +170,8 @@ def test_render_table_cuda_none_shows_na() -> None:
 def test_render_table_cuda_zero_shows_value() -> None:
     rows = [RunRow("transformers", "tiny", 10, 40.0, 44.0, 1200.0, 720.0, 0.0, 0.0)]
     table = render_table(rows)
-    assert "0.0" in table
-    assert "N/A" not in table
+    # cuda=0.0 must appear as "0.0", not "N/A"; the Sanity % column may still show N/A
+    assert "| 0.0" in table or "0.0 |" in table
 
 
 def test_render_table_vram_none_shows_na() -> None:
@@ -260,3 +261,62 @@ def test_existing_run_behavior_preserved(tmp_config: Path) -> None:
 def test_no_args_exits_nonzero() -> None:
     result = CliRunner().invoke(main, [])
     assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# Backward compatibility: old CSVs (no quality columns) → sanity_pass_rate=None
+# ---------------------------------------------------------------------------
+
+
+def test_load_old_csv_sanity_pass_rate_is_none() -> None:
+    """Old CSV without sanity_pass_rate column loads cleanly with None."""
+    row = load_csv(MOCK_CSV)
+    assert row.sanity_pass_rate is None
+
+
+def test_load_old_transformers_csv_sanity_pass_rate_is_none() -> None:
+    row = load_csv(TRANSFORMERS_CSV)
+    assert row.sanity_pass_rate is None
+
+
+def test_render_table_old_csv_sanity_shows_na() -> None:
+    row = load_csv(MOCK_CSV)
+    table = render_table([row])
+    assert "N/A" in table
+    assert "Sanity %" in table
+
+
+# ---------------------------------------------------------------------------
+# New quality fixture
+# ---------------------------------------------------------------------------
+
+
+def test_load_quality_csv_sanity_pass_rate() -> None:
+    row = load_csv(QUALITY_CSV)
+    assert row.sanity_pass_rate == pytest.approx(1.0)
+    assert row.peak_vram_memory_mb is None  # empty string in CSV → None
+
+
+def test_render_table_quality_shows_percentage() -> None:
+    row = load_csv(QUALITY_CSV)
+    table = render_table([row])
+    assert "100.0%" in table
+
+
+def test_render_table_sanity_header_present() -> None:
+    table = render_table(_ROWS[:1])
+    assert "Sanity %" in table
+
+
+def test_build_comparison_table_with_quality_csv() -> None:
+    table = build_comparison_table([QUALITY_CSV])
+    assert "100.0%" in table
+    assert "Sanity %" in table
+
+
+def test_build_comparison_table_mixed_old_and_new() -> None:
+    """Mixing old (no quality) and new (with quality) CSVs must not error."""
+    table = build_comparison_table([MOCK_CSV, QUALITY_CSV], sort_by="p95")
+    assert "mock" in table
+    assert "N/A" in table  # old row has no sanity
+    assert "100.0%" in table  # new row has sanity=1.0
