@@ -81,3 +81,22 @@ def test_run_benchmark_vram_none_without_nvidia_smi(tmp_prompts: Path) -> None:
         cfg = BenchmarkConfig(requests=3, warmup_requests=0, prompts_file=str(tmp_prompts))
         report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
     assert report.peak_vram_memory_mb is None
+
+
+def test_run_benchmark_quality_sanity_pass_rate_full(tmp_prompts: Path) -> None:
+    """MockBackend always returns non-empty text, so sanity_pass_rate should be 1.0."""
+    backend = MockBackend(model="test", latency_ms=0, tokens_per_response=5)
+    cfg = BenchmarkConfig(requests=5, warmup_requests=1, prompts_file=str(tmp_prompts))
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.sanity_pass_rate == pytest.approx(1.0)
+    assert report.empty_output_count == 0
+
+
+def test_run_benchmark_quality_fields_populated(tmp_prompts: Path) -> None:
+    """After a benchmark run, all quality fields must be present."""
+    backend = MockBackend(model="test", latency_ms=0, tokens_per_response=3)
+    cfg = BenchmarkConfig(requests=4, warmup_requests=0, prompts_file=str(tmp_prompts))
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.min_output_chars > 0  # mock produces non-empty text
+    assert report.mean_output_chars > 0.0
+    assert report.repeated_output_count >= 0

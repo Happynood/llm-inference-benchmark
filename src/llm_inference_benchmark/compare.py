@@ -26,6 +26,7 @@ _HEADERS = [
     "CPU mem (MB)",
     "CUDA mem (MB)",
     "VRAM mem (MB)",
+    "Sanity %",
 ]
 
 
@@ -40,6 +41,22 @@ class RunRow:
     peak_cpu_memory_mb: float
     peak_cuda_memory_mb: float | None
     peak_vram_memory_mb: float | None = None  # absent in older CSVs → None
+    sanity_pass_rate: float | None = None  # absent in older CSVs → None
+
+
+def _parse_optional_float(row: dict[str, str], key: str, path: str | Path) -> float | None:
+    if key not in row:
+        return None
+    raw = row[key]
+    stripped = raw.strip()
+    if raw and not stripped:
+        raise ValueError(f"{path}: invalid {key} value: {raw!r}")
+    if not stripped:
+        return None
+    try:
+        return float(stripped)
+    except ValueError as exc:
+        raise ValueError(f"{path}: invalid {key} value: {raw!r}") from exc
 
 
 def load_csv(path: str | Path) -> RunRow:
@@ -56,31 +73,9 @@ def load_csv(path: str | Path) -> RunRow:
     if missing:
         raise ValueError(f"{path} is missing columns: {sorted(missing)}")
 
-    peak_cuda: float | None = None
-    if "peak_cuda_memory_mb" in row:
-        cuda_raw = row["peak_cuda_memory_mb"]
-        stripped = cuda_raw.strip()
-        if cuda_raw and not stripped:
-            raise ValueError(f"{path}: invalid peak_cuda_memory_mb value: {cuda_raw!r}")
-        if stripped:
-            try:
-                peak_cuda = float(stripped)
-            except ValueError as exc:
-                msg = f"{path}: invalid peak_cuda_memory_mb value: {cuda_raw!r}"
-                raise ValueError(msg) from exc
-
-    peak_vram: float | None = None
-    if "peak_vram_memory_mb" in row:
-        vram_raw = row["peak_vram_memory_mb"]
-        stripped = vram_raw.strip()
-        if vram_raw and not stripped:
-            raise ValueError(f"{path}: invalid peak_vram_memory_mb value: {vram_raw!r}")
-        if stripped:
-            try:
-                peak_vram = float(stripped)
-            except ValueError as exc:
-                msg = f"{path}: invalid peak_vram_memory_mb value: {vram_raw!r}"
-                raise ValueError(msg) from exc
+    peak_cuda = _parse_optional_float(row, "peak_cuda_memory_mb", path)
+    peak_vram = _parse_optional_float(row, "peak_vram_memory_mb", path)
+    sanity = _parse_optional_float(row, "sanity_pass_rate", path)
 
     return RunRow(
         backend=row["backend"],
@@ -92,6 +87,7 @@ def load_csv(path: str | Path) -> RunRow:
         peak_cpu_memory_mb=float(row["peak_cpu_memory_mb"]),
         peak_cuda_memory_mb=peak_cuda,
         peak_vram_memory_mb=peak_vram,
+        sanity_pass_rate=sanity,
     )
 
 
@@ -110,6 +106,9 @@ def render_table(rows: list[RunRow]) -> str:
     def fmt_optional(v: float | None) -> str:
         return "N/A" if v is None else f"{v:.1f}"
 
+    def fmt_sanity(v: float | None) -> str:
+        return "N/A" if v is None else f"{v * 100:.1f}%"
+
     data: list[list[str]] = [
         [
             r.backend,
@@ -121,6 +120,7 @@ def render_table(rows: list[RunRow]) -> str:
             f"{r.peak_cpu_memory_mb:.1f}",
             fmt_optional(r.peak_cuda_memory_mb),
             fmt_optional(r.peak_vram_memory_mb),
+            fmt_sanity(r.sanity_pass_rate),
         ]
         for r in rows
     ]

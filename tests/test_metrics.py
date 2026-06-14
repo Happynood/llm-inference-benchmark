@@ -1,6 +1,7 @@
 import pytest
 
 from llm_inference_benchmark.metrics import RequestMetrics, compute_metrics
+from llm_inference_benchmark.quality import QualityReport
 
 
 def _results(latencies: list[float]) -> list[RequestMetrics]:
@@ -63,3 +64,39 @@ def test_cuda_memory_defaults_to_none() -> None:
 def test_cpu_memory_defaults_to_zero() -> None:
     report = compute_metrics(_results([10.0]), backend="mock", model="t")
     assert report.peak_cpu_memory_mb == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Quality fields
+# ---------------------------------------------------------------------------
+
+
+def test_quality_fields_pass_through_from_report() -> None:
+    q = QualityReport(
+        empty_output_count=1,
+        min_output_chars=0,
+        mean_output_chars=25.0,
+        repeated_output_count=3,
+        sanity_pass_rate=0.8,
+    )
+    report = compute_metrics(_results([10.0] * 5), backend="mock", model="t", quality=q)
+    assert report.empty_output_count == 1
+    assert report.min_output_chars == 0
+    assert report.mean_output_chars == pytest.approx(25.0)
+    assert report.repeated_output_count == 3
+    assert report.sanity_pass_rate == pytest.approx(0.8)
+
+
+def test_quality_defaults_when_none() -> None:
+    report = compute_metrics(_results([10.0]), backend="mock", model="t", quality=None)
+    assert report.empty_output_count == 0
+    assert report.min_output_chars == 0
+    assert report.mean_output_chars == pytest.approx(0.0)
+    assert report.repeated_output_count == 0
+    assert report.sanity_pass_rate == pytest.approx(1.0)
+
+
+def test_quality_defaults_when_not_provided() -> None:
+    report = compute_metrics(_results([10.0]), backend="mock", model="t")
+    assert report.sanity_pass_rate == pytest.approx(1.0)
+    assert report.empty_output_count == 0

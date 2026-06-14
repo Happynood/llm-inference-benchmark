@@ -11,6 +11,7 @@ from llm_inference_benchmark.memory import (
     reset_cuda_peak,
 )
 from llm_inference_benchmark.metrics import MetricsReport, RequestMetrics, compute_metrics
+from llm_inference_benchmark.quality import compute_quality
 
 
 def load_prompts(path: str | Path) -> list[str]:
@@ -32,6 +33,7 @@ def run_benchmark(backend: Backend, config: BenchmarkConfig, prompts: list[str])
         backend.generate(prompts[i % len(prompts)])
 
     results: list[RequestMetrics] = []
+    texts: list[str] = []
     with MemorySampler() as mem, NvidiaSmiSampler() as vram:
         reset_cuda_peak()
         for i in range(config.requests):
@@ -43,6 +45,7 @@ def run_benchmark(backend: Backend, config: BenchmarkConfig, prompts: list[str])
                     output_tokens=result.output_tokens,
                 )
             )
+            texts.append(result.text)
 
     return compute_metrics(
         results,
@@ -51,4 +54,5 @@ def run_benchmark(backend: Backend, config: BenchmarkConfig, prompts: list[str])
         peak_cpu_memory_mb=mem.peak_cpu_mb,
         peak_cuda_memory_mb=cuda_peak_mb(),
         peak_vram_memory_mb=vram.peak_vram_mb,
+        quality=compute_quality(texts),
     )
