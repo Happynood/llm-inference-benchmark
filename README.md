@@ -18,24 +18,18 @@ comparable, and suitable for later recommendation logic.
 
 ## Demo
 
-**Mock backend (no deps):**
+**CI/harness validation (mock backend, no model downloads):**
 ```bash
 uv run llm-bench --config configs/example.yaml --output benchmark.csv
 ```
+> The mock backend sleeps for a configured `latency_ms` — no model is loaded.
+> These numbers validate that the measurement pipeline is wired correctly, not that any model is fast.
 ```
 Backend: mock  Model: mock-gpt2  Requests: 20
-
-=== Benchmark Results ===
-  request_count: 20
-  p50_latency_ms: 5.01
-  p95_latency_ms: 5.09
-  tokens_per_second: 9971.18
-  total_tokens: 1100
-  backend: mock
-  model: mock-gpt2
+p50_latency_ms: 5.01  p95_latency_ms: 5.09  tokens_per_second: 9971.18  (simulated)
 ```
 
-**Transformers backend (CPU, real inference):**
+**Real inference (transformers backend, CPU):**
 ```bash
 make install-hf   # uv sync --extra transformers
 uv run llm-bench --config configs/transformers-cpu.yaml --output benchmark-hf.csv
@@ -175,35 +169,43 @@ configs/*.yaml
 
 ## Results
 
-Full metric definitions and hardware context: [docs/metrics.md](docs/metrics.md).
+Metric definitions and computation notes: [docs/metrics.md](docs/metrics.md).  
+Real-run curated reports: [docs/results/](docs/results/).
 
-### Mock backend (harness validation)
+### CI / Harness Validation — mock backend
 
-| Metric | Value |
-|--------|-------|
-| p50 latency | ~5 ms |
-| p95 latency | ~5 ms |
-| Output tokens/sec | ~10,000 (simulated) |
-| Backend | mock |
+> These numbers validate that the harness measures correctly. They are not inference benchmarks.
+> The mock backend does `time.sleep(latency_ms / 1000)` — no model is loaded.
 
-### Transformers backend — `sshleifer/tiny-gpt2`
+| Metric | Value | What it validates |
+|--------|-------|-------------------|
+| p50 latency | ~5 ms | configured latency is measured |
+| p95 latency | ~5 ms | p95 ≈ p50 for deterministic mock |
+| tokens/sec | ~10,000 (simulated) | tokens/sec formula is correct |
 
-> **Note**: `sshleifer/tiny-gpt2` is a 2-layer toy model (~4 MB, ~117 K params) used to
-> validate the harness produces real inference latency. It is not representative of
-> production-size models (GPT-2 medium 345 M, Llama 3 8B, etc.).
-> See [docs/metrics.md](docs/metrics.md) for the full run log and hardware details.
+### Real Hardware — `sshleifer/tiny-gpt2`, i5-11400H + RTX 3050 Laptop
 
-| Metric | CPU | GPU (RTX 3050) |
-|--------|-----|----------------|
+> `sshleifer/tiny-gpt2` is a 2-layer toy model (~117 K params, ~4 MB). It is used to
+> validate that the harness measures **real** inference (actual model weights, tokenizer,
+> CPU/CUDA kernels). Numbers are not representative of production-size models.
+> Full report: [docs/results/gpu-rtx3050-tiny-gpt2.md](docs/results/gpu-rtx3050-tiny-gpt2.md)
+
+| Metric | CPU (float32) | GPU — RTX 3050 (float16) |
+|--------|--------------|--------------------------|
 | p50 latency | 40.95 ms | 59.95 ms |
 | p95 latency | 44.67 ms | 61.86 ms |
-| Output tokens/sec | 1211.23 | 829.60 |
+| tokens/sec | 1211.23 | 829.60 |
 | Peak CPU memory | 721 MB | 1383 MB |
 | Peak CUDA memory | 0 MB | **8.82 MB** |
-| device | cpu | cuda (float16) |
 
 > GPU is slower than CPU here — expected for a 2-layer toy model where kernel-launch overhead
-> exceeds compute savings. Production models (Llama 3 8B+) reverse this decisively.
+> exceeds compute savings. Production models (Llama 3 8B Q4) reverse this decisively.
+
+### Next: production-size model on the same hardware
+
+The next milestone is `llama-cpp-python` + Llama 3 8B Q4_K_M (~4 GB VRAM). This will
+produce the first numbers that are meaningful for real optimization decisions: latency
+under a realistic prompt load, throughput at 4-bit vs 8-bit, and CPU-GPU trade-off at scale.
 
 ## How to Run
 
@@ -259,30 +261,49 @@ make typecheck  # pyright
 
 ## Limitations
 
-- Transformers backend tested only with GPT-2 architecture models on CPU.
-  Real-world latency for production models (Llama 3, Mistral 7B) is 100–1000× higher.
-- Concurrency > 1 is config-exposed but not yet implemented (sequential execution only).
-- `peak_cpu_memory_mb` is total process RSS (interpreter + PyTorch runtime + model weights +
-  activations). For tiny models, PyTorch runtime overhead dominates (~700 MB for tiny-gpt2).
-- `sshleifer/tiny-gpt2` results are harness validation, not production benchmarks.
-- Tested on Linux x86-64; macOS should work, Windows untested.
-- `prompts_file` resolves relative to the working directory — run from the project root.
+**Mock backend**
+- Produces no real inference — latency is `time.sleep(latency_ms / 1000)`. Numbers validate
+  the harness pipeline only; never compare mock results to real backend results.
+
+**Real backends (current)**
+- `sshleifer/tiny-gpt2` results are harness validation for the `transformers` backend, not
+  production benchmarks. Llama 3 8B latency is 100–1000× higher.
+- `peak_cpu_memory_mb` is total process RSS including PyTorch runtime (~700 MB base overhead).
+  For tiny models the runtime dominates; for production models the weights dominate.
+- GPU is slower than CPU for tiny-gpt2 — kernel-launch overhead exceeds compute savings at
+  117 K params. Production models reverse this.
+- Concurrency > 1 is config-exposed but sequential execution only.
+- Tested on Linux x86-64 (Ubuntu-family). macOS should work; Windows untested.
+- `prompts_file` and `config` paths resolve relative to the working directory. Run from the
+  project root.
 
 ## Roadmap
 
-- [x] Mock backend (v0.1)
-- [x] `transformers` backend — CPU inference (v0.2)
-- [ ] `llama-cpp-python` backend (GGUF quantization)
-- [ ] `onnxruntime` backend (ONNX export + quantization)
-- [ ] `vllm` backend (high-throughput GPU serving)
-- [x] Peak memory reporting — CPU RSS (`psutil`) + CUDA peak (`torch.cuda`) (v0.3)
-- [x] Markdown comparison table across runs (`llm-bench compare`) (v0.4)
-- [ ] Async concurrent request execution
-- [ ] Benchmark comparison table across backends in README
-- [x] Run manifest and environment fingerprint per benchmark (`--manifest`) (v0.5)
-- [x] Optional NVIDIA GPU fingerprint in manifest (`gpu` section, `nvidia-smi` + `torch.cuda`) (v0.6)
+**Harness foundation (complete)**
+- [x] Mock backend — CI/harness validation, zero deps (v0.1)
+- [x] `transformers` backend — real CPU inference (v0.2)
+- [x] Peak memory reporting — CPU RSS + CUDA peak (v0.3)
+- [x] Markdown comparison table (`llm-bench compare`) (v0.4)
+- [x] Run manifest and environment fingerprint (`--manifest`) (v0.5)
+- [x] Optional NVIDIA GPU fingerprint in manifest (v0.6)
 - [x] Workload profiles (`short_chat`, `summarization`, `code_completion`, `long_context_smoke`) (v0.7)
-- [x] GPU benchmark results — RTX 3050 Laptop (v0.7)
-- [x] Run matrix: multi-experiment YAML with `llm-bench matrix` (v0.8)
-- [ ] Lightweight output sanity / quality-retention checks
+- [x] GPU baseline — RTX 3050 Laptop, tiny-gpt2 (v0.7)
+- [x] Run matrix — multi-experiment YAML (`llm-bench matrix`) (v0.8)
+- [x] CI/real-evidence separation — docs/results/ registry (v0.9)
+
+**Next: production-size models on 4 GB VRAM (active)**
+- [ ] `llama-cpp-python` backend — GGUF quantization, Llama 3 8B Q4_K_M on RTX 3050
+- [ ] Quantization comparison: Q4_K_M vs Q8_0 vs float16, same prompts, same hardware
+- [ ] Curated results report for first production-size run
+
+**Optimization analysis (planned)**
+- [ ] Lightweight output quality checks (perplexity or judge scoring) so speed isn't reported without correctness
+- [ ] Parameter sweeps: batch size, concurrency, `max_new_tokens`, context length
+- [ ] Pareto table: latency vs memory vs quality across configurations
+- [ ] Constraint-based recommender: "best config under 4 GB VRAM, p95 < 2 s"
+
+**Additional backends (later)**
+- [ ] `onnxruntime` (ONNX export + quantization)
+- [ ] `vllm` (high-throughput GPU serving)
+- [ ] OpenAI-compatible endpoint (local or remote)
 - [ ] Pareto analysis and constraint-based recommendation report

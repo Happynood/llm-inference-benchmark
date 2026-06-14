@@ -23,6 +23,8 @@ benchmark.csv
 benchmark_*.csv
 benchmark-*.csv
 results/
+# docs/results/ contains curated markdown reports (not generated CSV/JSON)
+!docs/results/
 
 # Model artifacts (never commit)
 *.gguf

@@ -187,6 +187,13 @@ def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
         csv_path = results_dir / f"{run.name}.csv"
         manifest_path = results_dir / f"{run.name}.manifest.json"
 
+        # Defense-in-depth: confirm paths are contained within results_dir.
+        resolved_dir = results_dir.resolve()
+        if not csv_path.resolve().is_relative_to(resolved_dir):
+            raise click.ClickException(
+                f"Run name {run.name!r} would write outside results directory"
+            )
+
         row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
         with open(csv_path, "w", newline="") as f:
             writer = csv.DictWriter(f, fieldnames=list(row.keys()))

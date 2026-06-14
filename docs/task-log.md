@@ -133,6 +133,41 @@
 **Next iteration**:
 - `llama-cpp-python` backend (GGUF quantization)
 
+## 2026-06-14 — v0.9: Security hardening + CI/real-evidence separation
+
+**Goal**: Fix path-traversal risk in run names; make portfolio clearly distinguish mock
+CI validation from real hardware benchmark evidence.
+
+**Security fixes**:
+- `matrix.py`: added `@field_validator("name")` enforcing `^[A-Za-z0-9][A-Za-z0-9._-]*$` —
+  rejects path separators, leading dots, spaces, control chars, and empty strings
+- `cli.py`: added `resolve().is_relative_to(resolved_dir)` containment check as defense-in-depth
+  after computing `csv_path`/`manifest_path`
+- `test_matrix.py`: 8 new parametrized tests for bad name rejection, 6 for valid name acceptance
+
+**Issue #17 — CI/real-evidence separation**:
+- `docs/results/README.md`: real-run registry with criteria for what qualifies, mock exclusion
+  rationale, run table, and planned-runs table
+- `docs/results/gpu-rtx3050-tiny-gpt2.md`: curated report for RTX 3050 + tiny-gpt2 runs
+  (CPU vs GPU), with hardware table, software table, config YAML, results table,
+  interpretation, and reproduction instructions
+- `docs/metrics.md`: added explicit CI/Harness Validation vs Real Hardware Evidence sections
+  with rule ("never compare mock to real in the same table"); updated CPU/GPU headings to
+  match new structure; linked to curated reports
+- `README.md`: mock demo labeled as CI/harness validation; Results section split into
+  CI-validation table (with "what it validates" column) and Real Hardware table (linked to
+  curated report); roadmap restructured into Harness Foundation (done), Next (active), and
+  later phases; Limitations section split by backend
+
+**Quality checks passed**:
+- `uv run pytest -v` — 156/156 tests pass (14 new security tests)
+- `uv run ruff check .` — no issues
+- `uv run ruff format --check .` — no issues
+- `uv run pyright` — 0 errors
+
+**Next iteration**:
+- `llama-cpp-python` backend (GGUF quantization, Llama 3 8B Q4_K_M on RTX 3050)
+
 ## 2026-06-14 — v0.8: Run matrix for multi-experiment configs
 
 **Goal**: Run multiple benchmark configurations sequentially from one YAML file.

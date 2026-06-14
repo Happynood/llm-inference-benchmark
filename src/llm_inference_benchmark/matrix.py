@@ -2,10 +2,15 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, Field, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
+
+# Run names become file stems: require alphanumeric start, allow .-_ only,
+# no path separators or parent-traversal sequences.
+_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
 
 
 class MatrixRunConfig(BaseModel):
@@ -14,6 +19,17 @@ class MatrixRunConfig(BaseModel):
     name: str
     config: str
     workload_profile: str | None = None
+
+    @field_validator("name")
+    @classmethod
+    def _validate_name(cls, v: str) -> str:
+        if not _NAME_RE.match(v):
+            raise ValueError(
+                f"Run name {v!r} is invalid. Names must start with a letter or digit and "
+                "contain only letters, digits, dots, underscores, and hyphens "
+                "(no path separators or special characters)."
+            )
+        return v
 
     @model_validator(mode="after")
     def _validate_profile(self) -> MatrixRunConfig:
