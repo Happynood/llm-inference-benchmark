@@ -174,6 +174,83 @@ is the sole Pareto-optimal configuration in this two-run comparison.
 
 ---
 
+## Constraint-based Recommender
+
+`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N]`
+reads saved benchmark CSVs, filters them against explicit constraints, and recommends
+the best configuration.
+
+### Constraints
+
+| Flag | Metric filtered | Exclusion trigger |
+|------|----------------|-------------------|
+| `--max-vram-mb` | `peak_vram_memory_mb` | value > threshold, or value missing when flag is set |
+| `--max-p95-ms` | `p95_latency_ms` | value > threshold |
+| `--min-sanity` | `sanity_pass_rate` | value < threshold, or value missing when flag is set |
+
+All constraints are optional.  With no flags every run is a candidate.
+
+### Selection logic
+
+1. Apply all constraints.  Runs that violate any constraint are excluded with a reason.
+2. Among candidates, classify by Pareto dominance (same rules as `llm-bench pareto`).
+3. Among Pareto-optimal candidates, pick the one with the lowest p95 latency.
+4. If no candidates pass all constraints, print the exclusion table and exit with code 1.
+
+### Missing optional metrics
+
+`peak_vram_memory_mb` and `sanity_pass_rate` may be absent in older CSVs.
+
+- If **no constraint** is set for the metric → the run is still a candidate.
+- If a **constraint is set** and the value is missing → the run is excluded with
+  reason `VRAM unknown` or `sanity unknown`.
+
+### Example
+
+```
+uv run llm-bench recommend results/quant-q4km.csv results/quant-q8.csv \
+    --max-vram-mb 4096 --max-p95-ms 1000 --min-sanity 1.0
+```
+
+Output:
+
+```
+Recommendation
+──────────────────────────────────────────
+  Backend : llama-cpp
+  Model   : Llama-3.2-3B-Instruct-Q4_K_M.gguf
+  N       : 10
+  p95     : 915.22 ms
+  tok/s   : 55.3
+  VRAM    : 2361.0 MB
+  Sanity  : 100.0%
+
+Why: lowest p95 among 2 candidate(s) passing all constraints; Pareto-optimal.
+```
+
+If no run satisfies the constraints:
+
+```
+No recommendation: no runs satisfy all constraints.
+
+Excluded (2)
+──────────────────────────────────────────
+  llama-cpp  Q4_K_M.gguf  →  p95 latency too high (915.2 ms > 800.0 ms)
+  llama-cpp  Q8_0.gguf    →  p95 latency too high (1186.8 ms > 800.0 ms)
+```
+
+Exit code is 1 in this case; 0 when a winner is found.
+
+### Limitations
+
+- Recommendation quality is bounded by the quality of the input CSVs.
+  A recommendation from two runs is weaker than one from a systematic sweep.
+- Output quality (perplexity, task accuracy) is not a constraint.
+  `--min-sanity` only checks that completions are non-empty, not that they are correct.
+- Run-to-run variance is not considered.  p95 from N=10 requests is a rough estimate.
+
+---
+
 ## CI / Harness Validation
 
 Results from the mock backend validate that the measurement pipeline is wired up correctly.

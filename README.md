@@ -140,6 +140,33 @@ llm-bench pareto results/quant-q4km.csv results/quant-q8.csv
 
 > See [docs/metrics.md](docs/metrics.md) for benchmark results and hardware context.
 
+**Constraint-based recommendation:**
+```bash
+llm-bench recommend results/quant-q4km.csv results/quant-q8.csv \
+    --max-vram-mb 4096 --max-p95-ms 1000 --min-sanity 1.0
+```
+```
+Recommendation
+──────────────────────────────────────────
+  Backend : llama-cpp
+  Model   : Llama-3.2-3B-Instruct-Q4_K_M.gguf
+  N       : 10
+  p95     : 915.22 ms
+  tok/s   : 55.3
+  VRAM    : 2361.0 MB
+  Sanity  : 100.0%
+
+Why: lowest p95 among 2 candidate(s) passing all constraints; Pareto-optimal.
+
+Excluded (1)
+──────────────────────────────────────────
+  llama-cpp  Llama-3.2-3B-Instruct-Q8_0.gguf  →  VRAM too high (3697.0 MB > 4096.0 MB)
+```
+
+> Exits with code 1 and lists all excluded runs when no configuration satisfies the constraints.
+> Missing optional metrics (VRAM, sanity) do not crash — they are excluded only when a
+> constraint targets that metric.
+
 ## Features
 
 - **YAML-driven config** — backend, model, request count, warmup, prompts file or workload profile
@@ -149,6 +176,7 @@ llm-bench pareto results/quant-q4km.csv results/quant-q8.csv
 - **Peak memory reporting** — CPU RSS via `psutil`; PyTorch allocator CUDA peak via `torch.cuda`; driver-level VRAM via `nvidia-smi` (`peak_vram_memory_mb`) for non-PyTorch GPU backends such as llama.cpp
 - **Output sanity checks** — `empty_output_count`, `min/mean_output_chars`, `repeated_output_count`, `sanity_pass_rate` computed per run; shown as `Sanity %` in `llm-bench compare`
 - **Pareto analysis** — `llm-bench pareto` classifies configurations as optimal or dominated across p95 latency, throughput, VRAM, and sanity; missing optional metrics narrow the comparison rather than crashing
+- **Constraint-based recommender** — `llm-bench recommend` filters CSVs by `--max-vram-mb`, `--max-p95-ms`, `--min-sanity`; returns the Pareto-optimal winner or exits 1 with a clear exclusion table
 - **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
 - **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU, dep versions, optional GPU fingerprint (`--manifest`)
 - **Optimization-oriented roadmap** — run manifests, workload profiles, quality checks, Pareto
@@ -420,11 +448,11 @@ make typecheck  # pyright
 - [x] Quantization comparison: Q4\_K\_M vs Q8\_0 — 1.31× speed difference, 1.57× VRAM difference documented
 - [x] Output sanity checks — `empty_output_count`, `repeated_output_count`, `sanity_pass_rate` per run (v0.13)
 - [x] Pareto analysis — `llm-bench pareto` classifies configurations as optimal or dominated (v0.14)
+- [x] Constraint-based recommender — `llm-bench recommend` selects the best Pareto-optimal config under explicit VRAM / latency / sanity constraints (v0.15)
 
 **Optimization analysis (active)**
 - [ ] Semantic quality evaluation (perplexity or judge scoring) — sanity checks are structural only
 - [ ] Parameter sweeps: batch size, concurrency, `max_new_tokens`, context length
-- [ ] Constraint-based recommender: "best config under 4 GB VRAM, p95 < 2 s"
 
 **Additional backends (later)**
 - [ ] `onnxruntime` (ONNX export + quantization)
