@@ -1,7 +1,8 @@
 # llama.cpp — Quantization Comparison: Q4\_K\_M vs Q8\_0 (Llama 3.2 3B, RTX 3050)
 
 Comparison of two GGUF quantization formats for the same model, same prompts, and same
-GPU offload configuration. Produced via the repository CLI (v0.13, with output sanity metrics):
+GPU offload configuration. Produced via the repository CLI (v0.13 benchmark + quality
+metrics; v0.14 Pareto analysis):
 
 ```bash
 CUDA_LIBS=$(find .venv/lib/python3.12/site-packages/nvidia -name "*.so*" \
@@ -10,6 +11,7 @@ LD_LIBRARY_PATH="${CUDA_LIBS}${LD_LIBRARY_PATH}" \
   uv run llm-bench matrix --config configs/llama-cpp-quant-compare.yaml
 
 uv run llm-bench compare results/quant-q4km.csv results/quant-q8.csv
+uv run llm-bench pareto  results/quant-q4km.csv results/quant-q8.csv
 ```
 
 ## Hardware
@@ -174,6 +176,42 @@ laptop GPU (OS scheduling, thermal state, background processes).
 is faster, leaves more VRAM headroom for larger contexts or concurrent workloads, and
 is the standard "quality/speed sweet spot" quantization. Use Q8\_0 only when output
 quality is a hard requirement and 3.7 GB of dedicated VRAM is confirmed available.
+
+## Pareto Analysis (v0.14)
+
+Pareto dominance identifies whether any configuration is unambiguously better: no worse
+on every metric and strictly better on at least one.  Metrics ranked by optimisation
+direction: lower p95 latency, higher tok/s, lower VRAM, higher sanity pass rate.
+
+```
+uv run llm-bench pareto results/quant-q4km.csv results/quant-q8.csv
+```
+
+```
+| Backend   | Model                                  | N  | p95 (ms) | tok/s | CPU mem (MB) | VRAM mem (MB) | Sanity % | Pareto  |
+|-----------|----------------------------------------|----|----------|-------|--------------|---------------|----------|---------|
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf | 10 | 915.22   | 55.3  | 1289.8       | 2361.0        | 100.0%   | optimal |
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf   | 10 | 1186.75  | 42.2  | 1418.4       | 3697.0        | 100.0%   | -       |
+```
+
+**Q4\_K\_M is the sole Pareto-optimal configuration.**
+
+Q4\_K\_M beats Q8\_0 on every measured dimension simultaneously:
+
+| Metric | Q4\_K\_M | Q8\_0 | Direction | Winner |
+|--------|----------|-------|-----------|--------|
+| p95 latency | 915.22 ms | 1186.75 ms | minimize | Q4\_K\_M |
+| tok/s | 55.3 | 42.2 | maximize | Q4\_K\_M |
+| VRAM (MiB) | 2361 | 3697 | minimize | Q4\_K\_M |
+| Sanity pass rate | 100.0% | 100.0% | maximize | Tied |
+
+Q8\_0 is dominated: Q4\_K\_M is faster, uses less VRAM, and produces equally-valid
+outputs. There is no measured trade-off that justifies Q8\_0 on this hardware configuration.
+
+The Pareto result does not capture **output quality** (semantic accuracy, factual
+correctness). Q8\_0 stores weights at near-lossless precision and may produce better
+outputs on tasks where Q4\_K\_M compression degrades generation. See [Limitations](#limitations)
+for the full caveat.
 
 ## Limitations
 
