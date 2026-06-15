@@ -23,6 +23,9 @@
 | `task_quality_checked_count` | count | Number of completions evaluated against rubric checks; 0 when no `quality_file` was set |
 | `model_load_ms` | ms | Elapsed time for backend construction (from start of `_build_backend` to return). Blank for runs predating v0.18 |
 | `warmup_p50_latency_ms` | ms | Median latency across warmup requests; blank when `warmup_requests == 0` or run predates v0.18 |
+| `repeats` | count | Number of benchmark repeats executed; blank when `repeats == 1` (default, single-run behavior unchanged) |
+| `p95_latency_ms_std` | ms | Sample standard deviation of `p95_latency_ms` across repeats (n−1 denominator); blank when `repeats == 1` |
+| `tokens_per_second_std` | tok/s | Sample standard deviation of `tokens_per_second` across repeats (n−1 denominator); blank when `repeats == 1` |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
 
 ## Memory Measurement
@@ -207,6 +210,74 @@ paging) without those spikes inflating the benchmark p50/p95.
 `warmup_p50_latency_ms` columns. `llm-bench compare`, `pareto`, and `recommend` treat
 missing or blank lifecycle columns as `N/A` and do not crash on older CSVs.
 
+## Repeated-Trial Variance (v0.19)
+
+Add `repeats: N` (integer ≥ 1) to a benchmark config to run the full benchmark loop N times
+and report variance across those repetitions.
+
+```yaml
+backend: mock
+model: mock-gpt2
+requests: 20
+repeats: 5          # run the 20-request loop 5 times; report median + std dev
+```
+
+### What changes with `repeats > 1`
+
+| Field | Single run (`repeats: 1`, default) | Repeated run (`repeats: N`) |
+|-------|------------------------------------|-----------------------------|
+| `p50_latency_ms` | p50 across the single request loop | **median** of per-repeat p50 values |
+| `p95_latency_ms` | p95 across the single request loop | **median** of per-repeat p95 values |
+| `tokens_per_second` | tok/s from the single loop | **median** of per-repeat tok/s values |
+| `p95_latency_ms_std` | blank | sample std dev of per-repeat p95 values |
+| `tokens_per_second_std` | blank | sample std dev of per-repeat tok/s values |
+| `repeats` | blank | N |
+| Memory peaks | single-loop peak | **maximum** across repeats |
+
+Single-run behavior (`repeats: 1`, the default) is completely unchanged. The three new CSV
+columns are blank for single runs; older loaders and compare/pareto/recommend continue to work.
+
+### CLI output with `repeats > 1`
+
+When `repeats > 1`, fields that have a `_std` sibling are printed with `±` notation:
+
+```
+p95_latency_ms: 5.02 ± 0.08 (n=5)
+tokens_per_second: 9968.34 ± 42.17 (n=5)
+```
+
+Fields without a `_std` sibling are printed in the same format as single runs.
+
+### Standard deviation method
+
+`p95_latency_ms_std` and `tokens_per_second_std` use **sample standard deviation**
+(n−1 denominator, `statistics.stdev` in Python). This is appropriate when the N repeated
+runs are a sample drawn from a larger population of possible runs and the goal is to
+estimate the underlying variance, not just describe those exact N runs.
+
+### What variance this captures
+
+Each repeat executes the full warmup + benchmark loop with its own memory-measurement window.
+All repeats share one process, one model instance, and one warm OS page cache.
+
+**What the variance measures:** in-process request scheduling jitter — the noise floor of the
+benchmark pipeline itself under a warm, loaded process.
+
+**What it does not measure:** cold-start variance (first load from disk), cross-session
+variance (different Python interpreter starts), cross-machine variance, or OS-level
+interference between unrelated processes.
+
+A low `p95_latency_ms_std` (e.g. < 1% of `p95_latency_ms`) means the benchmark is stable
+enough that single-run comparisons are meaningful. A high std dev (> 5–10%) means you should
+run more repeats or investigate external interference before drawing conclusions.
+
+### Backward compatibility
+
+- `repeats: 1` (the default): CSV output is bit-for-bit identical to pre-v0.19 runs.
+  The three new columns are present but blank.
+- `compare`, `pareto`, and `recommend` do not read or use the variance columns — they are
+  available in the CSV for inspection but do not affect comparison logic (a planned follow-up).
+
 ---
 
 ## Computation Notes
@@ -272,7 +343,8 @@ is the sole Pareto-optimal configuration in this two-run comparison.
   estimate.
 - **No quality dimension**: output quality (perplexity, task accuracy) is not a metric.
   Pareto optimality here means "efficient on speed/memory/sanity", not "best model".
-- **No aggregation**: each CSV is one run.  Run-to-run variance is not considered.
+- **Single-run by default**: each CSV is one benchmark run.  Use `repeats: N` in the config
+  to collect variance data; see [Repeated-Trial Variance (v0.19)](#repeated-trial-variance-v019).
 
 ---
 
@@ -350,7 +422,8 @@ Exit code is 1 in this case; 0 when a winner is found.
   A recommendation from two runs is weaker than one from a systematic sweep.
 - Output quality (perplexity, task accuracy) is not a constraint.
   `--min-sanity` only checks that completions are non-empty, not that they are correct.
-- Run-to-run variance is not considered.  p95 from N=10 requests is a rough estimate.
+- p95 from N=10 requests is a rough estimate.  Use `repeats: N` in the config to quantify
+  run-to-run variance; see [Repeated-Trial Variance (v0.19)](#repeated-trial-variance-v019).
 
 ---
 

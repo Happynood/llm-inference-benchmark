@@ -12,7 +12,7 @@ import click
 from llm_inference_benchmark.backends.base import Backend
 from llm_inference_benchmark.backends.mock import MockBackend
 from llm_inference_benchmark.config import BenchmarkConfig, load_config
-from llm_inference_benchmark.runner import load_prompts, run_benchmark
+from llm_inference_benchmark.runner import load_prompts, run_repeated
 
 
 @click.group(invoke_without_command=True)
@@ -67,7 +67,7 @@ def main(
     prompts = load_prompts(cfg.resolve_prompts_file())
 
     click.echo(f"Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
-    report = run_benchmark(backend, cfg, prompts, model_load_ms=model_load_ms)
+    report = run_repeated(backend, cfg, prompts, model_load_ms=model_load_ms)
 
     if output_path:
         row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
@@ -85,13 +85,7 @@ def main(
         click.echo(f"Manifest written to {manifest_path}")
 
     click.echo("\n=== Benchmark Results ===")
-    for k, v in asdict(report).items():
-        if isinstance(v, float):
-            click.echo(f"  {k}: {v:.2f}")
-        elif v is None:
-            click.echo(f"  {k}: N/A")
-        else:
-            click.echo(f"  {k}: {v}")
+    _print_report(report)
 
 
 @main.command("compare")
@@ -242,7 +236,7 @@ def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
     """
     from llm_inference_benchmark.manifest import collect_manifest, write_manifest
     from llm_inference_benchmark.matrix import load_matrix
-    from llm_inference_benchmark.runner import load_prompts, run_benchmark
+    from llm_inference_benchmark.runner import load_prompts, run_repeated
 
     matrix = load_matrix(matrix_path)
     results_dir = Path(matrix.results_dir)
@@ -279,7 +273,7 @@ def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
         model_load_ms = (time.perf_counter() - _t0) * 1000.0
         prompts = load_prompts(cfg.resolve_prompts_file())
         click.echo(f"  Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
-        report = run_benchmark(backend, cfg, prompts, model_load_ms=model_load_ms)
+        report = run_repeated(backend, cfg, prompts, model_load_ms=model_load_ms)
 
         csv_path = results_dir / f"{run.name}.csv"
         manifest_path = results_dir / f"{run.name}.manifest.json"
@@ -309,6 +303,35 @@ def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
 
     click.echo("\nDone. Compare with:")
     click.echo(f"  llm-bench compare {results_dir}/*.csv")
+
+
+def _print_report(report: object) -> None:
+    """Print benchmark results to stdout.
+
+    For repeated runs (report.repeats > 1), fields that have a corresponding _std
+    sibling are printed as "value ± std (n=N)" to show run-to-run spread.
+    Single-run output is identical to pre-v0.19 format.
+    """
+    from dataclasses import asdict
+
+    from llm_inference_benchmark.metrics import MetricsReport
+
+    assert isinstance(report, MetricsReport)
+    report_dict = asdict(report)
+    n = report_dict.get("repeats")
+    for k, v in report_dict.items():
+        if k.endswith("_std"):
+            continue  # displayed inline alongside its parent field
+        std_key = k + "_std"
+        std_v = report_dict.get(std_key)
+        if n is not None and n > 1 and std_v is not None and isinstance(v, float):
+            click.echo(f"  {k}: {v:.2f} ± {std_v:.2f} (n={n})")
+        elif isinstance(v, float):
+            click.echo(f"  {k}: {v:.2f}")
+        elif v is None:
+            click.echo(f"  {k}: N/A")
+        else:
+            click.echo(f"  {k}: {v}")
 
 
 def _build_backend(cfg: BenchmarkConfig) -> Backend:

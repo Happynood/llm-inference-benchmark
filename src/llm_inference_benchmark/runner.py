@@ -12,7 +12,12 @@ from llm_inference_benchmark.memory import (
     cuda_peak_mb,
     reset_cuda_peak,
 )
-from llm_inference_benchmark.metrics import MetricsReport, RequestMetrics, compute_metrics
+from llm_inference_benchmark.metrics import (
+    MetricsReport,
+    RequestMetrics,
+    aggregate_repeat_reports,
+    compute_metrics,
+)
 from llm_inference_benchmark.quality import compute_quality
 from llm_inference_benchmark.task_quality import (
     TaskQualityReport,
@@ -84,3 +89,35 @@ def run_benchmark(
         model_load_ms=model_load_ms,
         warmup_p50_latency_ms=warmup_p50,
     )
+
+
+def run_repeated(
+    backend: Backend,
+    config: BenchmarkConfig,
+    prompts: list[str],
+    model_load_ms: float | None = None,
+) -> MetricsReport:
+    """Run the benchmark config.repeats times and aggregate into one MetricsReport.
+
+    When config.repeats == 1 (the default), delegates directly to run_benchmark with no
+    overhead and returns a report with variance fields set to None (backward-compatible).
+
+    When config.repeats > 1, each repeat executes the full warmup + benchmark loop with
+    its own memory measurement window. model_load_ms is attached to the first repeat only
+    (the backend was already constructed before run_repeated is called). The returned
+    report's p50/p95/tok/s are the median across repeats; p95_latency_ms_std and
+    tokens_per_second_std are sample standard deviations (n-1 denominator).
+    """
+    if config.repeats == 1:
+        return run_benchmark(backend, config, prompts, model_load_ms=model_load_ms)
+
+    single_reports: list[MetricsReport] = []
+    for i in range(config.repeats):
+        r = run_benchmark(
+            backend,
+            config,
+            prompts,
+            model_load_ms=model_load_ms if i == 0 else None,
+        )
+        single_reports.append(r)
+    return aggregate_repeat_reports(single_reports)
