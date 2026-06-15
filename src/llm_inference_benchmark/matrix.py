@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from typing import Any
 
 import yaml
 from pydantic import BaseModel, Field, field_validator, model_validator
@@ -19,6 +20,7 @@ class MatrixRunConfig(BaseModel):
     name: str
     config: str
     workload_profile: str | None = None
+    overrides: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("name")
     @classmethod
@@ -41,13 +43,75 @@ class MatrixRunConfig(BaseModel):
 
 
 class MatrixConfig(BaseModel):
-    """Full matrix config: a list of runs sharing a common results directory."""
+    """Full matrix config: a list of runs sharing a common results directory.
+
+    Two mutually exclusive formats are supported:
+
+    **Explicit runs** (existing format, backward-compatible)::
+
+        results_dir: results
+        runs:
+          - name: run-a
+            config: configs/a.yaml
+          - name: run-b
+            config: configs/b.yaml
+
+    **Sweep** (v0.17, generates cartesian product)::
+
+        base_config: configs/example.yaml
+        results_dir: results
+        sweep:
+          mock.latency_ms: [5, 10, 20]
+          mock.tokens_per_response: [25, 50]
+
+    ``sweep`` and ``runs`` cannot be combined in the same config.
+    """
 
     results_dir: str = "results"
-    runs: list[MatrixRunConfig] = Field(min_length=1)
+    base_config: str | None = None
+    sweep: dict[str, list[Any]] | None = None
+    runs: list[MatrixRunConfig] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def _expand_sweep(cls, data: Any) -> Any:
+        """Expand sweep grid into explicit run entries before field validation."""
+        if not isinstance(data, dict):
+            return data
+
+        sweep: dict[str, list[Any]] | None = data.get("sweep")
+        if not sweep:
+            return data
+
+        base_config: str | None = data.get("base_config")
+        if not base_config:
+            raise ValueError("'base_config' is required when 'sweep' is set")
+
+        if data.get("runs"):
+            raise ValueError(
+                "Cannot combine 'runs' and 'sweep' in the same matrix config. "
+                "Use one format or the other."
+            )
+
+        from llm_inference_benchmark.sweep import expand_sweep
+
+        expanded = expand_sweep(base_config, sweep)
+        data = {
+            **data,
+            "runs": [
+                {"name": name, "config": config, "overrides": overrides}
+                for name, config, overrides in expanded
+            ],
+        }
+        return data
 
     @model_validator(mode="after")
-    def _validate_unique_names(self) -> MatrixConfig:
+    def _validate_runs(self) -> MatrixConfig:
+        if not self.runs:
+            raise ValueError(
+                "Matrix config must define either 'runs' (non-empty list) "
+                "or 'sweep' + 'base_config'"
+            )
         seen: set[str] = set()
         for run in self.runs:
             if run.name in seen:

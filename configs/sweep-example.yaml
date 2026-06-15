@@ -1,0 +1,16 @@
+# Parameter sweep example: mock backend, varies latency and token output size.
+#
+# Generates 3 × 3 = 9 runs from a single base config.
+# Run all:     llm-bench matrix --config configs/sweep-example.yaml
+# Preview:     llm-bench matrix --config configs/sweep-example.yaml --dry-run
+# Compare:     llm-bench compare results/sweep-*.csv --sort p95
+#
+# For a real llama.cpp sweep over GPU offload layers see:
+#   docs/results/llama-cpp-rtx3050-vram-sweep.md
+
+base_config: configs/example.yaml
+results_dir: results
+
+sweep:
+  mock.latency_ms: [5, 10, 20]
+  mock.tokens_per_response: [25, 50, 100]
