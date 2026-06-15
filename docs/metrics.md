@@ -299,6 +299,79 @@ Exit code is 1 in this case; 0 when a winner is found.
 
 ---
 
+## Parameter Sweeps (v0.17)
+
+`llm-bench matrix` supports a `sweep:` block that generates a cartesian product of
+benchmark runs from a single base config, eliminating the need to write one YAML file
+per combination.
+
+### Sweep config format
+
+```yaml
+base_config: configs/example.yaml   # loaded for every run; overrides applied on top
+results_dir: results
+
+sweep:
+  llama_cpp.n_gpu_layers: [0, 20, 99]
+  llama_cpp.max_tokens: [32, 64]
+```
+
+This generates 3 × 2 = 6 runs. The `sweep:` format and the existing `runs:` format are
+mutually exclusive in the same config file.
+
+### Override path syntax
+
+Dot-separated paths address nested config fields.  Two levels are supported:
+
+| Path | Target |
+|------|--------|
+| `requests` | `BenchmarkConfig.requests` (top-level) |
+| `llama_cpp.n_gpu_layers` | `BenchmarkConfig.llama_cpp.n_gpu_layers` |
+| `hf.max_new_tokens` | `BenchmarkConfig.hf.max_new_tokens` |
+| `mock.latency_ms` | `BenchmarkConfig.mock.latency_ms` |
+
+Unknown paths raise a `ValidationError` with the list of valid options at the point of
+error.
+
+### Generated run names
+
+Run names are derived deterministically from the sweep parameter values:
+
+```
+sweep-{leaf1}-{val1}-{leaf2}-{val2}-...
+```
+
+For `llama_cpp.n_gpu_layers: [0, 20]` and `llama_cpp.max_tokens: [32]`:
+- `sweep-n_gpu_layers-0-max_tokens-32`
+- `sweep-n_gpu_layers-20-max_tokens-32`
+
+Names satisfy the same path-traversal-safe regex as explicit run names
+(`^[A-Za-z0-9][A-Za-z0-9._-]*$`).
+
+### Dry-run preview
+
+`llm-bench matrix --config ... --dry-run` lists all expanded runs with their overrides:
+
+```
+Matrix: 6 run(s) → results/
+  [1/6] sweep-n_gpu_layers-0-max_tokens-32
+        config: configs/example.yaml
+        overrides: llama_cpp.n_gpu_layers=0, llama_cpp.max_tokens=32
+        output: results/sweep-n_gpu_layers-0-max_tokens-32.csv
+  ...
+```
+
+### When to use sweep vs explicit runs
+
+| Situation | Recommendation |
+|-----------|---------------|
+| Systematic grid (all combinations matter) | `sweep:` |
+| Specific named experiments | `runs:` |
+| Mixed sweep + named overrides | `runs:` with hand-written entries |
+| Sweep with workload\_profile override | `runs:` (sweep doesn't support `workload_profile`) |
+
+---
+
 ## CI / Harness Validation
 
 Results from the mock backend validate that the measurement pipeline is wired up correctly.

@@ -104,6 +104,25 @@ uv run llm-bench matrix --config configs/matrix-example.yaml --dry-run
 uv run llm-bench compare results/*.csv --sort p95
 ```
 
+**Parameter sweep (cartesian product from one base config):**
+```bash
+uv run llm-bench matrix --config configs/sweep-example.yaml --dry-run
+```
+```
+Matrix: 9 run(s) → results/
+  [1/9] sweep-latency_ms-5-tokens_per_response-25
+        config: configs/example.yaml
+        overrides: mock.latency_ms=5, mock.tokens_per_response=25
+        output: results/sweep-latency_ms-5-tokens_per_response-25.csv
+  [2/9] sweep-latency_ms-5-tokens_per_response-50
+  ...
+```
+
+> Define a sweep grid with `base_config:` + `sweep:` in a matrix YAML instead of
+> writing one config per combination.  Supports top-level and nested backend params
+> (`llama_cpp.n_gpu_layers`, `hf.max_new_tokens`, `mock.latency_ms`, …).
+> See `configs/sweep-example.yaml` and [docs/metrics.md](docs/metrics.md#parameter-sweeps-v017).
+
 **Comparison table (across saved CSVs):**
 ```bash
 llm-bench compare mock.csv transformers.csv --sort p95
@@ -456,8 +475,9 @@ make typecheck  # pyright
 - [x] Task-quality evaluation — optional `quality_file:` YAML rubric spec; `task_quality_pass_rate` / `task_quality_checked_count` in CSV; `Task Q %` in compare/pareto tables; `--min-quality` constraint in `llm-bench recommend` (v0.16)
 
 **Optimization analysis (active)**
+- [x] Parameter sweep matrix — `base_config:` + `sweep:` in matrix YAML; cartesian product expansion; dot-path nested overrides (`llama_cpp.n_gpu_layers`, `hf.max_new_tokens`, `mock.latency_ms`); deterministic run names; dry-run preview with override list (v0.17)
+- [ ] Real parameter sweep evidence: RTX 3050 sweep of n\_gpu\_layers × max\_tokens on Llama 3.2 3B — infrastructure ready, real runs not yet committed
 - [ ] Semantic quality evaluation (perplexity or judge scoring) — task rubrics are deterministic substring/regex checks; no judge model or probabilistic scoring yet
-- [ ] Parameter sweeps: batch size, concurrency, `max_new_tokens`, context length
 
 **Additional backends (later)**
 - [ ] `onnxruntime` (ONNX export + quantization)

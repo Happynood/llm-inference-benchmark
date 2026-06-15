@@ -252,6 +252,9 @@ def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
             click.echo(f"        config: {run.config}")
             if run.workload_profile:
                 click.echo(f"        workload_profile: {run.workload_profile}")
+            if run.overrides:
+                overrides_str = ", ".join(f"{k}={v}" for k, v in run.overrides.items())
+                click.echo(f"        overrides: {overrides_str}")
             click.echo(f"        output: {results_dir / run.name}.csv")
         return
 
@@ -261,6 +264,10 @@ def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
     for idx, run in enumerate(matrix.runs, 1):
         click.echo(f"\n[{idx}/{n}] {run.name}")
         cfg = load_config(run.config)
+        if run.overrides:
+            from llm_inference_benchmark.sweep import apply_overrides
+
+            cfg = apply_overrides(cfg, run.overrides)
         if run.workload_profile is not None:
             cfg = cfg.model_copy(update={"workload_profile": run.workload_profile})
 
