@@ -174,9 +174,10 @@ Excluded (1)
 - **Run matrix** — define multiple experiment runs in one YAML; `llm-bench matrix` executes all sequentially with one CSV + manifest per run
 - **p50/p95 latency, tokens/sec, total tokens** per run
 - **Peak memory reporting** — CPU RSS via `psutil`; PyTorch allocator CUDA peak via `torch.cuda`; driver-level VRAM via `nvidia-smi` (`peak_vram_memory_mb`) for non-PyTorch GPU backends such as llama.cpp
-- **Output sanity checks** — `empty_output_count`, `min/mean_output_chars`, `repeated_output_count`, `sanity_pass_rate` computed per run; shown as `Sanity %` in `llm-bench compare`
-- **Pareto analysis** — `llm-bench pareto` classifies configurations as optimal or dominated across p95 latency, throughput, VRAM, and sanity; missing optional metrics narrow the comparison rather than crashing
-- **Constraint-based recommender** — `llm-bench recommend` filters CSVs by `--max-vram-mb`, `--max-p95-ms`, `--min-sanity`; returns the Pareto-optimal winner or exits 1 with a clear exclusion table
+- **Output sanity checks** — `empty_output_count`, `min/mean_output_chars`, `repeated_output_count`, `sanity_pass_rate` computed per run; shown as `Sanity %` in compare tables (structural check: was any text produced?)
+- **Task quality evaluation** — optional `quality_file:` in config points to a YAML rubric spec; evaluates each completion against per-prompt `contains_all`, `contains_any`, `forbidden`, `regex`, and `min_chars` checks; shown as `Task Q %` in compare tables (semantic check: did the answer match the expected content?). `Sanity %` and `Task Q %` are independent: a run can be 100% sane but 0% quality if the model produces text that misses the rubric
+- **Pareto analysis** — `llm-bench pareto` classifies configurations as optimal or dominated across p95 latency, throughput, VRAM, sanity, and task quality; missing optional metrics narrow the comparison rather than crashing
+- **Constraint-based recommender** — `llm-bench recommend` filters CSVs by `--max-vram-mb`, `--max-p95-ms`, `--min-sanity`, `--min-quality`; returns the Pareto-optimal winner or exits 1 with a clear exclusion table
 - **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
 - **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU, dep versions, optional GPU fingerprint (`--manifest`)
 - **Optimization-oriented roadmap** — run manifests, workload profiles, quality checks, Pareto
@@ -449,9 +450,10 @@ make typecheck  # pyright
 - [x] Output sanity checks — `empty_output_count`, `repeated_output_count`, `sanity_pass_rate` per run (v0.13)
 - [x] Pareto analysis — `llm-bench pareto` classifies configurations as optimal or dominated (v0.14)
 - [x] Constraint-based recommender — `llm-bench recommend` selects the best Pareto-optimal config under explicit VRAM / latency / sanity constraints (v0.15)
+- [x] Task-quality evaluation — optional `quality_file:` YAML rubric spec; `task_quality_pass_rate` / `task_quality_checked_count` in CSV; `Task Q %` in compare/pareto tables; `--min-quality` constraint in `llm-bench recommend` (v0.16)
 
 **Optimization analysis (active)**
-- [ ] Semantic quality evaluation (perplexity or judge scoring) — sanity checks are structural only
+- [ ] Semantic quality evaluation (perplexity or judge scoring) — task rubrics are deterministic substring/regex checks; no judge model or probabilistic scoring yet
 - [ ] Parameter sweeps: batch size, concurrency, `max_new_tokens`, context length
 
 **Additional backends (later)**

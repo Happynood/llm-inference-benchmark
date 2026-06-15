@@ -34,6 +34,7 @@ class BenchmarkConfig(BaseModel):
     requests: int = Field(default=20, ge=1)
     concurrency: int = Field(default=1, ge=1)
     prompts_file: str = "data/prompts/smoke.txt"
+    quality_file: str | None = None
     workload_profile: str | None = None
     warmup_requests: int = Field(default=2, ge=0)
     mock: MockBackendConfig = Field(default_factory=MockBackendConfig)

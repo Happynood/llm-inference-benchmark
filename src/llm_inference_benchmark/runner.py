@@ -12,6 +12,11 @@ from llm_inference_benchmark.memory import (
 )
 from llm_inference_benchmark.metrics import MetricsReport, RequestMetrics, compute_metrics
 from llm_inference_benchmark.quality import compute_quality
+from llm_inference_benchmark.task_quality import (
+    TaskQualityReport,
+    compute_task_quality,
+    load_task_rubrics,
+)
 
 
 def load_prompts(path: str | Path) -> list[str]:
@@ -47,6 +52,11 @@ def run_benchmark(backend: Backend, config: BenchmarkConfig, prompts: list[str])
             )
             texts.append(result.text)
 
+    task_qual: TaskQualityReport | None = None
+    if config.quality_file is not None:
+        rubrics = load_task_rubrics(config.quality_file)
+        task_qual = compute_task_quality(texts, len(prompts), rubrics)
+
     return compute_metrics(
         results,
         backend=backend.name,
@@ -55,4 +65,5 @@ def run_benchmark(backend: Backend, config: BenchmarkConfig, prompts: list[str])
         peak_cuda_memory_mb=cuda_peak_mb(),
         peak_vram_memory_mb=vram.peak_vram_mb,
         quality=compute_quality(texts),
+        task_quality=task_qual,
     )

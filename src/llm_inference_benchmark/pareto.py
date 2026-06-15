@@ -4,10 +4,11 @@ Identifies which benchmark runs are Pareto-optimal: no other run is at least
 as good on every metric and strictly better on at least one.
 
 Optimisation directions:
-  - p95_latency_ms      → minimise  (mandatory)
-  - tokens_per_second   → maximise  (mandatory)
-  - peak_vram_memory_mb → minimise  (optional; compared only when both rows have a value)
-  - sanity_pass_rate    → maximise  (optional; compared only when both rows have a value)
+  - p95_latency_ms          → minimise  (mandatory)
+  - tokens_per_second       → maximise  (mandatory)
+  - peak_vram_memory_mb     → minimise  (optional; compared only when both rows have a value)
+  - sanity_pass_rate        → maximise  (optional; compared only when both rows have a value)
+  - task_quality_pass_rate  → maximise  (optional; compared only when both rows have a value)
 
 Missing optional metrics narrow the comparison set rather than crashing or
 penalising either row.
@@ -28,6 +29,7 @@ _PARETO_HEADERS = [
     "CPU mem (MB)",
     "VRAM mem (MB)",
     "Sanity %",
+    "Task Q %",
     "Pareto",
 ]
 
@@ -48,6 +50,8 @@ def dominates(a: RunRow, b: RunRow) -> bool:
         comparisons.append((a.peak_vram_memory_mb, b.peak_vram_memory_mb, True))
     if a.sanity_pass_rate is not None and b.sanity_pass_rate is not None:
         comparisons.append((a.sanity_pass_rate, b.sanity_pass_rate, False))
+    if a.task_quality_pass_rate is not None and b.task_quality_pass_rate is not None:
+        comparisons.append((a.task_quality_pass_rate, b.task_quality_pass_rate, False))
 
     strictly_better = False
     for a_val, b_val, minimise in comparisons:
@@ -84,7 +88,7 @@ def render_pareto_table(classified: list[tuple[RunRow, bool]]) -> str:
     def fmt_opt(v: float | None) -> str:
         return "N/A" if v is None else f"{v:.1f}"
 
-    def fmt_sanity(v: float | None) -> str:
+    def fmt_rate(v: float | None) -> str:
         return "N/A" if v is None else f"{v * 100:.1f}%"
 
     def fmt_pareto(is_opt: bool) -> str:
@@ -99,7 +103,8 @@ def render_pareto_table(classified: list[tuple[RunRow, bool]]) -> str:
             f"{r.tokens_per_second:.1f}",
             f"{r.peak_cpu_memory_mb:.1f}",
             fmt_opt(r.peak_vram_memory_mb),
-            fmt_sanity(r.sanity_pass_rate),
+            fmt_rate(r.sanity_pass_rate),
+            fmt_rate(r.task_quality_pass_rate),
             fmt_pareto(is_opt),
         ]
         for r, is_opt in classified

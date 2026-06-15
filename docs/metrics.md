@@ -19,6 +19,8 @@
 | `mean_output_chars` | count | Mean stripped character count across all completions |
 | `repeated_output_count` | count | Completions whose text is identical to at least one other in the same run |
 | `sanity_pass_rate` | ratio [0, 1] | Fraction of non-empty completions; 1.0 = all outputs contained text |
+| `task_quality_pass_rate` | ratio [0, 1] | Fraction of completions that pass all rubric checks; blank when no `quality_file` was set |
+| `task_quality_checked_count` | count | Number of completions evaluated against rubric checks; 0 when no `quality_file` was set |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
 
 ## Memory Measurement
@@ -108,6 +110,50 @@ truncating before any real content is produced.
 **Backward compatibility**: CSVs produced before v0.13 do not contain these columns.
 `llm-bench compare` shows `N/A` in the `Sanity %` column for such runs.
 
+## Task Quality Metrics (v0.16)
+
+`Sanity %` checks structure (non-empty); `Task Q %` checks content against a per-prompt rubric.
+
+### `task_quality_pass_rate` / `task_quality_checked_count`
+
+When a `quality_file` is specified in the benchmark config, each non-warmup completion is
+evaluated against a per-prompt-position rubric loaded from a YAML spec file.
+
+```yaml
+# Example quality spec (quality_file: data/quality/my_task.yaml)
+- contains_all: ["Paris"]          # all phrases must appear (case-insensitive)
+  contains_any: ["capital", "city"] # at least one of these must appear
+  forbidden: ["I don't know"]       # none of these may appear (case-insensitive)
+  min_chars: 10                     # minimum stripped character length
+- null                              # null → skip check for this prompt position
+```
+
+Supported check types:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `contains_all` | list[str] | All phrases must appear (case-insensitive substring match) |
+| `contains_any` | list[str] | At least one phrase must appear (case-insensitive) |
+| `forbidden` | list[str] | None of these phrases may appear (case-insensitive) |
+| `regex` | str | Applied to stripped text via `re.search`; must match |
+| `min_chars` | int | Stripped text must be at least this many characters |
+
+**Cycling**: completions are matched to rubrics by `i % prompt_count`. A rubric list shorter
+than the prompt file leaves later prompt positions unchecked.
+
+`task_quality_pass_rate = passes / checked` where `checked` is the count of completions
+that had a non-null rubric entry.  When nothing was checked (all null, or no `quality_file`),
+the field is blank in the CSV and `N/A` in `llm-bench compare`.
+
+**Distinction from sanity**: `sanity_pass_rate` detects structural failures (empty/blank
+output); `task_quality_pass_rate` detects semantic failures (answer is present but wrong).
+A run with `sanity_pass_rate=1.0` and `task_quality_pass_rate=0.0` means the model
+produced text but none of it matched the expected content.
+
+**`--min-quality` constraint**: pass `--min-quality <float>` to `llm-bench recommend` to
+exclude runs whose `task_quality_pass_rate` is below threshold or unknown.  Runs without
+quality data are only excluded when the constraint is active — backward-compatible.
+
 ## Computation Notes
 
 - **p50/p95 latency**: both use C1 linear interpolation
@@ -142,6 +188,7 @@ better** on at least one:
 | `tokens_per_second` | maximise | always |
 | `peak_vram_memory_mb` | minimise | only when both rows have a value |
 | `sanity_pass_rate` | maximise | only when both rows have a value |
+| `task_quality_pass_rate` | maximise | only when both rows have a value |
 
 Optional metrics are excluded from any comparison where one or both rows carry `None`
 for that field.  This means an older CSV without VRAM data is not penalised — the
@@ -176,7 +223,7 @@ is the sole Pareto-optimal configuration in this two-run comparison.
 
 ## Constraint-based Recommender
 
-`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N]`
+`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N] [--min-quality N]`
 reads saved benchmark CSVs, filters them against explicit constraints, and recommends
 the best configuration.
 
@@ -187,6 +234,7 @@ the best configuration.
 | `--max-vram-mb` | `peak_vram_memory_mb` | value > threshold, or value missing when flag is set |
 | `--max-p95-ms` | `p95_latency_ms` | value > threshold |
 | `--min-sanity` | `sanity_pass_rate` | value < threshold, or value missing when flag is set |
+| `--min-quality` | `task_quality_pass_rate` | value < threshold, or value missing when flag is set |
 
 All constraints are optional.  With no flags every run is a candidate.
 
