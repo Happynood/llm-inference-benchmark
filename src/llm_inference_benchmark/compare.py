@@ -27,6 +27,7 @@ _HEADERS = [
     "CUDA mem (MB)",
     "VRAM mem (MB)",
     "Sanity %",
+    "Task Q %",
 ]
 
 
@@ -42,6 +43,8 @@ class RunRow:
     peak_cuda_memory_mb: float | None
     peak_vram_memory_mb: float | None = None  # absent in older CSVs → None
     sanity_pass_rate: float | None = None  # absent in older CSVs → None
+    task_quality_pass_rate: float | None = None  # absent when no quality_file was set
+    task_quality_checked_count: int | None = None  # absent when no quality_file was set
 
 
 def _parse_optional_float(row: dict[str, str], key: str, path: str | Path) -> float | None:
@@ -76,6 +79,11 @@ def load_csv(path: str | Path) -> RunRow:
     peak_cuda = _parse_optional_float(row, "peak_cuda_memory_mb", path)
     peak_vram = _parse_optional_float(row, "peak_vram_memory_mb", path)
     sanity = _parse_optional_float(row, "sanity_pass_rate", path)
+    task_quality = _parse_optional_float(row, "task_quality_pass_rate", path)
+    task_quality_checked_raw = _parse_optional_float(row, "task_quality_checked_count", path)
+    task_quality_checked = (
+        int(task_quality_checked_raw) if task_quality_checked_raw is not None else None
+    )
 
     return RunRow(
         backend=row["backend"],
@@ -88,6 +96,8 @@ def load_csv(path: str | Path) -> RunRow:
         peak_cuda_memory_mb=peak_cuda,
         peak_vram_memory_mb=peak_vram,
         sanity_pass_rate=sanity,
+        task_quality_pass_rate=task_quality,
+        task_quality_checked_count=task_quality_checked,
     )
 
 
@@ -106,7 +116,7 @@ def render_table(rows: list[RunRow]) -> str:
     def fmt_optional(v: float | None) -> str:
         return "N/A" if v is None else f"{v:.1f}"
 
-    def fmt_sanity(v: float | None) -> str:
+    def fmt_rate(v: float | None) -> str:
         return "N/A" if v is None else f"{v * 100:.1f}%"
 
     data: list[list[str]] = [
@@ -120,7 +130,8 @@ def render_table(rows: list[RunRow]) -> str:
             f"{r.peak_cpu_memory_mb:.1f}",
             fmt_optional(r.peak_cuda_memory_mb),
             fmt_optional(r.peak_vram_memory_mb),
-            fmt_sanity(r.sanity_pass_rate),
+            fmt_rate(r.sanity_pass_rate),
+            fmt_rate(r.task_quality_pass_rate),
         ]
         for r in rows
     ]

@@ -5,13 +5,16 @@ the best candidate using Pareto dominance and lowest p95 latency as a
 tiebreaker.
 
 Constraint semantics:
-  - max_p95_ms   : exclude runs where p95_latency_ms > threshold
-  - max_vram_mb  : exclude runs where peak_vram_memory_mb > threshold;
-                   also excludes runs with a missing VRAM reading when
-                   the constraint is active
-  - min_sanity   : exclude runs where sanity_pass_rate < threshold;
-                   also excludes runs with a missing sanity reading when
-                   the constraint is active
+  - max_p95_ms    : exclude runs where p95_latency_ms > threshold
+  - max_vram_mb   : exclude runs where peak_vram_memory_mb > threshold;
+                    also excludes runs with a missing VRAM reading when
+                    the constraint is active
+  - min_sanity    : exclude runs where sanity_pass_rate < threshold;
+                    also excludes runs with a missing sanity reading when
+                    the constraint is active
+  - min_quality   : exclude runs where task_quality_pass_rate < threshold;
+                    also excludes runs with a missing task quality reading
+                    when the constraint is active
   - No constraint set for an optional metric → missing value is allowed.
 """
 
@@ -29,6 +32,7 @@ class Constraints:
     max_vram_mb: float | None = None
     max_p95_ms: float | None = None
     min_sanity: float | None = None
+    min_quality: float | None = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +70,15 @@ def _check_row(row: RunRow, constraints: Constraints) -> str | None:
             return f"sanity unknown (constraint requires ≥ {constraints.min_sanity:.2f})"
         if row.sanity_pass_rate < constraints.min_sanity:
             return f"sanity too low ({row.sanity_pass_rate:.2f} < {constraints.min_sanity:.2f})"
+
+    if constraints.min_quality is not None:
+        if row.task_quality_pass_rate is None:
+            return f"task quality unknown (constraint requires ≥ {constraints.min_quality:.2f})"
+        if row.task_quality_pass_rate < constraints.min_quality:
+            return (
+                f"task quality too low "
+                f"({row.task_quality_pass_rate:.2f} < {constraints.min_quality:.2f})"
+            )
 
     return None
 
@@ -132,7 +145,7 @@ def _fmt_vram(v: float | None) -> str:
     return "N/A" if v is None else f"{v:.1f} MB"
 
 
-def _fmt_sanity(v: float | None) -> str:
+def _fmt_rate(v: float | None) -> str:
     return "N/A" if v is None else f"{v * 100:.1f}%"
 
 
@@ -151,13 +164,14 @@ def render_recommendation(result: RecommendationResult) -> str:
         lines += [
             "Recommendation",
             _DIVIDER,
-            f"  Backend : {w.backend}",
-            f"  Model   : {_display_model(w.model)}",
-            f"  N       : {w.request_count}",
-            f"  p95     : {w.p95_latency_ms:.2f} ms",
-            f"  tok/s   : {w.tokens_per_second:.1f}",
-            f"  VRAM    : {_fmt_vram(w.peak_vram_memory_mb)}",
-            f"  Sanity  : {_fmt_sanity(w.sanity_pass_rate)}",
+            f"  Backend  : {w.backend}",
+            f"  Model    : {_display_model(w.model)}",
+            f"  N        : {w.request_count}",
+            f"  p95      : {w.p95_latency_ms:.2f} ms",
+            f"  tok/s    : {w.tokens_per_second:.1f}",
+            f"  VRAM     : {_fmt_vram(w.peak_vram_memory_mb)}",
+            f"  Sanity   : {_fmt_rate(w.sanity_pass_rate)}",
+            f"  Task Q   : {_fmt_rate(w.task_quality_pass_rate)}",
             "",
         ]
         n = len(result.candidates)

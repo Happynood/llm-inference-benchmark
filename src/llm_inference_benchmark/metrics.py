@@ -4,6 +4,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
 from llm_inference_benchmark.quality import QualityReport
+from llm_inference_benchmark.task_quality import TaskQualityReport
 
 
 @dataclass(frozen=True)
@@ -32,6 +33,8 @@ class MetricsReport:
     mean_output_chars: float = 0.0
     repeated_output_count: int = 0
     sanity_pass_rate: float = 1.0
+    task_quality_pass_rate: float | None = None
+    task_quality_checked_count: int | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -43,6 +46,7 @@ def compute_metrics(
     peak_cuda_memory_mb: float | None = None,
     peak_vram_memory_mb: float | None = None,
     quality: QualityReport | None = None,
+    task_quality: TaskQualityReport | None = None,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -71,6 +75,12 @@ def compute_metrics(
         mean_output_chars=quality.mean_output_chars if quality is not None else 0.0,
         repeated_output_count=quality.repeated_output_count if quality is not None else 0,
         sanity_pass_rate=quality.sanity_pass_rate if quality is not None else 1.0,
+        task_quality_pass_rate=(
+            task_quality.task_quality_pass_rate if task_quality is not None else None
+        ),
+        task_quality_checked_count=(
+            task_quality.task_quality_checked_count if task_quality is not None else None
+        ),
     )
 
 

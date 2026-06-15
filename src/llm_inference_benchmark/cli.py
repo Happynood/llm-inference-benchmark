@@ -160,6 +160,12 @@ def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None) -> None:
 @click.option("--max-p95-ms", type=float, default=None, help="Maximum p95 latency in ms")
 @click.option("--min-sanity", type=float, default=None, help="Minimum sanity pass rate [0, 1]")
 @click.option(
+    "--min-quality",
+    type=float,
+    default=None,
+    help="Minimum task quality pass rate [0, 1] (requires quality_file in config)",
+)
+@click.option(
     "--output",
     "output_path",
     default=None,
@@ -171,6 +177,7 @@ def recommend_cmd(
     max_vram_mb: float | None,
     max_p95_ms: float | None,
     min_sanity: float | None,
+    min_quality: float | None,
     output_path: str | None,
 ) -> None:
     """Recommend the best benchmark configuration under explicit constraints.
@@ -189,6 +196,7 @@ def recommend_cmd(
         max_vram_mb=max_vram_mb,
         max_p95_ms=max_p95_ms,
         min_sanity=min_sanity,
+        min_quality=min_quality,
     )
     text, has_winner = build_recommendation(list(csv_files), constraints)
     if output_path:

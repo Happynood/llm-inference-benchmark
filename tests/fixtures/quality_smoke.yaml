@@ -1,0 +1,9 @@
+- contains_any:
+    - mock
+  min_chars: 3
+- contains_any:
+    - mock
+  min_chars: 3
+- contains_any:
+    - mock
+  min_chars: 3

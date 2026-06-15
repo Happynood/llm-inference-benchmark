@@ -220,6 +220,11 @@ for the full caveat.
 - Output quality not evaluated. The recommendation above assumes Q8\_0 is higher quality
   than Q4\_K\_M — this is the conventional expectation for K-quant vs Q8_0, but is not
   verified by this benchmark.
+- **No task-quality evidence**: these runs predate v0.16 and were produced without a
+  `quality_file` config field. The `task_quality_pass_rate` column is blank for both CSVs.
+  The Q4\_K\_M recommendation above is based on speed, VRAM, and sanity only — not on rubric
+  correctness. To add task-quality evidence, re-run with a `quality_file:` pointing to a
+  prompt-aligned YAML rubric spec and use `llm-bench recommend --min-quality <threshold>`.
 - `peak_cuda_memory_mb = 0.0` for all llama-cpp runs. Use `peak_vram_memory_mb`.
 - Q8\_0 at 3697 MiB leaves only 399 MiB VRAM headroom. Other GPU processes running
   concurrently could cause OOM at n\_gpu\_layers=99.
