@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import statistics
+import time
 from pathlib import Path
 
 from llm_inference_benchmark.backends.base import Backend
@@ -27,15 +29,28 @@ def load_prompts(path: str | Path) -> list[str]:
     return lines
 
 
-def run_benchmark(backend: Backend, config: BenchmarkConfig, prompts: list[str]) -> MetricsReport:
+def run_benchmark(
+    backend: Backend,
+    config: BenchmarkConfig,
+    prompts: list[str],
+    model_load_ms: float | None = None,
+) -> MetricsReport:
     """Run warmup + benchmark loop and return aggregated metrics including peak memory.
 
     Memory measurement window covers only the benchmark loop (warmup excluded) so
     first-use allocation spikes do not inflate the reported peak. reset_cuda_peak() is
     called inside the MemorySampler context so CPU and CUDA windows are co-incident.
+
+    model_load_ms: elapsed time (ms) for backend construction, measured at the call site
+    before run_benchmark is invoked. Pass None when not measured.
     """
+    warmup_latencies: list[float] = []
     for i in range(config.warmup_requests):
+        t0 = time.perf_counter()
         backend.generate(prompts[i % len(prompts)])
+        warmup_latencies.append((time.perf_counter() - t0) * 1000.0)
+
+    warmup_p50 = statistics.median(warmup_latencies) if warmup_latencies else None
 
     results: list[RequestMetrics] = []
     texts: list[str] = []
@@ -66,4 +81,6 @@ def run_benchmark(backend: Backend, config: BenchmarkConfig, prompts: list[str])
         peak_vram_memory_mb=vram.peak_vram_mb,
         quality=compute_quality(texts),
         task_quality=task_qual,
+        model_load_ms=model_load_ms,
+        warmup_p50_latency_ms=warmup_p50,
     )

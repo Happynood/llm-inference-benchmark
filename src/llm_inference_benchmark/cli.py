@@ -3,6 +3,7 @@ from __future__ import annotations
 import csv
 import gc
 import sys
+import time
 from dataclasses import asdict
 from pathlib import Path
 
@@ -60,11 +61,13 @@ def main(
         raise click.UsageError("--config is required when running a benchmark")
 
     cfg = load_config(config_path)
+    _t0 = time.perf_counter()
     backend = _build_backend(cfg)
+    model_load_ms = (time.perf_counter() - _t0) * 1000.0
     prompts = load_prompts(cfg.resolve_prompts_file())
 
     click.echo(f"Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
-    report = run_benchmark(backend, cfg, prompts)
+    report = run_benchmark(backend, cfg, prompts, model_load_ms=model_load_ms)
 
     if output_path:
         row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
@@ -271,10 +274,12 @@ def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
         if run.workload_profile is not None:
             cfg = cfg.model_copy(update={"workload_profile": run.workload_profile})
 
+        _t0 = time.perf_counter()
         backend = _build_backend(cfg)
+        model_load_ms = (time.perf_counter() - _t0) * 1000.0
         prompts = load_prompts(cfg.resolve_prompts_file())
         click.echo(f"  Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
-        report = run_benchmark(backend, cfg, prompts)
+        report = run_benchmark(backend, cfg, prompts, model_load_ms=model_load_ms)
 
         csv_path = results_dir / f"{run.name}.csv"
         manifest_path = results_dir / f"{run.name}.manifest.json"
