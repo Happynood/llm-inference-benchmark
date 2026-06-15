@@ -2,7 +2,8 @@
 
 Comparison of two GGUF quantization formats for the same model, same prompts, and same
 GPU offload configuration. Produced via the repository CLI (v0.13 benchmark + quality
-metrics; v0.14 Pareto analysis):
+metrics; v0.14 Pareto analysis; v0.15 constraint-based recommender; v0.16 task-quality
+evaluation):
 
 ```bash
 CUDA_LIBS=$(find .venv/lib/python3.12/site-packages/nvidia -name "*.so*" \
@@ -170,12 +171,13 @@ laptop GPU (OS scheduling, thermal state, background processes).
 | VRAM footprint | Q4\_K\_M | 1.57× smaller (2361 vs 3697 MiB) |
 | Latency consistency | Q8\_0 | marginally (0.1% vs 1.2% p95/p50) |
 | Output sanity | Tied | Both 100% pass rate, no empty outputs |
-| Output quality (not measured) | Q8\_0 | near-lossless vs ~4.5-bit compression |
+| Task quality (v0.16 rubric) | Q4\_K\_M | 100% vs 80% (Q8\_0 fails prompt 3 at max\_tokens=50) |
 
 **Recommendation for a 4 GB laptop GPU**: Q4\_K\_M is the better practical choice — it
 is faster, leaves more VRAM headroom for larger contexts or concurrent workloads, and
-is the standard "quality/speed sweet spot" quantization. Use Q8\_0 only when output
-quality is a hard requirement and 3.7 GB of dedicated VRAM is confirmed available.
+passes all deterministic rubric checks at max_tokens=50. Use Q8\_0 only when VRAM is not
+a constraint, you increase max_tokens to ≥ 100, or output quality at longer generation
+lengths is a hard requirement.
 
 ## Pareto Analysis (v0.14)
 
@@ -213,18 +215,112 @@ correctness). Q8\_0 stores weights at near-lossless precision and may produce be
 outputs on tasks where Q4\_K\_M compression degrades generation. See [Limitations](#limitations)
 for the full caveat.
 
+## Task Quality Evaluation (v0.16)
+
+Re-ran both quantizations with a deterministic YAML rubric spec attached to each config,
+using `configs/llama-cpp-quant-compare-quality.yaml`:
+
+```bash
+CUDA_LIBS=$(find .venv/lib/python3.12/site-packages/nvidia -name "*.so*" \
+  | xargs -I{} dirname {} | sort -u | tr '\n' ':')
+LD_LIBRARY_PATH="${CUDA_LIBS}${LD_LIBRARY_PATH}" \
+  uv run llm-bench matrix --config configs/llama-cpp-quant-compare-quality.yaml
+
+uv run llm-bench compare results/quant-q4km-quality.csv results/quant-q8-quality.csv
+uv run llm-bench pareto  results/quant-q4km-quality.csv results/quant-q8-quality.csv
+uv run llm-bench recommend results/quant-q4km-quality.csv results/quant-q8-quality.csv \
+  --max-vram-mb 4096 --max-p95-ms 1000 --min-sanity 1.0 --min-quality 1.0
+```
+
+### Rubric spec (`configs/quality/smoke-rubric.yaml`)
+
+5 rubrics aligned to the 5 prompts in `data/prompts/smoke.txt`.
+All string checks are case-insensitive.
+
+| Prompt | Check type | Criteria |
+|--------|------------|----------|
+| 0 — Capital of France | `contains_any` + `forbidden` | must contain "Paris"; must not contain hedging phrases |
+| 1 — Gradient descent | `contains_any` | must contain ≥ 1 of: gradient, descent, minimize, loss, optimize, converge |
+| 2 — Transformer architecture | `contains_any` | must contain ≥ 1 of: transformer, attention, encoder, decoder, feed-forward |
+| 3 — BERT vs GPT | `contains_all` | must contain both "bert" AND "gpt" |
+| 4 — Attention mechanism | `contains_any` | must contain ≥ 1 of: attention, query, key, value, weight, score |
+
+**Rubric type: deterministic structural checks — not semantic judge scoring.**
+A pass means the output mentioned the required terms. It does not measure accuracy, depth, or coherence.
+
+### `llm-bench compare` (with Task Q %)
+
+```
+| Backend   | Model                                                     | N  | p50 (ms) | p95 (ms) | tok/s | CPU mem (MB) | CUDA mem (MB) | VRAM mem (MB) | Sanity % | Task Q % |
+|-----------|-----------------------------------------------------------|----|----------|----------|-------|--------------|---------------|---------------|----------|----------|
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf                    | 10 | 901.01   | 915.86   | 55.5  | 1291.8       | 0.0           | 2361.0        | 100.0%   | 100.0%   |
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf                      | 10 | 1190.62  | 1226.97  | 41.8  | 708.2        | 0.0           | 3697.0        | 100.0%   | 80.0%    |
+```
+
+### `llm-bench pareto` (with Task Q %)
+
+```
+| Backend   | Model                                                     | N  | p95 (ms) | tok/s | CPU mem (MB) | VRAM mem (MB) | Sanity % | Task Q % | Pareto  |
+|-----------|-----------------------------------------------------------|----|----------|-------|--------------|---------------|----------|----------|---------|
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf                    | 10 | 915.86   | 55.5  | 1291.8       | 2361.0        | 100.0%   | 100.0%   | optimal |
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf                      | 10 | 1226.97  | 41.8  | 708.2        | 3697.0        | 100.0%   | 80.0%    | -       |
+```
+
+Q4\_K\_M remains the sole Pareto-optimal configuration, now also dominant on task quality (100% vs 80%).
+
+### `llm-bench recommend` (all 4 constraints)
+
+```
+Recommendation
+──────────────────────────────────────────
+  Backend  : llama-cpp
+  Model    : Llama-3.2-3B-Instruct-Q4_K_M.gguf
+  N        : 10
+  p95      : 915.86 ms
+  tok/s    : 55.5
+  VRAM     : 2361.0 MB
+  Sanity   : 100.0%
+  Task Q   : 100.0%
+
+Why: lowest p95 among 1 candidate(s) passing all constraints; Pareto-optimal.
+
+Excluded (1)
+──────────────────────────────────────────
+  llama-cpp  Llama-3.2-3B-Instruct-Q8_0.gguf  →  p95 latency too high (1227.0 ms > 1000.0 ms)
+```
+
+Note: Q8\_0 was excluded by `--max-p95-ms 1000` before the quality constraint could apply.
+Removing the latency constraint would additionally exclude it for task quality below `--min-quality 1.0`.
+
+### Q8\_0 task quality failure — root cause
+
+Q8\_0 scores 80% (4/5 prompts pass). The failing prompt is **prompt 3: "What are the main
+differences between BERT and GPT?"** — rubric: `contains_all: [bert, gpt]`.
+
+At `max_tokens=50`, Q8\_0's response focuses entirely on BERT for the first ~50 tokens
+without reaching "GPT". The response is grammatically valid and on-topic — it just hasn't
+finished discussing both models when truncated. Q4\_K\_M generates a more compact
+answer that mentions both models within the 50-token budget.
+
+**Confirmed diagnostic** (single-prompt run at `max_tokens=100`):
+Q8\_0 passes the BERT/GPT rubric at 100 tokens (task_quality=1.00; mean_output_chars=529).
+
+**Interpretation**: this is a **response-organisation difference between quantizations**,
+not quality degradation. Q8\_0 produces longer, more elaborate answers; Q4\_K\_M produces
+more compact ones that fit the rubric within the token budget. Both are valid LLM behaviors.
+The finding is benchmark-configuration-specific: the rubric + max_tokens combination
+surfaces a real operational difference worth knowing.
+
 ## Limitations
 
 - Single machine, single session: no statistical replication across reboots or days.
 - N=10 requests: p95 is the worst of 10 observations, not a stable tail-latency estimate.
-- Output quality not evaluated. The recommendation above assumes Q8\_0 is higher quality
-  than Q4\_K\_M — this is the conventional expectation for K-quant vs Q8_0, but is not
-  verified by this benchmark.
-- **No task-quality evidence**: these runs predate v0.16 and were produced without a
-  `quality_file` config field. The `task_quality_pass_rate` column is blank for both CSVs.
-  The Q4\_K\_M recommendation above is based on speed, VRAM, and sanity only — not on rubric
-  correctness. To add task-quality evidence, re-run with a `quality_file:` pointing to a
-  prompt-aligned YAML rubric spec and use `llm-bench recommend --min-quality <threshold>`.
+- Task quality rubric is **deterministic structural** (keyword presence), not semantic.
+  Passing the rubric does not guarantee factual accuracy or output depth.
+- Q8\_0 task quality at 80% is specific to `max_tokens=50`. At `max_tokens=100`, Q8\_0
+  passes all 5 rubric checks. The finding reflects this workload configuration.
+- Conventional expectation: Q8\_0 produces near-lossless outputs vs Q4\_K\_M compression.
+  This rubric does not measure that dimension — it measures structural term coverage only.
 - `peak_cuda_memory_mb = 0.0` for all llama-cpp runs. Use `peak_vram_memory_mb`.
 - Q8\_0 at 3697 MiB leaves only 399 MiB VRAM headroom. Other GPU processes running
   concurrently could cause OOM at n\_gpu\_layers=99.

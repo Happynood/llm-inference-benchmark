@@ -109,63 +109,66 @@ uv run llm-bench compare results/*.csv --sort p95
 llm-bench compare mock.csv transformers.csv --sort p95
 ```
 ```
-| Backend      | Model               | N  | p50 (ms) | p95 (ms) | tok/s  | CPU mem (MB) | CUDA mem (MB) | VRAM mem (MB) | Sanity % |
-|--------------|---------------------|----|----------|----------|--------|--------------|---------------|---------------|----------|
-| mock         | mock-gpt2           | 20 | 5.01     | 5.09     | 9971.2 | 45.2         | N/A           | N/A           | 100.0%   |
-| transformers | sshleifer/tiny-gpt2 | 10 | 40.95    | 44.67    | 1211.2 | 721.4        | 0.0           | N/A           | 100.0%   |
+| Backend      | Model               | N  | p50 (ms) | p95 (ms) | tok/s  | CPU mem (MB) | CUDA mem (MB) | VRAM mem (MB) | Sanity % | Task Q % |
+|--------------|---------------------|----|----------|----------|--------|--------------|---------------|---------------|----------|----------|
+| mock         | mock-gpt2           | 20 | 5.01     | 5.09     | 9971.2 | 45.2         | N/A           | N/A           | 100.0%   | N/A      |
+| transformers | sshleifer/tiny-gpt2 | 10 | 40.95    | 44.67    | 1211.2 | 721.4        | 0.0           | N/A           | 100.0%   | N/A      |
 ```
 
 > `CUDA mem` is PyTorch allocator memory (zero for CPU runs, absent when torch unavailable).
 > `VRAM mem` is driver-level VRAM from `nvidia-smi` — captures llama.cpp GPU usage that
 > `peak_cuda_memory_mb` misses. `N/A` when `nvidia-smi` is not available.
+> `Task Q %` is `task_quality_pass_rate × 100` — fraction of completions that passed the
+> per-prompt rubric checks. `N/A` when no `quality_file` was set in the config.
 
 > **Note**: Each row is one unrepeated benchmark run. p95 at N=10 requests is the single
 > worst-latency observation, not a stable statistical estimate.
 
 **Pareto analysis (identify efficient configurations):**
 ```bash
-llm-bench pareto results/quant-q4km.csv results/quant-q8.csv
+llm-bench pareto results/quant-q4km-quality.csv results/quant-q8-quality.csv
 ```
 ```
-| Backend   | Model                                  | N  | p95 (ms) | tok/s | CPU mem (MB) | VRAM mem (MB) | Sanity % | Pareto  |
-|-----------|----------------------------------------|----|----------|-------|--------------|---------------|----------|---------|
-| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf | 10 | 904.33   | 55.3  | 1289.8       | 2361.0        | 100.0%   | optimal |
-| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf   | 10 | 1185.23  | 42.2  | 1418.4       | 3697.0        | 100.0%   | -       |
+| Backend   | Model                                  | N  | p95 (ms) | tok/s | CPU mem (MB) | VRAM mem (MB) | Sanity % | Task Q % | Pareto  |
+|-----------|----------------------------------------|----|----------|-------|--------------|---------------|----------|----------|---------|
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf | 10 | 915.86   | 55.5  | 1291.8       | 2361.0        | 100.0%   | 100.0%   | optimal |
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf   | 10 | 1226.97  | 41.8  | 708.2        | 3697.0        | 100.0%   | 80.0%    | -       |
 ```
 
 > A run is **optimal** when no other run is at least as good on every metric and strictly
-> better on at least one (lower p95, higher tok/s, lower VRAM, higher sanity).  Missing
-> optional metrics (VRAM, sanity) are excluded from comparisons rather than penalising
+> better on at least one (lower p95, higher tok/s, lower VRAM, higher sanity, higher task
+> quality). Missing optional metrics are excluded from comparisons rather than penalising
 > either run.
 
 > See [docs/metrics.md](docs/metrics.md) for benchmark results and hardware context.
 
-**Constraint-based recommendation:**
+**Constraint-based recommendation (with task quality floor):**
 ```bash
-llm-bench recommend results/quant-q4km.csv results/quant-q8.csv \
-    --max-vram-mb 4096 --max-p95-ms 1000 --min-sanity 1.0
+llm-bench recommend results/quant-q4km-quality.csv results/quant-q8-quality.csv \
+    --max-vram-mb 4096 --max-p95-ms 1000 --min-sanity 1.0 --min-quality 1.0
 ```
 ```
 Recommendation
 ──────────────────────────────────────────
-  Backend : llama-cpp
-  Model   : Llama-3.2-3B-Instruct-Q4_K_M.gguf
-  N       : 10
-  p95     : 915.22 ms
-  tok/s   : 55.3
-  VRAM    : 2361.0 MB
-  Sanity  : 100.0%
+  Backend  : llama-cpp
+  Model    : Llama-3.2-3B-Instruct-Q4_K_M.gguf
+  N        : 10
+  p95      : 915.86 ms
+  tok/s    : 55.5
+  VRAM     : 2361.0 MB
+  Sanity   : 100.0%
+  Task Q   : 100.0%
 
-Why: lowest p95 among 2 candidate(s) passing all constraints; Pareto-optimal.
+Why: lowest p95 among 1 candidate(s) passing all constraints; Pareto-optimal.
 
 Excluded (1)
 ──────────────────────────────────────────
-  llama-cpp  Llama-3.2-3B-Instruct-Q8_0.gguf  →  VRAM too high (3697.0 MB > 4096.0 MB)
+  llama-cpp  Llama-3.2-3B-Instruct-Q8_0.gguf  →  p95 latency too high (1227.0 ms > 1000.0 ms)
 ```
 
 > Exits with code 1 and lists all excluded runs when no configuration satisfies the constraints.
-> Missing optional metrics (VRAM, sanity) do not crash — they are excluded only when a
-> constraint targets that metric.
+> `--min-quality` requires a `quality_file:` in the benchmark config — runs without it have
+> unknown task quality and are excluded when the constraint is active.
 
 ## Features
 
