@@ -476,6 +476,7 @@ make typecheck  # pyright
 
 **Optimization analysis (active)**
 - [x] Parameter sweep matrix — `base_config:` + `sweep:` in matrix YAML; cartesian product expansion; dot-path nested overrides (`llama_cpp.n_gpu_layers`, `hf.max_new_tokens`, `mock.latency_ms`); deterministic run names; dry-run preview with override list (v0.17)
+- [x] Lifecycle metrics: model load time (`model_load_ms`) and warmup latency (`warmup_p50_latency_ms`) — wired into CSV and CLI; mock values validate plumbing, not real model load time (v0.18)
 - [ ] Real parameter sweep evidence: RTX 3050 sweep of n\_gpu\_layers × max\_tokens on Llama 3.2 3B — infrastructure ready, real runs not yet committed
 - [ ] Semantic quality evaluation (perplexity or judge scoring) — task rubrics are deterministic substring/regex checks; no judge model or probabilistic scoring yet
 

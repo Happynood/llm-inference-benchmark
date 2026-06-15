@@ -21,6 +21,8 @@
 | `sanity_pass_rate` | ratio [0, 1] | Fraction of non-empty completions; 1.0 = all outputs contained text |
 | `task_quality_pass_rate` | ratio [0, 1] | Fraction of completions that pass all rubric checks; blank when no `quality_file` was set |
 | `task_quality_checked_count` | count | Number of completions evaluated against rubric checks; 0 when no `quality_file` was set |
+| `model_load_ms` | ms | Elapsed time for backend construction (from start of `_build_backend` to return). Blank for runs predating v0.18 |
+| `warmup_p50_latency_ms` | ms | Median latency across warmup requests; blank when `warmup_requests == 0` or run predates v0.18 |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
 
 ## Memory Measurement
@@ -153,6 +155,59 @@ produced text but none of it matched the expected content.
 **`--min-quality` constraint**: pass `--min-quality <float>` to `llm-bench recommend` to
 exclude runs whose `task_quality_pass_rate` is below threshold or unknown.  Runs without
 quality data are only excluded when the constraint is active — backward-compatible.
+
+## Lifecycle Metrics (v0.18)
+
+Two metrics capture how long a backend takes to become ready and how it behaves during warmup.
+These are distinct from steady-state latency and memory metrics: they describe the
+**startup cost** of a configuration rather than its sustained throughput.
+
+### `model_load_ms`
+
+**Measurement boundary**: elapsed wall-clock time from just before the `_build_backend()` call
+in the CLI to just after it returns. For the `transformers` backend this includes model weight
+download (first run only), tokenizer loading, and moving the model to the device. For
+`llama-cpp` it includes GGUF file loading, context allocation, and GPU layer offload. For the
+`mock` backend it is near-zero (class instantiation only).
+
+The backend is fully constructed before `run_benchmark` is called; `model_load_ms` therefore
+covers the entire cold-start path — weight loading, device transfer, and any library
+initialization — but **excludes** prompt encoding and the inference itself.
+
+**Limitations**:
+- Mock-backend values (~0 ms) validate that the measurement is wired correctly; they
+  are not meaningful as load-time estimates for real models.
+- Does not distinguish between a cold load (weights read from disk) and a warm load (OS
+  page-cached). Repeat runs on the same machine are typically faster if the GGUF or weights
+  file is cached in RAM.
+- `model_load_ms` is absent (blank in CSV) for runs produced before v0.18.
+
+### `warmup_p50_latency_ms`
+
+**Measurement boundary**: the median (p50) of per-request wall-clock latencies for the
+`warmup_requests` loop. Each warmup latency is timed with `time.perf_counter()` around the
+`backend.generate()` call, matching the method used for benchmark-loop latencies.
+
+Warmup requests are executed before the memory-measurement window opens and before benchmark
+metrics are recorded. Their latencies are now captured separately so you can see whether the
+first few requests are slower than steady-state (JIT compilation, CUDA warm-up, weight
+paging) without those spikes inflating the benchmark p50/p95.
+
+**When `None` / blank**: `warmup_requests == 0` in the config, or the run predates v0.18.
+
+**Limitations**:
+- The number of warmup requests is small (typically 1–3), so `warmup_p50_latency_ms` is
+  a rough estimate. With a single warmup request it equals that request's latency exactly.
+- Warmup latency reflects first-use allocation (CUDA kernels, memory pages, caches) and is
+  expected to be higher than steady-state. The gap narrows on subsequent calls.
+- Mock-backend warmup latency (~`latency_ms` ms) validates plumbing only; the mock sleeps
+  for a configured duration rather than doing real inference.
+
+**Backward compatibility**: CSVs produced before v0.18 do not contain `model_load_ms` or
+`warmup_p50_latency_ms` columns. `llm-bench compare`, `pareto`, and `recommend` treat
+missing or blank lifecycle columns as `N/A` and do not crash on older CSVs.
+
+---
 
 ## Computation Notes
 

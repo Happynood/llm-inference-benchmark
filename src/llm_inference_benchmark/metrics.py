@@ -35,6 +35,9 @@ class MetricsReport:
     sanity_pass_rate: float = 1.0
     task_quality_pass_rate: float | None = None
     task_quality_checked_count: int | None = None
+    # Lifecycle metrics — absent in runs that predate v0.18 (blank in CSV, None here)
+    model_load_ms: float | None = None
+    warmup_p50_latency_ms: float | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -47,6 +50,8 @@ def compute_metrics(
     peak_vram_memory_mb: float | None = None,
     quality: QualityReport | None = None,
     task_quality: TaskQualityReport | None = None,
+    model_load_ms: float | None = None,
+    warmup_p50_latency_ms: float | None = None,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -81,6 +86,8 @@ def compute_metrics(
         task_quality_checked_count=(
             task_quality.task_quality_checked_count if task_quality is not None else None
         ),
+        model_load_ms=model_load_ms,
+        warmup_p50_latency_ms=warmup_p50_latency_ms,
     )
 
 
