@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import statistics
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
@@ -38,6 +39,11 @@ class MetricsReport:
     # Lifecycle metrics — absent in runs that predate v0.18 (blank in CSV, None here)
     model_load_ms: float | None = None
     warmup_p50_latency_ms: float | None = None
+    # Repeated-trial variance (v0.19) — None for single runs (config.repeats == 1)
+    # p95 and tok/s become median-across-repeats; std fields hold sample std dev (n-1)
+    repeats: int | None = None
+    p95_latency_ms_std: float | None = None
+    tokens_per_second_std: float | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -100,3 +106,66 @@ def _percentile_sorted(sorted_data: list[float], p: int) -> float:
     upper = min(lower + 1, len(sorted_data) - 1)
     fraction = idx - lower
     return sorted_data[lower] + fraction * (sorted_data[upper] - sorted_data[lower])
+
+
+def _max_optional(values: list[float | None]) -> float | None:
+    present = [v for v in values if v is not None]
+    return max(present) if present else None
+
+
+def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
+    """Return a single MetricsReport summarising N repeated benchmark runs.
+
+    When len(reports) == 1 the report is returned unchanged with variance fields as None
+    (backward-compatible: the CSV looks identical to a non-repeated run).
+
+    For len(reports) >= 2:
+    - p50/p95 latency and tokens_per_second become the median across repeats.
+    - p95_latency_ms_std and tokens_per_second_std are the sample standard deviation
+      (n-1 denominator, via statistics.stdev) across repeats.
+    - Memory peaks (CPU, CUDA, VRAM) take the maximum across repeats.
+    - Non-aggregated fields (quality, task quality, warmup) come from the last repeat.
+    - model_load_ms comes from the first repeat (backend was constructed once before repeats).
+
+    Capture scope: repeats share one process and warm cache state, so variance reflects
+    in-process loop jitter, not cold-start or cross-machine variance.
+    """
+    if not reports:
+        raise ValueError("No reports to aggregate")
+
+    if len(reports) == 1:
+        return reports[0]
+
+    n = len(reports)
+    first = reports[0]
+    last = reports[-1]
+
+    p50s = [r.p50_latency_ms for r in reports]
+    p95s = [r.p95_latency_ms for r in reports]
+    toks = [r.tokens_per_second for r in reports]
+
+    return MetricsReport(
+        request_count=last.request_count,
+        p50_latency_ms=statistics.median(p50s),
+        p95_latency_ms=statistics.median(p95s),
+        tokens_per_second=statistics.median(toks),
+        total_tokens=last.total_tokens,
+        backend=last.backend,
+        model=last.model,
+        peak_cpu_memory_mb=max(r.peak_cpu_memory_mb for r in reports),
+        peak_cuda_memory_mb=_max_optional([r.peak_cuda_memory_mb for r in reports]),
+        peak_vram_memory_mb=_max_optional([r.peak_vram_memory_mb for r in reports]),
+        empty_output_count=last.empty_output_count,
+        min_output_chars=last.min_output_chars,
+        mean_output_chars=last.mean_output_chars,
+        repeated_output_count=last.repeated_output_count,
+        sanity_pass_rate=last.sanity_pass_rate,
+        task_quality_pass_rate=last.task_quality_pass_rate,
+        task_quality_checked_count=last.task_quality_checked_count,
+        model_load_ms=first.model_load_ms,
+        warmup_p50_latency_ms=last.warmup_p50_latency_ms,
+        repeats=n,
+        p95_latency_ms_std=statistics.stdev(p95s),
+        tokens_per_second_std=statistics.stdev(toks),
+        timestamp=last.timestamp,
+    )

@@ -37,6 +37,7 @@ class BenchmarkConfig(BaseModel):
     quality_file: str | None = None
     workload_profile: str | None = None
     warmup_requests: int = Field(default=2, ge=0)
+    repeats: int = Field(default=1, ge=1)
     mock: MockBackendConfig = Field(default_factory=MockBackendConfig)
     hf: HFBackendConfig = Field(default_factory=HFBackendConfig)
     llama_cpp: LlamaCppBackendConfig = Field(default_factory=LlamaCppBackendConfig)

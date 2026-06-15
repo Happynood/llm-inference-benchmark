@@ -104,6 +104,24 @@ uv run llm-bench matrix --config configs/matrix-example.yaml --dry-run
 uv run llm-bench compare results/*.csv --sort p95
 ```
 
+**Repeated trials with variance reporting:**
+```bash
+# Add repeats: 5 to any config YAML, then run as normal:
+uv run llm-bench --config configs/example-repeats.yaml --output results/repeated.csv
+```
+> Add `repeats: 5` to a config to run the full benchmark loop 5 times. The reported p95
+> latency and tok/s become the median across all repeats. Two new CSV columns
+> (`p95_latency_ms_std`, `tokens_per_second_std`) carry the sample standard deviation
+> across repeats. When `repeats: 1` (the default), CSV output is unchanged.
+```
+p95_latency_ms: 5.02 ± 0.08 (n=5)   ← median ± std dev across 5 repeats
+tokens_per_second: 9968.34 ± 42.17 (n=5)
+```
+
+> Variance captured here is in-process loop jitter (warm cache, loaded model) — not
+> cold-start variance. A low std dev confirms the benchmark is stable enough for
+> single-run comparisons to be meaningful.
+
 **Parameter sweep (cartesian product from one base config):**
 ```bash
 uv run llm-bench matrix --config configs/sweep-example.yaml --dry-run
@@ -477,6 +495,7 @@ make typecheck  # pyright
 **Optimization analysis (active)**
 - [x] Parameter sweep matrix — `base_config:` + `sweep:` in matrix YAML; cartesian product expansion; dot-path nested overrides (`llama_cpp.n_gpu_layers`, `hf.max_new_tokens`, `mock.latency_ms`); deterministic run names; dry-run preview with override list (v0.17)
 - [x] Lifecycle metrics: model load time (`model_load_ms`) and warmup latency (`warmup_p50_latency_ms`) — wired into CSV and CLI; mock values validate plumbing, not real model load time (v0.18)
+- [x] Repeated-trial variance: `repeats: N` in config runs the benchmark loop N times; reported p95/tok/s become median across repeats; `p95_latency_ms_std` and `tokens_per_second_std` hold sample std dev; single-run CSVs unchanged (v0.19)
 - [ ] Real parameter sweep evidence: RTX 3050 sweep of n\_gpu\_layers × max\_tokens on Llama 3.2 3B — infrastructure ready, real runs not yet committed
 - [ ] Semantic quality evaluation (perplexity or judge scoring) — task rubrics are deterministic substring/regex checks; no judge model or probabilistic scoring yet
 
