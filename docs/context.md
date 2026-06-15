@@ -3,7 +3,7 @@
 ## Purpose
 
 Reproducible harness for benchmarking LLM inference backends (latency, throughput, memory).
-Portfolio project demonstrating production-grade engineering: CLI, config, tests, CI, honest metrics.
+Production-grade engineering reference: CLI, config, tests, CI, and honest metrics.
 
 ## Current State (v0.1)
 

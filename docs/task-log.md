@@ -33,7 +33,7 @@ Fix: install `nvidia-cublas-cu12 12.9.2.10` + `nvidia-cuda-runtime-cu12`, then s
 
 ## 2026-06-13 — v0.1: Mock backend vertical slice
 
-**Goal**: Portfolio-ready scaffold with architecture, CLI, tests, CI — no model weights required.
+**Goal**: Production-ready scaffold with architecture, CLI, tests, CI — no model weights required.
 
 **Delivered**:
 - `pyproject.toml` with uv, Pydantic v2, Click, Ruff, Pyright, pytest
@@ -206,7 +206,7 @@ keep CI safe with mock-based unit tests (no GGUF download, no GPU required).
 
 ## 2026-06-14 — v0.9: Security hardening + CI/real-evidence separation
 
-**Goal**: Fix path-traversal risk in run names; make portfolio clearly distinguish mock
+**Goal**: Fix path-traversal risk in run names; make documentation clearly distinguish mock
 CI validation from real hardware benchmark evidence.
 
 **Security fixes**:
