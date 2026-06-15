@@ -34,7 +34,7 @@ and real hardware evidence.
 | [RTX 3050 — tiny-gpt2 CPU vs GPU](gpu-rtx3050-tiny-gpt2.md) | i5-11400H + RTX 3050 4 GB | transformers | sshleifer/tiny-gpt2 | 2026-06-14 | GPU slower than CPU for 2-layer toy model; establishes GPU baseline |
 | [RTX 3050 — Llama 3.2 3B CPU vs GPU](llama-cpp-rtx3050-llama32-3b.md) | i5-11400H + RTX 3050 4 GB | llama-cpp | Llama-3.2-3B-Instruct-Q4\_K\_M | 2026-06-14 | GPU 2.95× faster; 53.7 tok/s vs 18.0 tok/s CPU; all 28 layers on CUDA0 |
 | [RTX 3050 — n\_gpu\_layers sweep (0 / 20 / 99)](llama-cpp-rtx3050-vram-sweep.md) | i5-11400H + RTX 3050 4 GB | llama-cpp | Llama-3.2-3B-Instruct-Q4\_K\_M | 2026-06-14 | VRAM scales ~60 MiB/layer after 655 MiB baseline; full offload 2.92× CPU; partial offload viable |
-| [RTX 3050 — Q4\_K\_M vs Q8\_0 quantization comparison](llama-cpp-rtx3050-quant-compare.md) | i5-11400H + RTX 3050 4 GB | llama-cpp | Llama-3.2-3B-Instruct (both quants) | 2026-06-14 | Q4\_K\_M 1.31× faster, 1.57× less VRAM; Q8\_0 fits at 90.2% of 4 GB; Q4\_K\_M is sole Pareto-optimal config |
+| [RTX 3050 — Q4\_K\_M vs Q8\_0 quantization comparison](llama-cpp-rtx3050-quant-compare.md) | i5-11400H + RTX 3050 4 GB | llama-cpp | Llama-3.2-3B-Instruct (both quants) | 2026-06-14 | Q4\_K\_M 1.31× faster, 1.57× less VRAM, Pareto-optimal; v0.16: Q4\_K\_M 100% task quality vs Q8\_0 80% (prompt-3 truncation at max\_tokens=50) |
 
 ## Planned runs
 

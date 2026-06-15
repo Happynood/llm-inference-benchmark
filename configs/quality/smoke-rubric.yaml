@@ -1,0 +1,85 @@
+# Task quality rubric for data/prompts/smoke.txt
+#
+# One entry per prompt position (same order as the prompts file).
+# null = skip quality check for that position.
+# All string checks (contains_all, contains_any, forbidden) are case-insensitive.
+#
+# Prompts:
+#   0: "What is the capital of France?"
+#   1: "Explain the concept of gradient descent in machine learning."
+#   2: "Write a brief summary of the transformer architecture."
+#   3: "What are the main differences between BERT and GPT?"
+#   4: "How does the attention mechanism work in neural networks?"
+#
+# Rubric philosophy:
+#   - contains_any checks for at least one domain keyword — tests that the model
+#     answered the right topic, not a refusal or hallucinated tangent.
+#   - contains_all checks that BOTH subjects appear when the question requires both.
+#   - forbidden catches common refusal or uncertainty phrases.
+#   - min_chars=20 rules out ultra-short or whitespace-only responses.
+#   - Checks are intentionally permissive: a competent model should pass all of them.
+#     Failures indicate truncation, refusal, or a seriously degraded completion.
+
+# Prompt 0: "What is the capital of France?"
+- contains_any:
+    - Paris
+  forbidden:
+    - I don't know
+    - I'm not sure
+    - I cannot
+  min_chars: 10
+
+# Prompt 1: "Explain the concept of gradient descent in machine learning."
+- contains_any:
+    - gradient
+    - descent
+    - minimize
+    - minimise
+    - loss
+    - optimize
+    - optimise
+    - converge
+  forbidden:
+    - I don't know
+    - I'm not sure
+    - I cannot
+  min_chars: 30
+
+# Prompt 2: "Write a brief summary of the transformer architecture."
+- contains_any:
+    - transformer
+    - attention
+    - encoder
+    - decoder
+    - self-attention
+    - feed-forward
+    - feedforward
+  forbidden:
+    - I don't know
+    - I'm not sure
+    - I cannot
+  min_chars: 30
+
+# Prompt 3: "What are the main differences between BERT and GPT?"
+- contains_all:
+    - bert
+    - gpt
+  forbidden:
+    - I don't know
+    - I'm not sure
+    - I cannot
+  min_chars: 30
+
+# Prompt 4: "How does the attention mechanism work in neural networks?"
+- contains_any:
+    - attention
+    - query
+    - key
+    - value
+    - weight
+    - score
+  forbidden:
+    - I don't know
+    - I'm not sure
+    - I cannot
+  min_chars: 30
