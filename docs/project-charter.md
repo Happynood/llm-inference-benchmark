@@ -38,8 +38,8 @@ selection rather than ad-hoc timing scripts.
 - Engineers comparing inference backends on ordinary local hardware.
 - ML practitioners who need reproducible, scriptable optimization experiments.
 - Engineers deciding between backend, quantization, batch/concurrency, and generation settings.
-- Portfolio reviewers who want to see clean backend abstractions, metrics discipline, testing, and
-  honest documentation.
+- Engineers and reviewers who want to see clean backend abstractions, metrics discipline, testing,
+  and honest documentation.
 
 ## Goals
 
@@ -104,7 +104,7 @@ Accept a feature if it strengthens at least one of these pillars:
 - low-resource local inference
 - quality/performance trade-off analysis
 - measurement honesty
-- portfolio-quality engineering
+- product-quality engineering
 
 Delay or reject a feature if it mainly adds surface area without improving controlled experiments,
 metadata quality, comparison quality, or recommendation quality.
