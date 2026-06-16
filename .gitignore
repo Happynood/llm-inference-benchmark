@@ -40,3 +40,8 @@ data/outputs/
 .vscode/
 *.swp
 *.swo
+
+# Local Claude Code operating layer
+.claude/
+CLAUDE.md
+CLAUDE.local.md
