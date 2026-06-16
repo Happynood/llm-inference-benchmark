@@ -7,6 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [0.22.0] — 2026-06-17
+
+### Added
+- OpenAI-compatible endpoint backend (`backend: openai`): benchmarks any server that
+  exposes the `/v1/chat/completions` HTTP API — llama.cpp server, Ollama, LM Studio,
+  vLLM, and others. Uses `urllib` (no extra dependency). Token counts from the `usage`
+  field when present; word-count fallback otherwise. API key read from a named
+  environment variable (`api_key_env`); never written to config, logs, or output.
+  Example config at `configs/openai-endpoint.yaml`.
+
+**Limitation:** reported latency includes network round-trip and server-side queueing
+overhead and is not directly comparable to in-process backend latency.
+
 ## [0.21.0] — 2026-06-16
 
 ### Added

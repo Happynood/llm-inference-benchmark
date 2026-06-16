@@ -379,4 +379,15 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             n_threads=cfg.llama_cpp.n_threads,
             verbose=cfg.llama_cpp.verbose,
         )
+    if cfg.backend == "openai":
+        from llm_inference_benchmark.backends.openai_endpoint import OpenAIEndpointBackend
+
+        return OpenAIEndpointBackend(
+            base_url=cfg.openai.base_url,
+            model=cfg.model,
+            max_tokens=cfg.openai.max_tokens,
+            temperature=cfg.openai.temperature,
+            timeout_s=cfg.openai.timeout_s,
+            api_key_env=cfg.openai.api_key_env,
+        )
     raise ValueError(f"Unknown backend: {cfg.backend!r}")

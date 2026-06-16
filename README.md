@@ -228,6 +228,7 @@ Excluded (1)
 - **Mock backend** — deterministic, zero-dependency, CI-friendly
 - **Transformers backend** — real CPU/GPU inference via `AutoModelForCausalLM` (optional extra)
 - **llama.cpp backend** — GGUF quantized inference via `llama-cpp-python` (optional extra); GPU via CUDA build
+- **OpenAI-compatible endpoint backend** — benchmark any running server (Ollama, llama.cpp server, LM Studio, vLLM) via the `/v1/chat/completions` HTTP API; no extra dependency; API key read from env variable only
 - **Type-checked and tested** — Pyright (basic) + Ruff + pytest
 - **GitHub Actions CI** — lint + type-check + mock tests on every push
 
@@ -239,6 +240,7 @@ Excluded (1)
 | Config | Pydantic v2, PyYAML |
 | CLI | Click |
 | Transformers backend | HuggingFace `transformers` + PyTorch (optional) |
+| OpenAI endpoint backend | stdlib `urllib` (no extra dependency) |
 | Tests | pytest, pytest-cov |
 | Lint/format | Ruff |
 | Type checking | Pyright |
@@ -254,10 +256,11 @@ configs/*.yaml
         │
         ▼
   _build_backend() → Backend (ABC)
-                         ├── MockBackend     ← zero-dep, CI-safe    ✓ v0.1
-                         ├── HFBackend       ← transformers extra   ✓ v0.2
-                         ├── LlamaCppBackend ← GGUF quantization    ✓ v0.10
-                         └── ONNXBackend     ← ONNX export          roadmap
+                         ├── MockBackend            ← zero-dep, CI-safe    ✓ v0.1
+                         ├── HFBackend              ← transformers extra   ✓ v0.2
+                         ├── LlamaCppBackend        ← GGUF quantization    ✓ v0.10
+                         ├── OpenAIEndpointBackend  ← HTTP /v1/chat API    ✓ v0.22
+                         └── ONNXBackend            ← ONNX export          roadmap
         │
         ▼
   run_benchmark(backend, config, prompts)
@@ -457,6 +460,15 @@ make typecheck  # pyright
 - `prompts_file` and `config` paths resolve relative to the working directory. Run from the
   project root.
 
+**OpenAI-compatible endpoint backend**
+- Reported latency includes network round-trip and server-side queueing overhead and is not
+  directly comparable to in-process backend latency from the `transformers` or `llama-cpp`
+  backends.
+- Token counts are taken from the `usage` field in the server response when present. When
+  the server omits `usage`, counts fall back to a word-count estimate (less accurate).
+- `measure_perplexity` and `measure_judge` are not supported for this backend (no logit
+  access); both report `None`.
+
 **llama.cpp backend**
 - Requires a local GGUF model file — no automatic download. Obtain models from Hugging Face Hub
   (e.g. `huggingface_hub.hf_hub_download`).
@@ -505,4 +517,4 @@ make typecheck  # pyright
 **Additional backends (later)**
 - [ ] `onnxruntime` (ONNX export + quantization)
 - [ ] `vllm` (high-throughput GPU serving)
-- [ ] OpenAI-compatible endpoint (local or remote)
+- [x] OpenAI-compatible endpoint backend — `/v1/chat/completions` HTTP API; works with Ollama, llama.cpp server, LM Studio, vLLM; no extra dependency; API key via env var (v0.22)
