@@ -7,6 +7,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [0.23.0] — 2026-06-17
+
+### Added
+- `compare` table now shows a `Load (ms)` column (`model_load_ms` from v0.18 runs; `N/A`
+  for pre-v0.18 CSVs). When a run used `repeats > 1`, the `p95 (ms)` and `tok/s` cells
+  show the median with its standard deviation as `value ± std`.
+- `pareto` table now shows a `Load (ms)` column and includes `model_load_ms` as a
+  Pareto dimension (lower is better) when both compared runs have a value.
+- `recommend` displays `Load` in the winning-configuration summary and accepts a new
+  `--max-load-ms` constraint: runs where load time exceeds the threshold (or where load
+  time is unknown) are excluded with a clear reason.
+
 ## [0.22.0] — 2026-06-17
 
 ### Added

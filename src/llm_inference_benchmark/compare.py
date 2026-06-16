@@ -23,6 +23,7 @@ _HEADERS = [
     "p50 (ms)",
     "p95 (ms)",
     "tok/s",
+    "Load (ms)",
     "CPU mem (MB)",
     "CUDA mem (MB)",
     "VRAM mem (MB)",
@@ -49,6 +50,9 @@ class RunRow:
     task_quality_checked_count: int | None = None  # absent when no quality_file was set
     perplexity: float | None = None  # absent unless config.measure_perplexity was set
     judge_score: float | None = None  # absent unless config.measure_judge was set
+    model_load_ms: float | None = None  # absent in pre-v0.18 CSVs → None
+    p95_latency_ms_std: float | None = None  # absent unless config.repeats > 1
+    tokens_per_second_std: float | None = None  # absent unless config.repeats > 1
 
 
 def _parse_optional_float(row: dict[str, str], key: str, path: str | Path) -> float | None:
@@ -90,6 +94,9 @@ def load_csv(path: str | Path) -> RunRow:
     )
     perplexity = _parse_optional_float(row, "perplexity", path)
     judge_score = _parse_optional_float(row, "judge_score", path)
+    model_load_ms = _parse_optional_float(row, "model_load_ms", path)
+    p95_std = _parse_optional_float(row, "p95_latency_ms_std", path)
+    toks_std = _parse_optional_float(row, "tokens_per_second_std", path)
 
     return RunRow(
         backend=row["backend"],
@@ -106,6 +113,9 @@ def load_csv(path: str | Path) -> RunRow:
         task_quality_checked_count=task_quality_checked,
         perplexity=perplexity,
         judge_score=judge_score,
+        model_load_ms=model_load_ms,
+        p95_latency_ms_std=p95_std,
+        tokens_per_second_std=toks_std,
     )
 
 
@@ -130,14 +140,25 @@ def render_table(rows: list[RunRow]) -> str:
     def fmt_ppl(v: float | None) -> str:
         return "N/A" if v is None else f"{v:.2f}"
 
+    def fmt_p95(r: RunRow) -> str:
+        if r.p95_latency_ms_std is not None:
+            return f"{r.p95_latency_ms:.2f} ± {r.p95_latency_ms_std:.2f}"
+        return f"{r.p95_latency_ms:.2f}"
+
+    def fmt_toks(r: RunRow) -> str:
+        if r.tokens_per_second_std is not None:
+            return f"{r.tokens_per_second:.1f} ± {r.tokens_per_second_std:.1f}"
+        return f"{r.tokens_per_second:.1f}"
+
     data: list[list[str]] = [
         [
             r.backend,
             r.model,
             str(r.request_count),
             f"{r.p50_latency_ms:.2f}",
-            f"{r.p95_latency_ms:.2f}",
-            f"{r.tokens_per_second:.1f}",
+            fmt_p95(r),
+            fmt_toks(r),
+            fmt_optional(r.model_load_ms),
             f"{r.peak_cpu_memory_mb:.1f}",
             fmt_optional(r.peak_cuda_memory_mb),
             fmt_optional(r.peak_vram_memory_mb),
