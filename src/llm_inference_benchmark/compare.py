@@ -125,6 +125,11 @@ def sort_rows(rows: list[RunRow], sort_by: str = "p95") -> list[RunRow]:
         return sorted(rows, key=lambda r: (r.backend, r.model))
     if sort_by == "model":
         return sorted(rows, key=lambda r: (r.model, r.backend))
+    if sort_by == "toks":
+        return sorted(rows, key=lambda r: r.tokens_per_second, reverse=True)
+    if sort_by == "load":
+        _inf = float("inf")
+        return sorted(rows, key=lambda r: r.model_load_ms if r.model_load_ms is not None else _inf)
     return sorted(rows, key=lambda r: r.p95_latency_ms)  # default: p95 ascending
 
 

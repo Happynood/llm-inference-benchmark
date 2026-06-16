@@ -97,8 +97,8 @@ def main(
     "sort_by",
     default="p95",
     show_default=True,
-    type=click.Choice(["backend", "model", "p95"], case_sensitive=False),
-    help="Sort rows by this column",
+    type=click.Choice(["backend", "model", "p95", "toks", "load"], case_sensitive=False),
+    help="Sort column: toks=highest throughput first; load=fastest load first (N/A last)",
 )
 @click.option(
     "--output",
