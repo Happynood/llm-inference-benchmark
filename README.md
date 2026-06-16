@@ -6,7 +6,7 @@ identical workloads.
 
 Project direction is fixed in [docs/project-charter.md](docs/project-charter.md): start with a
 small benchmark harness, then grow toward configuration comparison, Pareto analysis, and
-constraint-based recommendations.
+constraint-based recommendations. See [CHANGELOG.md](CHANGELOG.md) for release history.
 
 ## Problem
 
@@ -64,7 +64,7 @@ uv run llm-bench --config configs/example.yaml --output results.csv --manifest r
   "platform_info": "Linux-7.0.0-x86_64",
   "cpu_model": "Intel(R) Core(TM) i5-11400H @ 2.70GHz",
   "cpu_count": 12,
-  "package_version": "0.1.0",
+  "package_version": "0.20.0",
   "torch_version": "2.12.0",
   "transformers_version": "5.12.0",
   "psutil_version": "6.1.1",
