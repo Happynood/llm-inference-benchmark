@@ -1,0 +1,29 @@
+# Benchmark an OpenAI-compatible /v1/chat/completions HTTP endpoint.
+#
+# Works with llama.cpp server, Ollama, LM Studio, vLLM, and any other server
+# that implements the OpenAI chat-completions API.
+#
+# NOTE: reported latency includes network round-trip and server-side queueing
+# overhead and is not directly comparable to in-process backend latency from
+# the transformers or llama-cpp backends.
+#
+# Usage:
+#   llm-bench --config configs/openai-endpoint.yaml --output results/openai.csv
+#
+# To authenticate, set api_key_env to the name of an environment variable that
+# holds your API key (the key is never written to config files, logs, or output):
+#   export MY_API_KEY=sk-...
+#   then set:  api_key_env: MY_API_KEY
+
+backend: openai
+model: "llama3.2"       # model name as the server expects it
+requests: 20
+warmup_requests: 2
+prompts_file: data/prompts/smoke.txt
+
+openai:
+  base_url: "http://localhost:11434/v1"   # Ollama default; adjust for your server
+  max_tokens: 128
+  temperature: 0.0
+  timeout_s: 60.0
+  # api_key_env: MY_API_KEY               # uncomment and set if your server requires auth
