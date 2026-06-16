@@ -10,6 +10,7 @@ import os
 import time
 
 from llm_inference_benchmark.backends.base import Backend, GenerationResult
+from llm_inference_benchmark.perplexity import perplexity_from_nll
 
 try:
     import torch  # type: ignore[import-untyped]
@@ -86,3 +87,29 @@ class HFBackend(Backend):
             output_tokens=output_len,
             latency_ms=elapsed_ms,
         )
+
+    def compute_perplexity(self, texts: list[str]) -> float | None:
+        """Corpus-level self-perplexity of texts under this model (teacher-forced).
+
+        Texts that tokenize to fewer than 2 tokens contribute nothing (there is no
+        next-token target to score) and are skipped. Returns None when no text in
+        the batch yields a scorable token.
+        """
+        total_nll = 0.0
+        total_tokens = 0
+        with torch.no_grad():
+            for text in texts:
+                ids = self._tokenizer(text, return_tensors="pt").to(self._device)["input_ids"]
+                if ids.shape[1] < 2:
+                    continue
+                logits = self._model(ids).logits
+                shift_logits = logits[:, :-1, :].float()
+                shift_labels = ids[:, 1:]
+                log_probs = torch.log_softmax(shift_logits, dim=-1)
+                token_log_probs = log_probs.gather(2, shift_labels.unsqueeze(-1)).squeeze(-1)
+                total_nll += -token_log_probs.sum().item()
+                total_tokens += shift_labels.shape[1]
+
+        if total_tokens == 0:
+            return None
+        return perplexity_from_nll(total_nll, total_tokens)

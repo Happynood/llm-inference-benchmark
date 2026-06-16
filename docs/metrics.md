@@ -159,6 +159,51 @@ produced text but none of it matched the expected content.
 exclude runs whose `task_quality_pass_rate` is below threshold or unknown.  Runs without
 quality data are only excluded when the constraint is active — backward-compatible.
 
+## Perplexity (v0.20)
+
+`PPL` is a continuous, model-confidence-based quality signal that complements the binary
+`Sanity %` and `Task Q %` checks above: a configuration can pass every structural and rubric
+check while still becoming less fluent (e.g. under aggressive quantization), and perplexity is
+the metric designed to catch that.
+
+### `perplexity`
+
+Set `measure_perplexity: true` in the benchmark config to compute it. After the benchmark loop
+finishes, the backend re-scores its own generated completions via teacher forcing (each token
+is scored against the model's prediction for it, given all preceding tokens — the standard
+self-perplexity definition) and reports a single corpus-level value:
+
+```text
+perplexity = exp(total_negative_log_likelihood / total_tokens)
+```
+
+Negative log-likelihood is pooled across every scored token in every completion, not averaged
+per-text first — this avoids biasing the result toward short completions. Lower is better:
+`1.0` means the model assigned probability 1.0 to every token it generated (perfect confidence);
+higher values mean the model was less certain about its own output.
+
+**Backend support**: only the `transformers` backend currently exposes the logits needed for
+this computation. `mock` and `llama-cpp` backends return `None` (blank in the CSV, `N/A` in
+`compare`/`pareto`/`recommend`) — this is a known gap, not an error; see Limitations below.
+Completions that tokenize to fewer than 2 tokens are skipped (there is no next-token target to
+score); if every completion in a run is skipped, `perplexity` is `None` for that run.
+
+**What this does and does not measure**: this is an intrinsic fluency signal computed on text
+the model itself produced — it is not a task-correctness or factual-accuracy check (that is
+`task_quality_pass_rate`'s job), and it is not perplexity on a held-out reference corpus.
+Perplexity values are only meaningfully comparable across runs that share the same tokenizer
+and model family; comparing perplexity across different models or tokenizers (e.g. GPT-2 BPE
+vs. a Llama tokenizer) is not valid because vocabulary size and segmentation differ.
+
+**`--max-perplexity` constraint**: pass `--max-perplexity <float>` to `llm-bench recommend` to
+exclude runs whose `perplexity` exceeds the threshold or is unknown. Runs without a perplexity
+reading are only excluded when the constraint is active — backward-compatible, matching the
+existing `--min-quality` / `--max-vram-mb` pattern.
+
+**Pareto treatment**: `llm-bench pareto` treats lower perplexity as strictly better and compares
+it only when both rows in a pairwise comparison have a value — a row missing perplexity neither
+gains nor loses on that axis, consistent with how missing VRAM or sanity data is handled.
+
 ## Lifecycle Metrics (v0.18)
 
 Two metrics capture how long a backend takes to become ready and how it behaves during warmup.
@@ -341,8 +386,10 @@ is the sole Pareto-optimal configuration in this two-run comparison.
 - **N matters**: Pareto analysis at N=10 requests inherits all limitations of the raw
   metrics — p95 at N=10 is the single worst observation, not a stable tail-latency
   estimate.
-- **No quality dimension**: output quality (perplexity, task accuracy) is not a metric.
-  Pareto optimality here means "efficient on speed/memory/sanity", not "best model".
+- **Quality dimension is partial**: `task_quality_pass_rate` (rubric-based) and `perplexity`
+  (v0.20, transformers backend only) participate in dominance when present, but neither is a
+  general task-accuracy or semantic-correctness measure. Pareto optimality here means
+  "efficient on speed/memory/sanity/fluency", not "best model" in an absolute sense.
 - **Single-run by default**: each CSV is one benchmark run.  Use `repeats: N` in the config
   to collect variance data; see [Repeated-Trial Variance (v0.19)](#repeated-trial-variance-v019).
 
@@ -350,7 +397,7 @@ is the sole Pareto-optimal configuration in this two-run comparison.
 
 ## Constraint-based Recommender
 
-`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N] [--min-quality N]`
+`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N] [--min-quality N] [--max-perplexity N]`
 reads saved benchmark CSVs, filters them against explicit constraints, and recommends
 the best configuration.
 
@@ -362,6 +409,7 @@ the best configuration.
 | `--max-p95-ms` | `p95_latency_ms` | value > threshold |
 | `--min-sanity` | `sanity_pass_rate` | value < threshold, or value missing when flag is set |
 | `--min-quality` | `task_quality_pass_rate` | value < threshold, or value missing when flag is set |
+| `--max-perplexity` | `perplexity` | value > threshold, or value missing when flag is set |
 
 All constraints are optional.  With no flags every run is a candidate.
 
@@ -420,8 +468,9 @@ Exit code is 1 in this case; 0 when a winner is found.
 
 - Recommendation quality is bounded by the quality of the input CSVs.
   A recommendation from two runs is weaker than one from a systematic sweep.
-- Output quality (perplexity, task accuracy) is not a constraint.
-  `--min-sanity` only checks that completions are non-empty, not that they are correct.
+- `--min-sanity` only checks that completions are non-empty, not that they are correct.
+  `--max-perplexity` (v0.20) adds an intrinsic fluency constraint but is only available for
+  the `transformers` backend and is not a task-accuracy check — use `--min-quality` for that.
 - p95 from N=10 requests is a rough estimate.  Use `repeats: N` in the config to quantify
   run-to-run variance; see [Repeated-Trial Variance (v0.19)](#repeated-trial-variance-v019).
 

@@ -19,3 +19,11 @@ class Backend(ABC):
     @property
     @abstractmethod
     def name(self) -> str: ...
+
+    def compute_perplexity(self, texts: list[str]) -> float | None:
+        """Return corpus-level perplexity of texts under this backend's model.
+
+        Default: None (backend has no token-level log-probability access).
+        Backends that expose logits (e.g. transformers) override this.
+        """
+        return None

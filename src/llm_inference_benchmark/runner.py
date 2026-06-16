@@ -77,6 +77,10 @@ def run_benchmark(
         rubrics = load_task_rubrics(config.quality_file)
         task_qual = compute_task_quality(texts, len(prompts), rubrics)
 
+    perplexity: float | None = None
+    if config.measure_perplexity:
+        perplexity = backend.compute_perplexity(texts)
+
     return compute_metrics(
         results,
         backend=backend.name,
@@ -88,6 +92,7 @@ def run_benchmark(
         task_quality=task_qual,
         model_load_ms=model_load_ms,
         warmup_p50_latency_ms=warmup_p50,
+        perplexity=perplexity,
     )
 
 

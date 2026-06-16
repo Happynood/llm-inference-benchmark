@@ -99,6 +99,28 @@ def test_build_comparison_table_empty_paths_raises() -> None:
         build_comparison_table([])
 
 
+def test_load_csv_perplexity_absent_is_none() -> None:
+    """Older CSVs without a perplexity column load with perplexity=None."""
+    row = load_csv(MOCK_CSV)
+    assert row.perplexity is None
+
+
+def test_load_csv_with_perplexity_column(tmp_path: Path) -> None:
+    p = tmp_path / "ppl.csv"
+    header = "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,perplexity,timestamp\n"  # noqa: E501
+    p.write_text(header + "10,40.0,44.0,1200.0,500,transformers,tiny,720.0,,12.34,2026-01-01\n")
+    row = load_csv(p)
+    assert row.perplexity == pytest.approx(12.34)
+
+
+def test_load_csv_perplexity_blank_is_none(tmp_path: Path) -> None:
+    p = tmp_path / "ppl_blank.csv"
+    header = "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,perplexity,timestamp\n"  # noqa: E501
+    p.write_text(header + "10,40.0,44.0,1200.0,500,mock,m,45.0,,,2026-01-01\n")
+    row = load_csv(p)
+    assert row.perplexity is None
+
+
 # ---------------------------------------------------------------------------
 # sort_rows
 # ---------------------------------------------------------------------------
@@ -189,6 +211,38 @@ def test_render_table_row_count() -> None:
     table = render_table(_ROWS)
     lines = table.splitlines()
     assert len(lines) == len(_ROWS) + 2  # header + separator + data rows
+
+
+def test_render_table_ppl_header() -> None:
+    table = render_table(_ROWS[:1])
+    assert "PPL" in table
+
+
+def test_render_table_ppl_na_when_none() -> None:
+    rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None)]
+    assert "N/A" in render_table(rows)
+
+
+def test_render_table_ppl_value_shown() -> None:
+    rows = [
+        RunRow(
+            "transformers",
+            "tiny-gpt2",
+            10,
+            40.0,
+            44.0,
+            1200.0,
+            720.0,
+            0.0,
+            None,
+            None,
+            None,
+            None,
+            perplexity=12.34,
+        )
+    ]
+    table = render_table(rows)
+    assert "12.34" in table
 
 
 # ---------------------------------------------------------------------------

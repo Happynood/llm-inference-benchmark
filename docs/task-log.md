@@ -1,5 +1,49 @@
 # Task Log
 
+## 2026-06-16 — v0.20: Self-perplexity quality metric
+
+**Goal**: Add a continuous quality signal that catches fluency degradation binary checks
+(sanity, task-quality rubrics) miss — closes the last open item in the "Optimization
+analysis" roadmap section before broader backend work.
+
+**Delivered**:
+- `perplexity.py`: `perplexity_from_nll(total_nll, total_tokens)` — pure corpus-level
+  perplexity formula (`exp(total_nll / total_tokens)`), no torch dependency so it runs in
+  default CI without the `transformers` extra
+- `backends/base.py`: `Backend.compute_perplexity(texts) -> float | None` with a default
+  `None` implementation; backends without logit access need no changes
+- `backends/hf.py`: `HFBackend.compute_perplexity()` — teacher-forced self-perplexity over
+  generated completions; skips texts with <2 tokens; `None` when nothing is scorable
+- `config.py`: `measure_perplexity: bool = False` opt-in flag (default off, backward-compatible)
+- `runner.py`: `run_benchmark` calls `backend.compute_perplexity(texts)` after the timed loop
+  when `measure_perplexity` is set
+- `metrics.py`: `MetricsReport.perplexity: float | None = None`; `aggregate_repeat_reports`
+  takes it from the last repeat (same rule as task quality and warmup fields)
+- `compare.py` / `pareto.py` / `recommend.py`: `RunRow.perplexity` field; `PPL` column in
+  `compare`/`pareto` tables (`N/A` when absent); Pareto dominance treats lower perplexity as
+  strictly better, comparing only when both rows have a value; `recommend` gains
+  `--max-perplexity` with the same missing-value semantics as `--min-quality`
+- `tests/test_perplexity.py`, plus targeted additions to `test_metrics.py`, `test_variance.py`,
+  `test_config.py`, `test_runner.py`, `test_compare.py`, `test_pareto.py`, `test_recommend.py`,
+  and a 3-test integration block in `test_hf_backend.py` (real `sshleifer/tiny-gpt2` scoring)
+- `docs/metrics.md`: new Perplexity section (formula, backend scope, limitations); updated
+  Pareto/Recommender limitations and constraint tables
+- `README.md`: roadmap, Features list, and recommend constraints updated
+
+**Quality checks passed**:
+- `uv run pytest -v` — 431/431 pass, 1 skipped (llama-cpp, no extra installed)
+- `uv run ruff check .` — no issues
+- `uv run ruff format --check .` — no issues
+- `uv run pyright` — 0 errors
+
+**Manual verification** (`sshleifer/tiny-gpt2`, CPU): `measure_perplexity: true` end-to-end
+run produced `perplexity: 44193.75` (high, as expected for an untrained tiny test model);
+`llm-bench compare` / `pareto` rendered the `PPL` column; `recommend --max-perplexity 1000`
+correctly excluded the run with reason `perplexity too high`.
+
+**Next iteration**:
+- Real parameter sweep evidence (RTX 3050) — docs-only, infrastructure already in place
+
 ## 2026-06-14 — v0.11: Real llama.cpp run — Llama 3.2 3B Q4\_K\_M on RTX 3050
 
 **Goal**: Document the first production-size GGUF benchmark on the RTX 3050 Laptop GPU;

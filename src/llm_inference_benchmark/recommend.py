@@ -15,6 +15,9 @@ Constraint semantics:
   - min_quality   : exclude runs where task_quality_pass_rate < threshold;
                     also excludes runs with a missing task quality reading
                     when the constraint is active
+  - max_perplexity: exclude runs where perplexity > threshold;
+                    also excludes runs with a missing perplexity reading
+                    when the constraint is active
   - No constraint set for an optional metric → missing value is allowed.
 """
 
@@ -33,6 +36,7 @@ class Constraints:
     max_p95_ms: float | None = None
     min_sanity: float | None = None
     min_quality: float | None = None
+    max_perplexity: float | None = None
 
 
 @dataclass(frozen=True)
@@ -79,6 +83,12 @@ def _check_row(row: RunRow, constraints: Constraints) -> str | None:
                 f"task quality too low "
                 f"({row.task_quality_pass_rate:.2f} < {constraints.min_quality:.2f})"
             )
+
+    if constraints.max_perplexity is not None:
+        if row.perplexity is None:
+            return f"perplexity unknown (constraint requires ≤ {constraints.max_perplexity:.2f})"
+        if row.perplexity > constraints.max_perplexity:
+            return f"perplexity too high ({row.perplexity:.2f} > {constraints.max_perplexity:.2f})"
 
     return None
 
@@ -149,6 +159,10 @@ def _fmt_rate(v: float | None) -> str:
     return "N/A" if v is None else f"{v * 100:.1f}%"
 
 
+def _fmt_ppl(v: float | None) -> str:
+    return "N/A" if v is None else f"{v:.2f}"
+
+
 def _display_model(model: str) -> str:
     """Return a short display name: filename for absolute paths, full string otherwise."""
     if "/" in model:
@@ -172,6 +186,7 @@ def render_recommendation(result: RecommendationResult) -> str:
             f"  VRAM     : {_fmt_vram(w.peak_vram_memory_mb)}",
             f"  Sanity   : {_fmt_rate(w.sanity_pass_rate)}",
             f"  Task Q   : {_fmt_rate(w.task_quality_pass_rate)}",
+            f"  PPL      : {_fmt_ppl(w.perplexity)}",
             "",
         ]
         n = len(result.candidates)

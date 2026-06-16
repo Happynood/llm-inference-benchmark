@@ -26,6 +26,7 @@ def _row(
     toks: float = 100.0,
     vram: float | None = None,
     sanity: float | None = None,
+    ppl: float | None = None,
 ) -> RunRow:
     return RunRow(
         backend=backend,
@@ -38,6 +39,7 @@ def _row(
         peak_cuda_memory_mb=None,
         peak_vram_memory_mb=vram,
         sanity_pass_rate=sanity,
+        perplexity=ppl,
     )
 
 
@@ -130,6 +132,21 @@ def test_dominates_equal_vram_other_strict() -> None:
     a = _row(p95=9.0, toks=100.0, vram=2000.0)
     b = _row(p95=10.0, toks=100.0, vram=2000.0)
     assert dominates(a, b)
+
+
+def test_dominates_includes_ppl_when_both_present() -> None:
+    """Lower perplexity (more confident/fluent) is better."""
+    a = _row(p95=10.0, toks=100.0, ppl=8.0)
+    b = _row(p95=10.0, toks=100.0, ppl=12.0)
+    assert dominates(a, b)
+    assert not dominates(b, a)
+
+
+def test_dominates_ppl_none_in_one_excludes_ppl() -> None:
+    a = _row(p95=10.0, toks=100.0, ppl=None)
+    b = _row(p95=10.0, toks=100.0, ppl=12.0)
+    assert not dominates(a, b)
+    assert not dominates(b, a)
 
 
 # ---------------------------------------------------------------------------
@@ -273,6 +290,18 @@ def test_render_partial_sanity_percentage() -> None:
     classified = [(_row(sanity=0.8), True)]
     table = render_pareto_table(classified)
     assert "80.0%" in table
+
+
+def test_render_ppl_na_when_none() -> None:
+    classified = [(_row(ppl=None), True)]
+    table = render_pareto_table(classified)
+    assert "N/A" in table
+
+
+def test_render_ppl_value_shown() -> None:
+    classified = [(_row(ppl=12.34), True)]
+    table = render_pareto_table(classified)
+    assert "12.34" in table
 
 
 # ---------------------------------------------------------------------------
