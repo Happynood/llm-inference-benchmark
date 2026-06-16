@@ -216,8 +216,9 @@ Excluded (1)
 - **Peak memory reporting** — CPU RSS via `psutil`; PyTorch allocator CUDA peak via `torch.cuda`; driver-level VRAM via `nvidia-smi` (`peak_vram_memory_mb`) for non-PyTorch GPU backends such as llama.cpp
 - **Output sanity checks** — `empty_output_count`, `min/mean_output_chars`, `repeated_output_count`, `sanity_pass_rate` computed per run; shown as `Sanity %` in compare tables (structural check: was any text produced?)
 - **Task quality evaluation** — optional `quality_file:` in config points to a YAML rubric spec; evaluates each completion against per-prompt `contains_all`, `contains_any`, `forbidden`, `regex`, and `min_chars` checks; shown as `Task Q %` in compare tables (semantic check: did the answer match the expected content?). `Sanity %` and `Task Q %` are independent: a run can be 100% sane but 0% quality if the model produces text that misses the rubric
-- **Pareto analysis** — `llm-bench pareto` classifies configurations as optimal or dominated across p95 latency, throughput, VRAM, sanity, and task quality; missing optional metrics narrow the comparison rather than crashing
-- **Constraint-based recommender** — `llm-bench recommend` filters CSVs by `--max-vram-mb`, `--max-p95-ms`, `--min-sanity`, `--min-quality`; returns the Pareto-optimal winner or exits 1 with a clear exclusion table
+- **Self-perplexity quality metric** — optional `measure_perplexity: true` scores a backend's own generated completions via teacher forcing; shown as `PPL` in compare/pareto tables (intrinsic fluency check: how confident was the model in the tokens it generated?). `transformers` backend only; other backends report `None`
+- **Pareto analysis** — `llm-bench pareto` classifies configurations as optimal or dominated across p95 latency, throughput, VRAM, sanity, task quality, and perplexity; missing optional metrics narrow the comparison rather than crashing
+- **Constraint-based recommender** — `llm-bench recommend` filters CSVs by `--max-vram-mb`, `--max-p95-ms`, `--min-sanity`, `--min-quality`, `--max-perplexity`; returns the Pareto-optimal winner or exits 1 with a clear exclusion table
 - **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
 - **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU, dep versions, optional GPU fingerprint (`--manifest`)
 - **Optimization-oriented roadmap** — run manifests, workload profiles, quality checks, Pareto
@@ -496,8 +497,9 @@ make typecheck  # pyright
 - [x] Parameter sweep matrix — `base_config:` + `sweep:` in matrix YAML; cartesian product expansion; dot-path nested overrides (`llama_cpp.n_gpu_layers`, `hf.max_new_tokens`, `mock.latency_ms`); deterministic run names; dry-run preview with override list (v0.17)
 - [x] Lifecycle metrics: model load time (`model_load_ms`) and warmup latency (`warmup_p50_latency_ms`) — wired into CSV and CLI; mock values validate plumbing, not real model load time (v0.18)
 - [x] Repeated-trial variance: `repeats: N` in config runs the benchmark loop N times; reported p95/tok/s become median across repeats; `p95_latency_ms_std` and `tokens_per_second_std` hold sample std dev; single-run CSVs unchanged (v0.19)
+- [x] Self-perplexity quality metric: `measure_perplexity: true` reports corpus-level perplexity of a backend's own generated completions via teacher forcing; `transformers` backend only, `None` elsewhere; `PPL` column in compare/pareto, `--max-perplexity` constraint in recommend (v0.20)
 - [ ] Real parameter sweep evidence: RTX 3050 sweep of n\_gpu\_layers × max\_tokens on Llama 3.2 3B — infrastructure ready, real runs not yet committed
-- [ ] Semantic quality evaluation (perplexity or judge scoring) — task rubrics are deterministic substring/regex checks; no judge model or probabilistic scoring yet
+- [ ] LLM-as-judge / preference scoring — perplexity (v0.20) covers intrinsic fluency; judge-based scoring is a separate, heavier addition
 
 **Additional backends (later)**
 - [ ] `onnxruntime` (ONNX export + quantization)

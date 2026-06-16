@@ -76,6 +76,24 @@ def test_generate_is_deterministic(hf_backend) -> None:  # type: ignore[no-untyp
 
 
 @skip_without_transformers
+def test_compute_perplexity_returns_positive_float(hf_backend) -> None:  # type: ignore[no-untyped-def]
+    ppl = hf_backend.compute_perplexity(["The capital of France is Paris."])
+    assert ppl is not None
+    assert ppl > 0
+
+
+@skip_without_transformers
+def test_compute_perplexity_none_for_empty_texts(hf_backend) -> None:  # type: ignore[no-untyped-def]
+    assert hf_backend.compute_perplexity([]) is None
+
+
+@skip_without_transformers
+def test_compute_perplexity_skips_single_token_texts(hf_backend) -> None:  # type: ignore[no-untyped-def]
+    """A text that tokenizes to <2 tokens has no next-token target to score."""
+    assert hf_backend.compute_perplexity([""]) is None
+
+
+@skip_without_transformers
 def test_run_benchmark_with_hf_backend(tmp_prompts: pytest.FixtureRequest) -> None:
     from llm_inference_benchmark.backends.hf import HFBackend
     from llm_inference_benchmark.config import BenchmarkConfig

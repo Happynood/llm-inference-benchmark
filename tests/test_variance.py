@@ -178,6 +178,15 @@ def test_aggregate_model_load_ms_from_first_report() -> None:
     assert agg.model_load_ms == pytest.approx(150.0)
 
 
+def test_aggregate_perplexity_from_last_report() -> None:
+    reports = [
+        _make_report(perplexity=10.0, p95_latency_ms=5.0, tokens_per_second=100.0),
+        _make_report(perplexity=12.0, p95_latency_ms=5.0, tokens_per_second=100.0),
+    ]
+    agg = aggregate_repeat_reports(reports)
+    assert agg.perplexity == pytest.approx(12.0)
+
+
 def test_aggregate_empty_raises() -> None:
     with pytest.raises(ValueError, match="No reports"):
         aggregate_repeat_reports([])

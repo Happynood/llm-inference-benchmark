@@ -92,6 +92,21 @@ def test_quality_defaults_when_none() -> None:
     assert report.empty_output_count == 0
     assert report.min_output_chars == 0
     assert report.mean_output_chars == pytest.approx(0.0)
+
+
+# ---------------------------------------------------------------------------
+# Perplexity field (v0.20)
+# ---------------------------------------------------------------------------
+
+
+def test_perplexity_defaults_to_none() -> None:
+    report = compute_metrics(_results([10.0]), backend="mock", model="t")
+    assert report.perplexity is None
+
+
+def test_perplexity_passed_through() -> None:
+    report = compute_metrics(_results([10.0]), backend="mock", model="t", perplexity=12.34)
+    assert report.perplexity == pytest.approx(12.34)
     assert report.repeated_output_count == 0
     assert report.sanity_pass_rate == pytest.approx(1.0)
 

@@ -28,6 +28,7 @@ _HEADERS = [
     "VRAM mem (MB)",
     "Sanity %",
     "Task Q %",
+    "PPL",
 ]
 
 
@@ -45,6 +46,7 @@ class RunRow:
     sanity_pass_rate: float | None = None  # absent in older CSVs → None
     task_quality_pass_rate: float | None = None  # absent when no quality_file was set
     task_quality_checked_count: int | None = None  # absent when no quality_file was set
+    perplexity: float | None = None  # absent unless config.measure_perplexity was set
 
 
 def _parse_optional_float(row: dict[str, str], key: str, path: str | Path) -> float | None:
@@ -84,6 +86,7 @@ def load_csv(path: str | Path) -> RunRow:
     task_quality_checked = (
         int(task_quality_checked_raw) if task_quality_checked_raw is not None else None
     )
+    perplexity = _parse_optional_float(row, "perplexity", path)
 
     return RunRow(
         backend=row["backend"],
@@ -98,6 +101,7 @@ def load_csv(path: str | Path) -> RunRow:
         sanity_pass_rate=sanity,
         task_quality_pass_rate=task_quality,
         task_quality_checked_count=task_quality_checked,
+        perplexity=perplexity,
     )
 
 
@@ -119,6 +123,9 @@ def render_table(rows: list[RunRow]) -> str:
     def fmt_rate(v: float | None) -> str:
         return "N/A" if v is None else f"{v * 100:.1f}%"
 
+    def fmt_ppl(v: float | None) -> str:
+        return "N/A" if v is None else f"{v:.2f}"
+
     data: list[list[str]] = [
         [
             r.backend,
@@ -132,6 +139,7 @@ def render_table(rows: list[RunRow]) -> str:
             fmt_optional(r.peak_vram_memory_mb),
             fmt_rate(r.sanity_pass_rate),
             fmt_rate(r.task_quality_pass_rate),
+            fmt_ppl(r.perplexity),
         ]
         for r in rows
     ]

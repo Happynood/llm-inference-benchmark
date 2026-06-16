@@ -33,6 +33,7 @@ def _row(
     vram: float | None = 2000.0,
     sanity: float | None = 1.0,
     cpu: float = 500.0,
+    ppl: float | None = None,
 ) -> RunRow:
     return RunRow(
         backend=backend,
@@ -45,6 +46,7 @@ def _row(
         peak_cuda_memory_mb=None,
         peak_vram_memory_mb=vram,
         sanity_pass_rate=sanity,
+        perplexity=ppl,
     )
 
 
@@ -64,6 +66,7 @@ _CSV_FIELDNAMES = [
     "mean_output_chars",
     "repeated_output_count",
     "sanity_pass_rate",
+    "perplexity",
     "timestamp",
 ]
 
@@ -92,6 +95,7 @@ def _write_csv(path: Path, row: RunRow) -> Path:
                 "mean_output_chars": 50.0,
                 "repeated_output_count": 0,
                 "sanity_pass_rate": _s(row.sanity_pass_rate),
+                "perplexity": _s(row.perplexity),
                 "timestamp": "2026-01-01T00:00:00+00:00",
             }
         )
@@ -159,6 +163,28 @@ def test_apply_constraints_missing_sanity_excluded_when_constrained() -> None:
 
 def test_apply_constraints_missing_sanity_ok_when_unconstrained() -> None:
     row = _row(sanity=None)
+    candidates, excluded = apply_constraints([row], Constraints())
+    assert len(candidates) == 1
+    assert excluded == []
+
+
+def test_apply_constraints_max_perplexity_filters() -> None:
+    rows = [_row(model="fluent", ppl=8.0), _row(model="degraded", ppl=20.0)]
+    candidates, excluded = apply_constraints(rows, Constraints(max_perplexity=10.0))
+    assert len(candidates) == 1
+    assert candidates[0].model == "fluent"
+    assert "perplexity too high" in excluded[0].reason
+
+
+def test_apply_constraints_missing_perplexity_excluded_when_constrained() -> None:
+    row = _row(ppl=None)
+    candidates, excluded = apply_constraints([row], Constraints(max_perplexity=10.0))
+    assert candidates == []
+    assert "perplexity unknown" in excluded[0].reason
+
+
+def test_apply_constraints_missing_perplexity_ok_when_unconstrained() -> None:
+    row = _row(ppl=None)
     candidates, excluded = apply_constraints([row], Constraints())
     assert len(candidates) == 1
     assert excluded == []
@@ -386,3 +412,10 @@ def test_cli_recommend_min_sanity_constraint(tmp_path: Path) -> None:
     result = CliRunner().invoke(main, ["recommend", str(p), "--min-sanity", "1.0"])
     assert result.exit_code != 0
     assert "sanity too low" in result.output
+
+
+def test_cli_recommend_max_perplexity_constraint(tmp_path: Path) -> None:
+    p = _write_csv(tmp_path / "run.csv", _row(ppl=20.0))
+    result = CliRunner().invoke(main, ["recommend", str(p), "--max-perplexity", "10.0"])
+    assert result.exit_code != 0
+    assert "perplexity too high" in result.output

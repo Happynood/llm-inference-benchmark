@@ -100,3 +100,41 @@ def test_run_benchmark_quality_fields_populated(tmp_prompts: Path) -> None:
     assert report.min_output_chars > 0  # mock produces non-empty text
     assert report.mean_output_chars > 0.0
     assert report.repeated_output_count >= 0
+
+
+# ---------------------------------------------------------------------------
+# Perplexity wiring (v0.20)
+# ---------------------------------------------------------------------------
+
+
+class _PerplexityBackend(MockBackend):
+    """MockBackend that reports a fixed perplexity, for wiring tests only."""
+
+    def compute_perplexity(self, texts: list[str]) -> float | None:
+        return 7.5
+
+
+def test_run_benchmark_perplexity_none_when_not_measured(tmp_prompts: Path) -> None:
+    backend = _PerplexityBackend(model="test", latency_ms=0)
+    cfg = BenchmarkConfig(requests=3, warmup_requests=0, prompts_file=str(tmp_prompts))
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.perplexity is None
+
+
+def test_run_benchmark_perplexity_populated_when_measured(tmp_prompts: Path) -> None:
+    backend = _PerplexityBackend(model="test", latency_ms=0)
+    cfg = BenchmarkConfig(
+        requests=3, warmup_requests=0, prompts_file=str(tmp_prompts), measure_perplexity=True
+    )
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.perplexity == pytest.approx(7.5)
+
+
+def test_run_benchmark_perplexity_none_for_backend_without_support(tmp_prompts: Path) -> None:
+    """Backends that return None from compute_perplexity propagate None even when measured."""
+    backend = MockBackend(model="test", latency_ms=0)
+    cfg = BenchmarkConfig(
+        requests=3, warmup_requests=0, prompts_file=str(tmp_prompts), measure_perplexity=True
+    )
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.perplexity is None
