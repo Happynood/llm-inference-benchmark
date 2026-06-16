@@ -381,3 +381,76 @@ def test_compare_subcommand_still_works() -> None:
     )
     assert result.exit_code == 0, result.output
     assert "mock" in result.output
+
+
+# ---------------------------------------------------------------------------
+# --continue-on-error
+# ---------------------------------------------------------------------------
+
+
+def test_matrix_continue_on_error_runs_all_when_one_fails(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    good_cfg = tmp_path / "good.yaml"
+    _write_mock_config(good_cfg, prompts)
+    bad_cfg = tmp_path / "nonexistent_config.yaml"  # does not exist → FileNotFoundError
+
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(results_dir),
+        [
+            {"name": "will-fail", "config": str(bad_cfg)},
+            {"name": "will-pass", "config": str(good_cfg)},
+        ],
+    )
+
+    result = CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--continue-on-error"])
+    assert result.exit_code == 1
+    assert (results_dir / "will-pass.csv").exists()
+    assert not (results_dir / "will-fail.csv").exists()
+    assert "will-fail" in result.output
+    assert "1 failed" in result.output
+
+
+def test_matrix_continue_on_error_exit_zero_when_all_pass(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(results_dir),
+        [{"name": "run-a", "config": str(cfg)}, {"name": "run-b", "config": str(cfg)}],
+    )
+
+    result = CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--continue-on-error"])
+    assert result.exit_code == 0, result.output
+    assert (results_dir / "run-a.csv").exists()
+    assert (results_dir / "run-b.csv").exists()
+
+
+def test_matrix_without_continue_on_error_stops_on_first_failure(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    good_cfg = tmp_path / "good.yaml"
+    _write_mock_config(good_cfg, prompts)
+    bad_cfg = tmp_path / "nonexistent_config.yaml"
+
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(results_dir),
+        [
+            {"name": "will-fail", "config": str(bad_cfg)},
+            {"name": "should-not-run", "config": str(good_cfg)},
+        ],
+    )
+
+    result = CliRunner().invoke(main, ["matrix", "--config", str(matrix)])
+    assert result.exit_code != 0
+    assert not (results_dir / "should-not-run.csv").exists()

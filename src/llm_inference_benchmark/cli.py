@@ -263,7 +263,13 @@ def profiles_cmd() -> None:
     default=False,
     help="List runs without executing them",
 )
-def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
+@click.option(
+    "--continue-on-error",
+    is_flag=True,
+    default=False,
+    help="Continue remaining runs after a failure; exit 1 if any run failed",
+)
+def matrix_cmd(matrix_path: str, dry_run: bool, continue_on_error: bool) -> None:
     """Execute all benchmark runs defined in a matrix config file.
 
     Each run writes a CSV and a manifest into the results directory:
@@ -273,6 +279,10 @@ def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
     Preview what would run without executing:
 
         llm-bench matrix --config configs/matrix-example.yaml --dry-run
+
+    Continue remaining runs even when one fails:
+
+        llm-bench matrix --config configs/matrix-example.yaml --continue-on-error
 
     Compare outputs afterwards:
 
@@ -302,48 +312,66 @@ def matrix_cmd(matrix_path: str, dry_run: bool) -> None:
     results_dir.mkdir(parents=True, exist_ok=True)
     click.echo(f"Matrix: {n} run(s) → {results_dir}/")
 
+    failures: list[tuple[str, str]] = []
+
     for idx, run in enumerate(matrix.runs, 1):
         click.echo(f"\n[{idx}/{n}] {run.name}")
-        cfg = load_config(run.config)
-        if run.overrides:
-            from llm_inference_benchmark.sweep import apply_overrides
+        try:
+            cfg = load_config(run.config)
+            if run.overrides:
+                from llm_inference_benchmark.sweep import apply_overrides
 
-            cfg = apply_overrides(cfg, run.overrides)
-        if run.workload_profile is not None:
-            cfg = cfg.model_copy(update={"workload_profile": run.workload_profile})
+                cfg = apply_overrides(cfg, run.overrides)
+            if run.workload_profile is not None:
+                cfg = cfg.model_copy(update={"workload_profile": run.workload_profile})
 
-        _t0 = time.perf_counter()
-        backend = _build_backend(cfg)
-        model_load_ms = (time.perf_counter() - _t0) * 1000.0
-        prompts = load_prompts(cfg.resolve_prompts_file())
-        click.echo(f"  Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
-        report = run_repeated(backend, cfg, prompts, model_load_ms=model_load_ms)
+            _t0 = time.perf_counter()
+            backend = _build_backend(cfg)
+            model_load_ms = (time.perf_counter() - _t0) * 1000.0
+            prompts = load_prompts(cfg.resolve_prompts_file())
+            click.echo(f"  Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
+            report = run_repeated(backend, cfg, prompts, model_load_ms=model_load_ms)
 
-        csv_path = results_dir / f"{run.name}.csv"
-        manifest_path = results_dir / f"{run.name}.manifest.json"
+            csv_path = results_dir / f"{run.name}.csv"
+            manifest_path = results_dir / f"{run.name}.manifest.json"
 
-        # Defense-in-depth: confirm paths are contained within results_dir.
-        resolved_dir = results_dir.resolve()
-        if not csv_path.resolve().is_relative_to(resolved_dir):
-            raise click.ClickException(
-                f"Run name {run.name!r} would write outside results directory"
-            )
+            # Defense-in-depth: confirm paths are contained within results_dir.
+            resolved_dir = results_dir.resolve()
+            if not csv_path.resolve().is_relative_to(resolved_dir):
+                raise click.ClickException(
+                    f"Run name {run.name!r} would write outside results directory"
+                )
 
-        row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
-        with open(csv_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=list(row.keys()))
-            writer.writeheader()
-            writer.writerow(row)
+            row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+                writer.writeheader()
+                writer.writerow(row)
 
-        manifest = collect_manifest(run.config, cfg)
-        write_manifest(manifest, manifest_path)
+            manifest = collect_manifest(run.config, cfg)
+            write_manifest(manifest, manifest_path)
 
-        click.echo(f"  → {csv_path}")
-        click.echo(f"  → {manifest_path}")
+            click.echo(f"  → {csv_path}")
+            click.echo(f"  → {manifest_path}")
 
-        # Release backend resources (GPU memory, file handles) before the next run.
-        del backend
-        gc.collect()
+            # Release backend resources (GPU memory, file handles) before the next run.
+            del backend
+            gc.collect()
+
+        except Exception as exc:  # noqa: BLE001
+            if not continue_on_error:
+                raise
+            msg = str(exc) or type(exc).__name__
+            click.echo(f"  FAILED: {msg}", err=True)
+            failures.append((run.name, msg))
+
+    n_ok = n - len(failures)
+    if failures:
+        click.echo(f"\nDone: {n_ok} completed, {len(failures)} failed.")
+        click.echo("Failed runs:")
+        for name, msg in failures:
+            click.echo(f"  {name}: {msg}")
+        sys.exit(1)
 
     click.echo("\nDone. Compare with:")
     click.echo(f"  llm-bench compare {results_dir}/*.csv")
