@@ -178,6 +178,32 @@ def test_sort_does_not_mutate_input() -> None:
     assert [r.backend for r in _ROWS] == original_order
 
 
+def test_sort_by_toks_descending() -> None:
+    result = sort_rows(_ROWS, sort_by="toks")
+    toks = [r.tokens_per_second for r in result]
+    assert toks == sorted(toks, reverse=True)
+
+
+def test_sort_by_load_ascending_none_last() -> None:
+    rows_with_load = [
+        RunRow("a", "m", 10, 5.0, 6.0, 100.0, 50.0, None, None, model_load_ms=300.0),
+        RunRow("b", "m", 10, 5.0, 6.0, 100.0, 50.0, None, None, model_load_ms=None),
+        RunRow("c", "m", 10, 5.0, 6.0, 100.0, 50.0, None, None, model_load_ms=100.0),
+    ]
+    result = sort_rows(rows_with_load, sort_by="load")
+    load_times = [r.model_load_ms for r in result]
+    assert load_times == [100.0, 300.0, None]
+
+
+def test_sort_by_load_all_none_preserves_relative_order() -> None:
+    rows = [
+        RunRow("a", "m", 10, 5.0, 6.0, 100.0, 50.0, None, None, model_load_ms=None),
+        RunRow("b", "m", 10, 5.0, 6.0, 100.0, 50.0, None, None, model_load_ms=None),
+    ]
+    result = sort_rows(rows, sort_by="load")
+    assert [r.backend for r in result] == ["a", "b"]
+
+
 # ---------------------------------------------------------------------------
 # render_table
 # ---------------------------------------------------------------------------
