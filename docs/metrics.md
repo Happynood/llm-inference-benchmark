@@ -406,6 +406,9 @@ better** on at least one:
 | `peak_vram_memory_mb` | minimise | only when both rows have a value |
 | `sanity_pass_rate` | maximise | only when both rows have a value |
 | `task_quality_pass_rate` | maximise | only when both rows have a value |
+| `perplexity` | minimise | only when both rows have a value (v0.20) |
+| `judge_score` | maximise | only when both rows have a value (v0.21) |
+| `model_load_ms` | minimise | only when both rows have a value (v0.23) |
 
 Optional metrics are excluded from any comparison where one or both rows carry `None`
 for that field.  This means an older CSV without VRAM data is not penalised — the
@@ -418,10 +421,10 @@ uv run llm-bench pareto results/quant-q4km.csv results/quant-q8.csv
 ```
 
 ```
-| Backend   | Model                                  | N  | p95 (ms) | tok/s | CPU mem (MB) | VRAM mem (MB) | Sanity % | Pareto  |
-|-----------|----------------------------------------|----|----------|-------|--------------|---------------|----------|---------|
-| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf | 10 | 904.33   | 55.3  | 1289.8       | 2361.0        | 100.0%   | optimal |
-| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf   | 10 | 1185.23  | 42.2  | 1418.4       | 3697.0        | 100.0%   | -       |
+| Backend   | Model                                  | N  | p95 (ms) | tok/s | Load (ms) | CPU mem (MB) | VRAM mem (MB) | Sanity % | Task Q % | PPL | Judge | Pareto  |
+|-----------|----------------------------------------|----|----------|-------|-----------|--------------|---------------|----------|----------|-----|-------|---------|
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf | 10 | 904.33   | 55.3  | N/A       | 1289.8       | 2361.0        | 100.0%   | N/A      | N/A | N/A   | optimal |
+| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf   | 10 | 1185.23  | 42.2  | N/A       | 1418.4       | 3697.0        | 100.0%   | N/A      | N/A | N/A   | -       |
 ```
 
 Q4\_K\_M is strictly better than Q8\_0 on p95 latency, throughput, and VRAM, so Q4\_K\_M
@@ -444,7 +447,7 @@ is the sole Pareto-optimal configuration in this two-run comparison.
 
 ## Constraint-based Recommender
 
-`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N] [--min-quality N] [--max-perplexity N] [--min-judge N]`
+`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N] [--min-quality N] [--max-perplexity N] [--min-judge N] [--max-load-ms N]`
 reads saved benchmark CSVs, filters them against explicit constraints, and recommends
 the best configuration.
 
@@ -458,6 +461,7 @@ the best configuration.
 | `--min-quality` | `task_quality_pass_rate` | value < threshold, or value missing when flag is set |
 | `--max-perplexity` | `perplexity` | value > threshold, or value missing when flag is set |
 | `--min-judge` | `judge_score` | value < threshold, or value missing when flag is set |
+| `--max-load-ms` | `model_load_ms` | value > threshold, or value missing when flag is set (v0.23) |
 
 All constraints are optional.  With no flags every run is a candidate.
 
