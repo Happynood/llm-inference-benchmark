@@ -231,6 +231,64 @@ def recommend_cmd(
         sys.exit(1)
 
 
+@main.command("validate-config")
+@click.option(
+    "--config",
+    "config_path",
+    required=True,
+    type=click.Path(exists=True),
+    help="YAML benchmark config file to validate",
+)
+def validate_config_cmd(config_path: str) -> None:
+    """Validate a benchmark config file and print a summary of resolved settings.
+
+    Reads the YAML, runs full pydantic validation, resolves the effective
+    prompts file, and prints a summary.  Exits 0 on success, 1 on error.
+
+        llm-bench validate-config --config configs/example.yaml
+    """
+    try:
+        cfg = load_config(config_path)
+    except Exception as exc:  # noqa: BLE001
+        raise click.ClickException(str(exc)) from exc
+
+    click.echo(f"Config: {config_path}")
+    click.echo(f"  backend          : {cfg.backend}")
+    click.echo(f"  model            : {cfg.model}")
+    click.echo(f"  requests         : {cfg.requests}")
+    click.echo(f"  warmup_requests  : {cfg.warmup_requests}")
+    click.echo(f"  repeats          : {cfg.repeats}")
+    click.echo(f"  prompts_file     : {cfg.resolve_prompts_file()}")
+    if cfg.workload_profile:
+        click.echo(f"  workload_profile : {cfg.workload_profile}")
+    if cfg.quality_file:
+        click.echo(f"  quality_file     : {cfg.quality_file}")
+    if cfg.measure_perplexity:
+        click.echo(f"  measure_perplexity: {cfg.measure_perplexity}")
+    if cfg.measure_judge:
+        click.echo(f"  measure_judge    : {cfg.measure_judge}")
+
+    if cfg.backend == "mock":
+        click.echo(f"  mock.latency_ms  : {cfg.mock.latency_ms}")
+        click.echo(f"  mock.tokens_per_response: {cfg.mock.tokens_per_response}")
+    elif cfg.backend == "transformers":
+        click.echo(f"  hf.max_new_tokens: {cfg.hf.max_new_tokens}")
+        click.echo(f"  hf.device        : {cfg.hf.device}")
+        click.echo(f"  hf.torch_dtype   : {cfg.hf.torch_dtype}")
+    elif cfg.backend == "llama-cpp":
+        click.echo(f"  llama_cpp.n_ctx       : {cfg.llama_cpp.n_ctx}")
+        click.echo(f"  llama_cpp.n_gpu_layers: {cfg.llama_cpp.n_gpu_layers}")
+        click.echo(f"  llama_cpp.max_tokens  : {cfg.llama_cpp.max_tokens}")
+    elif cfg.backend == "openai":
+        click.echo(f"  openai.base_url  : {cfg.openai.base_url}")
+        click.echo(f"  openai.max_tokens: {cfg.openai.max_tokens}")
+        click.echo(f"  openai.timeout_s : {cfg.openai.timeout_s}")
+        if cfg.openai.api_key_env:
+            click.echo(f"  openai.api_key_env: {cfg.openai.api_key_env}")
+
+    click.echo("OK")
+
+
 @main.command("profiles")
 def profiles_cmd() -> None:
     """List available workload profiles and their descriptions.
