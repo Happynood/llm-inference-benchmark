@@ -175,6 +175,12 @@ def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None) -> None:
     help="Minimum judge score [0, 1] (requires measure_judge in config)",
 )
 @click.option(
+    "--max-load-ms",
+    type=float,
+    default=None,
+    help="Maximum model load time in ms (requires v0.18+ benchmark run)",
+)
+@click.option(
     "--output",
     "output_path",
     default=None,
@@ -189,6 +195,7 @@ def recommend_cmd(
     min_quality: float | None,
     max_perplexity: float | None,
     min_judge: float | None,
+    max_load_ms: float | None,
     output_path: str | None,
 ) -> None:
     """Recommend the best benchmark configuration under explicit constraints.
@@ -210,6 +217,7 @@ def recommend_cmd(
         min_quality=min_quality,
         max_perplexity=max_perplexity,
         min_judge=min_judge,
+        max_load_ms=max_load_ms,
     )
     text, has_winner = build_recommendation(list(csv_files), constraints)
     if output_path:

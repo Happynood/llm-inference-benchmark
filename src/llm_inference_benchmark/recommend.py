@@ -41,6 +41,7 @@ class Constraints:
     min_quality: float | None = None
     max_perplexity: float | None = None
     min_judge: float | None = None
+    max_load_ms: float | None = None
 
 
 @dataclass(frozen=True)
@@ -99,6 +100,15 @@ def _check_row(row: RunRow, constraints: Constraints) -> str | None:
             return f"judge score unknown (constraint requires ≥ {constraints.min_judge:.2f})"
         if row.judge_score < constraints.min_judge:
             return f"judge score too low ({row.judge_score:.2f} < {constraints.min_judge:.2f})"
+
+    if constraints.max_load_ms is not None:
+        if row.model_load_ms is None:
+            return f"load time unknown (constraint requires ≤ {constraints.max_load_ms:.0f} ms)"
+        if row.model_load_ms > constraints.max_load_ms:
+            return (
+                f"load time too high "
+                f"({row.model_load_ms:.1f} ms > {constraints.max_load_ms:.1f} ms)"
+            )
 
     return None
 
@@ -165,6 +175,10 @@ def _fmt_vram(v: float | None) -> str:
     return "N/A" if v is None else f"{v:.1f} MB"
 
 
+def _fmt_ms(v: float | None) -> str:
+    return "N/A" if v is None else f"{v:.1f} ms"
+
+
 def _fmt_rate(v: float | None) -> str:
     return "N/A" if v is None else f"{v * 100:.1f}%"
 
@@ -197,6 +211,7 @@ def render_recommendation(result: RecommendationResult) -> str:
             f"  N        : {w.request_count}",
             f"  p95      : {w.p95_latency_ms:.2f} ms",
             f"  tok/s    : {w.tokens_per_second:.1f}",
+            f"  Load     : {_fmt_ms(w.model_load_ms)}",
             f"  VRAM     : {_fmt_vram(w.peak_vram_memory_mb)}",
             f"  Sanity   : {_fmt_rate(w.sanity_pass_rate)}",
             f"  Task Q   : {_fmt_rate(w.task_quality_pass_rate)}",
