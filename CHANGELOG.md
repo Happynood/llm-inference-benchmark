@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [1.0.0] — 2026-06-17
+
+### Added
+- `llm-bench --version` prints the installed package version and exits 0.
+
+### Changed
+- Version bumped to 1.0.0, signalling a stable public API. The CLI commands
+  (`llm-bench`, `compare`, `pareto`, `recommend`, `matrix`), YAML config schema,
+  CSV output format, and manifest format are now considered stable and will not
+  change in an incompatible way without a major version bump.
+
 ## [0.23.0] — 2026-06-17
 
 ### Added

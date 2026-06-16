@@ -7,6 +7,7 @@ identical workloads.
 Project direction is fixed in [docs/project-charter.md](docs/project-charter.md): start with a
 small benchmark harness, then grow toward configuration comparison, Pareto analysis, and
 constraint-based recommendations. See [CHANGELOG.md](CHANGELOG.md) for release history.
+Current stable release: **v1.0.0**.
 
 ## Problem
 
@@ -514,6 +515,7 @@ make typecheck  # pyright
 - [x] LLM-as-judge quality score: `measure_judge: true` asks the model a fixed yes/no question about each of its own completions and scores the mean P(yes) from the "Yes"/"No" logprobs; `transformers` backend only, `None` elsewhere; `Judge` column in compare/pareto, `--min-judge` constraint in recommend (v0.21)
 - [x] OpenAI-compatible endpoint backend — `/v1/chat/completions` HTTP API; works with Ollama, llama.cpp server, LM Studio, vLLM; no extra dependency; API key via env var (v0.22)
 - [x] Lifecycle and variance metrics in analysis commands: `Load (ms)` column in `compare` and `pareto`; `±std` variance in compare p95/tok/s cells; `model_load_ms` as Pareto dimension; `--max-load-ms` constraint in `recommend` (v0.23)
+- [x] `llm-bench --version`; stable public API declared — CLI commands, YAML config schema, CSV format, and manifest format are stable (v1.0.0)
 - [ ] Real parameter sweep evidence: RTX 3050 sweep of n\_gpu\_layers × max\_tokens on Llama 3.2 3B — infrastructure ready, real runs not yet committed
 
 **Additional backends (later)**

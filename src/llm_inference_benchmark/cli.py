@@ -9,6 +9,7 @@ from pathlib import Path
 
 import click
 
+from llm_inference_benchmark import __version__
 from llm_inference_benchmark.backends.base import Backend
 from llm_inference_benchmark.backends.mock import MockBackend
 from llm_inference_benchmark.config import BenchmarkConfig, load_config
@@ -16,6 +17,7 @@ from llm_inference_benchmark.runner import load_prompts, run_repeated
 
 
 @click.group(invoke_without_command=True)
+@click.version_option(version=__version__, prog_name="llm-bench")
 @click.pass_context
 @click.option(
     "--config",
