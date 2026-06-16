@@ -231,6 +231,24 @@ def recommend_cmd(
         sys.exit(1)
 
 
+@main.command("profiles")
+def profiles_cmd() -> None:
+    """List available workload profiles and their descriptions.
+
+    Profiles can be referenced by name in a benchmark config YAML
+    (workload_profile: short_chat) or in a matrix config run entry.
+
+        llm-bench profiles
+    """
+    from llm_inference_benchmark.profiles import list_profiles
+
+    for profile in list_profiles():
+        click.echo(profile.name)
+        click.echo(f"  Input : {profile.input_length}  Output: {profile.output_length}")
+        click.echo(f"  {profile.description}")
+        click.echo()
+
+
 @main.command("matrix")
 @click.option(
     "--config",

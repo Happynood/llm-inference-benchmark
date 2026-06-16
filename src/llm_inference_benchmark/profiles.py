@@ -60,6 +60,11 @@ _PROFILES: dict[str, WorkloadProfile] = {
 PROFILE_NAMES: frozenset[str] = frozenset(_PROFILES)
 
 
+def list_profiles() -> list[WorkloadProfile]:
+    """Return all profiles in alphabetical order by name."""
+    return [_PROFILES[k] for k in sorted(_PROFILES)]
+
+
 def get_profile(name: str) -> WorkloadProfile:
     """Return the named profile or raise ValueError with valid options listed."""
     if name not in _PROFILES:

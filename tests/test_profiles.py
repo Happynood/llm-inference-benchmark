@@ -9,7 +9,12 @@ from click.testing import CliRunner
 
 from llm_inference_benchmark.cli import main
 from llm_inference_benchmark.config import BenchmarkConfig, load_config
-from llm_inference_benchmark.profiles import PROFILE_NAMES, WorkloadProfile, get_profile
+from llm_inference_benchmark.profiles import (
+    PROFILE_NAMES,
+    WorkloadProfile,
+    get_profile,
+    list_profiles,
+)
 
 # ---------------------------------------------------------------------------
 # WorkloadProfile dataclass
@@ -69,6 +74,39 @@ def test_workload_profile_is_frozen() -> None:
     p = get_profile("short_chat")
     with pytest.raises(FrozenInstanceError):
         p.name = "other"  # type: ignore[misc]
+
+
+def test_list_profiles_returns_all_four_sorted() -> None:
+    profiles = list_profiles()
+    assert len(profiles) == 4
+    names = [p.name for p in profiles]
+    assert names == sorted(names)
+
+
+def test_list_profiles_all_are_workload_profile_instances() -> None:
+    for p in list_profiles():
+        assert isinstance(p, WorkloadProfile)
+
+
+# ---------------------------------------------------------------------------
+# llm-bench profiles subcommand
+# ---------------------------------------------------------------------------
+
+
+def test_cli_profiles_exits_zero() -> None:
+    result = CliRunner().invoke(main, ["profiles"])
+    assert result.exit_code == 0
+
+
+def test_cli_profiles_lists_all_four_names() -> None:
+    result = CliRunner().invoke(main, ["profiles"])
+    for name in ["short_chat", "summarization", "code_completion", "long_context_smoke"]:
+        assert name in result.output
+
+
+def test_cli_profiles_shows_descriptions() -> None:
+    result = CliRunner().invoke(main, ["profiles"])
+    assert "latency" in result.output.lower() or "throughput" in result.output.lower()
 
 
 # ---------------------------------------------------------------------------
