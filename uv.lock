@@ -396,7 +396,7 @@ sdist = { url = "https://files.pythonhosted.org/packages/83/0f/8e03877aa9ea79890
 
 [[package]]
 name = "llm-inference-benchmark"
-version = "0.20.0"
+version = "0.21.0"
 source = { editable = "." }
 dependencies = [
     { name = "click" },

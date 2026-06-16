@@ -10,6 +10,10 @@ import os
 import time
 
 from llm_inference_benchmark.backends.base import Backend, GenerationResult
+from llm_inference_benchmark.judge import (
+    judge_score_from_probabilities,
+    probability_from_yes_no_logits,
+)
 from llm_inference_benchmark.perplexity import perplexity_from_nll
 
 try:
@@ -19,6 +23,12 @@ try:
     _AVAILABLE = True
 except ImportError:
     _AVAILABLE = False
+
+_JUDGE_TEMPLATE = (
+    "{prompt}\n\nResponse: {response}\n\n"
+    "Does the response directly and coherently address the request above? "
+    "Answer with exactly one word, Yes or No.\nAnswer:"
+)
 
 
 class HFBackend(Backend):
@@ -113,3 +123,36 @@ class HFBackend(Backend):
         if total_tokens == 0:
             return None
         return perplexity_from_nll(total_nll, total_tokens)
+
+    def compute_judge_score(self, prompts: list[str], texts: list[str]) -> float | None:
+        """Self-judge score: mean P(yes) to a fixed yes/no question about each pair.
+
+        For each (prompt, completion) pair, the model is asked whether the
+        completion addresses the prompt, and P(yes) is read from the "Yes"/"No"
+        logits at the next-token position in a single forward pass. Pairs that
+        tokenize to zero tokens are skipped. Returns None when no pair yields a
+        scorable token.
+        """
+        yes_id = self._first_token_id(" Yes")
+        no_id = self._first_token_id(" No")
+        probabilities: list[float] = []
+        with torch.no_grad():
+            for prompt, text in zip(prompts, texts, strict=True):
+                judge_input = _JUDGE_TEMPLATE.format(prompt=prompt, response=text)
+                ids = self._tokenizer(judge_input, return_tensors="pt").to(self._device)[
+                    "input_ids"
+                ]
+                if ids.shape[1] == 0:
+                    continue
+                logits = self._model(ids).logits[0, -1, :].float()
+                probabilities.append(
+                    probability_from_yes_no_logits(logits[yes_id].item(), logits[no_id].item())
+                )
+
+        if not probabilities:
+            return None
+        return judge_score_from_probabilities(probabilities)
+
+    def _first_token_id(self, text: str) -> int:
+        ids = self._tokenizer(text, add_special_tokens=False)["input_ids"]
+        return ids[0]

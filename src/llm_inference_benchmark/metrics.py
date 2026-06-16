@@ -47,6 +47,9 @@ class MetricsReport:
     # Self-perplexity (v0.20) — None unless config.measure_perplexity is set and the
     # backend exposes token-level log-probabilities (currently transformers only).
     perplexity: float | None = None
+    # LLM-as-judge score (v0.21) — None unless config.measure_judge is set and the
+    # backend exposes token-level log-probabilities (currently transformers only).
+    judge_score: float | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -62,6 +65,7 @@ def compute_metrics(
     model_load_ms: float | None = None,
     warmup_p50_latency_ms: float | None = None,
     perplexity: float | None = None,
+    judge_score: float | None = None,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -99,6 +103,7 @@ def compute_metrics(
         model_load_ms=model_load_ms,
         warmup_p50_latency_ms=warmup_p50_latency_ms,
         perplexity=perplexity,
+        judge_score=judge_score,
     )
 
 
@@ -129,8 +134,8 @@ def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
     - p95_latency_ms_std and tokens_per_second_std are the sample standard deviation
       (n-1 denominator, via statistics.stdev) across repeats.
     - Memory peaks (CPU, CUDA, VRAM) take the maximum across repeats.
-    - Non-aggregated fields (quality, task quality, warmup, perplexity) come from the
-      last repeat.
+    - Non-aggregated fields (quality, task quality, warmup, perplexity, judge_score) come
+      from the last repeat.
     - model_load_ms comes from the first repeat (backend was constructed once before repeats).
 
     Capture scope: repeats share one process and warm cache state, so variance reflects
@@ -171,6 +176,7 @@ def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
         model_load_ms=first.model_load_ms,
         warmup_p50_latency_ms=last.warmup_p50_latency_ms,
         perplexity=last.perplexity,
+        judge_score=last.judge_score,
         repeats=n,
         p95_latency_ms_std=statistics.stdev(p95s),
         tokens_per_second_std=statistics.stdev(toks),

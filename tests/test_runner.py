@@ -138,3 +138,41 @@ def test_run_benchmark_perplexity_none_for_backend_without_support(tmp_prompts: 
     )
     report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
     assert report.perplexity is None
+
+
+# ---------------------------------------------------------------------------
+# Judge score wiring (v0.21)
+# ---------------------------------------------------------------------------
+
+
+class _JudgeBackend(MockBackend):
+    """MockBackend that reports a fixed judge score, for wiring tests only."""
+
+    def compute_judge_score(self, prompts: list[str], texts: list[str]) -> float | None:
+        return 0.9
+
+
+def test_run_benchmark_judge_score_none_when_not_measured(tmp_prompts: Path) -> None:
+    backend = _JudgeBackend(model="test", latency_ms=0)
+    cfg = BenchmarkConfig(requests=3, warmup_requests=0, prompts_file=str(tmp_prompts))
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.judge_score is None
+
+
+def test_run_benchmark_judge_score_populated_when_measured(tmp_prompts: Path) -> None:
+    backend = _JudgeBackend(model="test", latency_ms=0)
+    cfg = BenchmarkConfig(
+        requests=3, warmup_requests=0, prompts_file=str(tmp_prompts), measure_judge=True
+    )
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.judge_score == pytest.approx(0.9)
+
+
+def test_run_benchmark_judge_score_none_for_backend_without_support(tmp_prompts: Path) -> None:
+    """Backends that return None from compute_judge_score propagate None even when measured."""
+    backend = MockBackend(model="test", latency_ms=0)
+    cfg = BenchmarkConfig(
+        requests=3, warmup_requests=0, prompts_file=str(tmp_prompts), measure_judge=True
+    )
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.judge_score is None

@@ -18,6 +18,9 @@ Constraint semantics:
   - max_perplexity: exclude runs where perplexity > threshold;
                     also excludes runs with a missing perplexity reading
                     when the constraint is active
+  - min_judge     : exclude runs where judge_score < threshold;
+                    also excludes runs with a missing judge_score reading
+                    when the constraint is active
   - No constraint set for an optional metric → missing value is allowed.
 """
 
@@ -37,6 +40,7 @@ class Constraints:
     min_sanity: float | None = None
     min_quality: float | None = None
     max_perplexity: float | None = None
+    min_judge: float | None = None
 
 
 @dataclass(frozen=True)
@@ -89,6 +93,12 @@ def _check_row(row: RunRow, constraints: Constraints) -> str | None:
             return f"perplexity unknown (constraint requires ≤ {constraints.max_perplexity:.2f})"
         if row.perplexity > constraints.max_perplexity:
             return f"perplexity too high ({row.perplexity:.2f} > {constraints.max_perplexity:.2f})"
+
+    if constraints.min_judge is not None:
+        if row.judge_score is None:
+            return f"judge score unknown (constraint requires ≥ {constraints.min_judge:.2f})"
+        if row.judge_score < constraints.min_judge:
+            return f"judge score too low ({row.judge_score:.2f} < {constraints.min_judge:.2f})"
 
     return None
 
@@ -163,6 +173,10 @@ def _fmt_ppl(v: float | None) -> str:
     return "N/A" if v is None else f"{v:.2f}"
 
 
+def _fmt_judge(v: float | None) -> str:
+    return "N/A" if v is None else f"{v * 100:.1f}%"
+
+
 def _display_model(model: str) -> str:
     """Return a short display name: filename for absolute paths, full string otherwise."""
     if "/" in model:
@@ -187,6 +201,7 @@ def render_recommendation(result: RecommendationResult) -> str:
             f"  Sanity   : {_fmt_rate(w.sanity_pass_rate)}",
             f"  Task Q   : {_fmt_rate(w.task_quality_pass_rate)}",
             f"  PPL      : {_fmt_ppl(w.perplexity)}",
+            f"  Judge    : {_fmt_judge(w.judge_score)}",
             "",
         ]
         n = len(result.candidates)

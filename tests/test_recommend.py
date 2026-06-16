@@ -34,6 +34,7 @@ def _row(
     sanity: float | None = 1.0,
     cpu: float = 500.0,
     ppl: float | None = None,
+    judge: float | None = None,
 ) -> RunRow:
     return RunRow(
         backend=backend,
@@ -47,6 +48,7 @@ def _row(
         peak_vram_memory_mb=vram,
         sanity_pass_rate=sanity,
         perplexity=ppl,
+        judge_score=judge,
     )
 
 
@@ -67,6 +69,7 @@ _CSV_FIELDNAMES = [
     "repeated_output_count",
     "sanity_pass_rate",
     "perplexity",
+    "judge_score",
     "timestamp",
 ]
 
@@ -96,6 +99,7 @@ def _write_csv(path: Path, row: RunRow) -> Path:
                 "repeated_output_count": 0,
                 "sanity_pass_rate": _s(row.sanity_pass_rate),
                 "perplexity": _s(row.perplexity),
+                "judge_score": _s(row.judge_score),
                 "timestamp": "2026-01-01T00:00:00+00:00",
             }
         )
@@ -185,6 +189,28 @@ def test_apply_constraints_missing_perplexity_excluded_when_constrained() -> Non
 
 def test_apply_constraints_missing_perplexity_ok_when_unconstrained() -> None:
     row = _row(ppl=None)
+    candidates, excluded = apply_constraints([row], Constraints())
+    assert len(candidates) == 1
+    assert excluded == []
+
+
+def test_apply_constraints_min_judge_filters() -> None:
+    rows = [_row(model="relevant", judge=0.9), _row(model="off-topic", judge=0.2)]
+    candidates, excluded = apply_constraints(rows, Constraints(min_judge=0.5))
+    assert len(candidates) == 1
+    assert candidates[0].model == "relevant"
+    assert "judge score too low" in excluded[0].reason
+
+
+def test_apply_constraints_missing_judge_excluded_when_constrained() -> None:
+    row = _row(judge=None)
+    candidates, excluded = apply_constraints([row], Constraints(min_judge=0.5))
+    assert candidates == []
+    assert "judge score unknown" in excluded[0].reason
+
+
+def test_apply_constraints_missing_judge_ok_when_unconstrained() -> None:
+    row = _row(judge=None)
     candidates, excluded = apply_constraints([row], Constraints())
     assert len(candidates) == 1
     assert excluded == []
@@ -419,3 +445,10 @@ def test_cli_recommend_max_perplexity_constraint(tmp_path: Path) -> None:
     result = CliRunner().invoke(main, ["recommend", str(p), "--max-perplexity", "10.0"])
     assert result.exit_code != 0
     assert "perplexity too high" in result.output
+
+
+def test_cli_recommend_min_judge_constraint(tmp_path: Path) -> None:
+    p = _write_csv(tmp_path / "run.csv", _row(judge=0.2))
+    result = CliRunner().invoke(main, ["recommend", str(p), "--min-judge", "0.5"])
+    assert result.exit_code != 0
+    assert "judge score too low" in result.output

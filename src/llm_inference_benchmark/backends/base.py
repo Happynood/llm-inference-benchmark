@@ -27,3 +27,11 @@ class Backend(ABC):
         Backends that expose logits (e.g. transformers) override this.
         """
         return None
+
+    def compute_judge_score(self, prompts: list[str], texts: list[str]) -> float | None:
+        """Return a logprob-based self-judge score for (prompt, completion) pairs.
+
+        Default: None (backend has no token-level logit access).
+        Backends that expose logits (e.g. transformers) override this.
+        """
+        return None

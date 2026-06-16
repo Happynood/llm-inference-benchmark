@@ -10,6 +10,7 @@ Optimisation directions:
   - sanity_pass_rate        → maximise  (optional; compared only when both rows have a value)
   - task_quality_pass_rate  → maximise  (optional; compared only when both rows have a value)
   - perplexity              → minimise  (optional; compared only when both rows have a value)
+  - judge_score             → maximise  (optional; compared only when both rows have a value)
 
 Missing optional metrics narrow the comparison set rather than crashing or
 penalising either row.
@@ -32,6 +33,7 @@ _PARETO_HEADERS = [
     "Sanity %",
     "Task Q %",
     "PPL",
+    "Judge",
     "Pareto",
 ]
 
@@ -56,6 +58,8 @@ def dominates(a: RunRow, b: RunRow) -> bool:
         comparisons.append((a.task_quality_pass_rate, b.task_quality_pass_rate, False))
     if a.perplexity is not None and b.perplexity is not None:
         comparisons.append((a.perplexity, b.perplexity, True))
+    if a.judge_score is not None and b.judge_score is not None:
+        comparisons.append((a.judge_score, b.judge_score, False))
 
     strictly_better = False
     for a_val, b_val, minimise in comparisons:
@@ -113,6 +117,7 @@ def render_pareto_table(classified: list[tuple[RunRow, bool]]) -> str:
             fmt_rate(r.sanity_pass_rate),
             fmt_rate(r.task_quality_pass_rate),
             fmt_ppl(r.perplexity),
+            fmt_rate(r.judge_score),
             fmt_pareto(is_opt),
         ]
         for r, is_opt in classified

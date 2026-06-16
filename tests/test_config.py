@@ -25,6 +25,7 @@ def test_config_defaults() -> None:
     assert cfg.warmup_requests == 2
     assert cfg.mock.latency_ms == 10.0
     assert cfg.measure_perplexity is False
+    assert cfg.measure_judge is False
 
 
 def test_config_rejects_zero_requests() -> None:

@@ -94,6 +94,20 @@ def test_compute_perplexity_skips_single_token_texts(hf_backend) -> None:  # typ
 
 
 @skip_without_transformers
+def test_compute_judge_score_returns_value_in_unit_interval(hf_backend) -> None:  # type: ignore[no-untyped-def]
+    score = hf_backend.compute_judge_score(
+        ["What is the capital of France?"], ["The capital of France is Paris."]
+    )
+    assert score is not None
+    assert 0.0 <= score <= 1.0
+
+
+@skip_without_transformers
+def test_compute_judge_score_none_for_empty_lists(hf_backend) -> None:  # type: ignore[no-untyped-def]
+    assert hf_backend.compute_judge_score([], []) is None
+
+
+@skip_without_transformers
 def test_run_benchmark_with_hf_backend(tmp_prompts: pytest.FixtureRequest) -> None:
     from llm_inference_benchmark.backends.hf import HFBackend
     from llm_inference_benchmark.config import BenchmarkConfig

@@ -187,6 +187,15 @@ def test_aggregate_perplexity_from_last_report() -> None:
     assert agg.perplexity == pytest.approx(12.0)
 
 
+def test_aggregate_judge_score_from_last_report() -> None:
+    reports = [
+        _make_report(judge_score=0.6, p95_latency_ms=5.0, tokens_per_second=100.0),
+        _make_report(judge_score=0.9, p95_latency_ms=5.0, tokens_per_second=100.0),
+    ]
+    agg = aggregate_repeat_reports(reports)
+    assert agg.judge_score == pytest.approx(0.9)
+
+
 def test_aggregate_empty_raises() -> None:
     with pytest.raises(ValueError, match="No reports"):
         aggregate_repeat_reports([])
