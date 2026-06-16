@@ -27,6 +27,7 @@ def _row(
     vram: float | None = None,
     sanity: float | None = None,
     ppl: float | None = None,
+    judge: float | None = None,
 ) -> RunRow:
     return RunRow(
         backend=backend,
@@ -40,6 +41,7 @@ def _row(
         peak_vram_memory_mb=vram,
         sanity_pass_rate=sanity,
         perplexity=ppl,
+        judge_score=judge,
     )
 
 
@@ -145,6 +147,21 @@ def test_dominates_includes_ppl_when_both_present() -> None:
 def test_dominates_ppl_none_in_one_excludes_ppl() -> None:
     a = _row(p95=10.0, toks=100.0, ppl=None)
     b = _row(p95=10.0, toks=100.0, ppl=12.0)
+    assert not dominates(a, b)
+    assert not dominates(b, a)
+
+
+def test_dominates_includes_judge_when_both_present() -> None:
+    """Higher judge score (more confident in its own relevance) is better."""
+    a = _row(p95=10.0, toks=100.0, judge=0.9)
+    b = _row(p95=10.0, toks=100.0, judge=0.5)
+    assert dominates(a, b)
+    assert not dominates(b, a)
+
+
+def test_dominates_judge_none_in_one_excludes_judge() -> None:
+    a = _row(p95=10.0, toks=100.0, judge=None)
+    b = _row(p95=10.0, toks=100.0, judge=0.9)
     assert not dominates(a, b)
     assert not dominates(b, a)
 
@@ -302,6 +319,18 @@ def test_render_ppl_value_shown() -> None:
     classified = [(_row(ppl=12.34), True)]
     table = render_pareto_table(classified)
     assert "12.34" in table
+
+
+def test_render_judge_na_when_none() -> None:
+    classified = [(_row(judge=None), True)]
+    table = render_pareto_table(classified)
+    assert "N/A" in table
+
+
+def test_render_judge_value_shown() -> None:
+    classified = [(_row(judge=0.85), True)]
+    table = render_pareto_table(classified)
+    assert "85.0%" in table
 
 
 # ---------------------------------------------------------------------------

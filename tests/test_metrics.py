@@ -115,3 +115,20 @@ def test_quality_defaults_when_not_provided() -> None:
     report = compute_metrics(_results([10.0]), backend="mock", model="t")
     assert report.sanity_pass_rate == pytest.approx(1.0)
     assert report.empty_output_count == 0
+
+
+# ---------------------------------------------------------------------------
+# Judge score field (v0.21)
+# ---------------------------------------------------------------------------
+
+
+def test_judge_score_defaults_to_none() -> None:
+    report = compute_metrics(_results([10.0]), backend="mock", model="t")
+    assert report.judge_score is None
+
+
+def test_judge_score_passed_through() -> None:
+    report = compute_metrics(_results([10.0]), backend="mock", model="t", judge_score=0.85)
+    assert report.judge_score == pytest.approx(0.85)
+    assert report.repeated_output_count == 0
+    assert report.sanity_pass_rate == pytest.approx(1.0)

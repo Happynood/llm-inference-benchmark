@@ -26,6 +26,8 @@
 | `repeats` | count | Number of benchmark repeats executed; blank when `repeats == 1` (default, single-run behavior unchanged) |
 | `p95_latency_ms_std` | ms | Sample standard deviation of `p95_latency_ms` across repeats (n−1 denominator); blank when `repeats == 1` |
 | `tokens_per_second_std` | tok/s | Sample standard deviation of `tokens_per_second` across repeats (n−1 denominator); blank when `repeats == 1` |
+| `perplexity` | float ≥ 1.0 | Corpus-level self-perplexity; blank unless `measure_perplexity: true` and the backend exposes logits |
+| `judge_score` | ratio [0, 1] | Mean P(yes) from a fixed self-judge yes/no question; blank unless `measure_judge: true` and the backend exposes logits |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
 
 ## Memory Measurement
@@ -203,6 +205,50 @@ existing `--min-quality` / `--max-vram-mb` pattern.
 **Pareto treatment**: `llm-bench pareto` treats lower perplexity as strictly better and compares
 it only when both rows in a pairwise comparison have a value — a row missing perplexity neither
 gains nor loses on that axis, consistent with how missing VRAM or sanity data is handled.
+
+## LLM-as-judge score (v0.21)
+
+`Judge` is a logprob-based self-judge signal that complements perplexity (v0.20): perplexity
+measures intrinsic fluency, but says nothing about whether a completion actually addresses its
+prompt. The judge score asks the model that question directly.
+
+### `judge_score`
+
+Set `measure_judge: true` in the benchmark config to compute it. After the benchmark loop
+finishes, for each (prompt, completion) pair the backend builds a fixed judge prompt asking
+whether the completion directly and coherently addresses the request, then reads the
+competing `"Yes"`/`"No"` logits at the next-token position in a single forward pass — no extra
+decoding needed. The probability of "Yes" is recovered via a 2-way softmax
+(`sigmoid(yes_logit - no_logit)`), and the corpus-level `judge_score` is the mean P(yes) across
+every scored pair:
+
+```text
+judge_score = mean(P(yes) for each (prompt, completion) pair)
+```
+
+Higher is better: `1.0` means the model was maximally confident every completion addressed its
+prompt; `0.0` means the opposite. Pairs that tokenize to zero tokens are skipped; if every pair
+in a run is skipped, `judge_score` is `None` for that run.
+
+**Backend support**: only the `transformers` backend currently exposes the logits needed for
+this computation. `mock` and `llama-cpp` backends return `None` (blank in the CSV, `N/A` in
+`compare`/`pareto`/`recommend`) — the same gap as `perplexity`.
+
+**What this does and does not measure**: this is the model under test judging its own output
+with a single fixed yes/no question — not a calibrated preference model, not a substitute for
+human or third-party evaluation, and not comparable across different judge models. Small or
+instruction-untuned models may answer this fixed question unreliably regardless of the actual
+quality of the completion. Use `task_quality_pass_rate` for a rubric-based correctness check
+that does not depend on the model judging itself.
+
+**`--min-judge` constraint**: pass `--min-judge <float>` to `llm-bench recommend` to exclude
+runs whose `judge_score` falls below the threshold or is unknown. Runs without a judge score
+reading are only excluded when the constraint is active — backward-compatible, matching the
+existing `--min-quality` / `--max-perplexity` pattern.
+
+**Pareto treatment**: `llm-bench pareto` treats higher judge score as strictly better and
+compares it only when both rows in a pairwise comparison have a value — a row missing
+`judge_score` neither gains nor loses on that axis.
 
 ## Lifecycle Metrics (v0.18)
 
@@ -386,10 +432,11 @@ is the sole Pareto-optimal configuration in this two-run comparison.
 - **N matters**: Pareto analysis at N=10 requests inherits all limitations of the raw
   metrics — p95 at N=10 is the single worst observation, not a stable tail-latency
   estimate.
-- **Quality dimension is partial**: `task_quality_pass_rate` (rubric-based) and `perplexity`
-  (v0.20, transformers backend only) participate in dominance when present, but neither is a
-  general task-accuracy or semantic-correctness measure. Pareto optimality here means
-  "efficient on speed/memory/sanity/fluency", not "best model" in an absolute sense.
+- **Quality dimension is partial**: `task_quality_pass_rate` (rubric-based), `perplexity`
+  (v0.20), and `judge_score` (v0.21, transformers backend only for both) participate in
+  dominance when present, but none is a general task-accuracy or semantic-correctness measure.
+  Pareto optimality here means "efficient on speed/memory/sanity/fluency/self-judged
+  relevance", not "best model" in an absolute sense.
 - **Single-run by default**: each CSV is one benchmark run.  Use `repeats: N` in the config
   to collect variance data; see [Repeated-Trial Variance (v0.19)](#repeated-trial-variance-v019).
 
@@ -397,7 +444,7 @@ is the sole Pareto-optimal configuration in this two-run comparison.
 
 ## Constraint-based Recommender
 
-`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N] [--min-quality N] [--max-perplexity N]`
+`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N] [--min-quality N] [--max-perplexity N] [--min-judge N]`
 reads saved benchmark CSVs, filters them against explicit constraints, and recommends
 the best configuration.
 
@@ -410,6 +457,7 @@ the best configuration.
 | `--min-sanity` | `sanity_pass_rate` | value < threshold, or value missing when flag is set |
 | `--min-quality` | `task_quality_pass_rate` | value < threshold, or value missing when flag is set |
 | `--max-perplexity` | `perplexity` | value > threshold, or value missing when flag is set |
+| `--min-judge` | `judge_score` | value < threshold, or value missing when flag is set |
 
 All constraints are optional.  With no flags every run is a candidate.
 
@@ -471,6 +519,9 @@ Exit code is 1 in this case; 0 when a winner is found.
 - `--min-sanity` only checks that completions are non-empty, not that they are correct.
   `--max-perplexity` (v0.20) adds an intrinsic fluency constraint but is only available for
   the `transformers` backend and is not a task-accuracy check — use `--min-quality` for that.
+- `--min-judge` (v0.21) is also `transformers`-only and reflects the model's own self-assessment
+  of a single fixed yes/no question, not a calibrated correctness measure — use `--min-quality`
+  for rubric-based correctness instead.
 - p95 from N=10 requests is a rough estimate.  Use `repeats: N` in the config to quantify
   run-to-run variance; see [Repeated-Trial Variance (v0.19)](#repeated-trial-variance-v019).
 

@@ -59,10 +59,12 @@ def run_benchmark(
 
     results: list[RequestMetrics] = []
     texts: list[str] = []
+    prompts_used: list[str] = []
     with MemorySampler() as mem, NvidiaSmiSampler() as vram:
         reset_cuda_peak()
         for i in range(config.requests):
-            result = backend.generate(prompts[i % len(prompts)])
+            prompt = prompts[i % len(prompts)]
+            result = backend.generate(prompt)
             results.append(
                 RequestMetrics(
                     latency_ms=result.latency_ms,
@@ -71,6 +73,7 @@ def run_benchmark(
                 )
             )
             texts.append(result.text)
+            prompts_used.append(prompt)
 
     task_qual: TaskQualityReport | None = None
     if config.quality_file is not None:
@@ -80,6 +83,10 @@ def run_benchmark(
     perplexity: float | None = None
     if config.measure_perplexity:
         perplexity = backend.compute_perplexity(texts)
+
+    judge_score: float | None = None
+    if config.measure_judge:
+        judge_score = backend.compute_judge_score(prompts_used, texts)
 
     return compute_metrics(
         results,
@@ -93,6 +100,7 @@ def run_benchmark(
         model_load_ms=model_load_ms,
         warmup_p50_latency_ms=warmup_p50,
         perplexity=perplexity,
+        judge_score=judge_score,
     )
 
 

@@ -121,6 +121,28 @@ def test_load_csv_perplexity_blank_is_none(tmp_path: Path) -> None:
     assert row.perplexity is None
 
 
+def test_load_csv_judge_score_absent_is_none() -> None:
+    """Older CSVs without a judge_score column load with judge_score=None."""
+    row = load_csv(MOCK_CSV)
+    assert row.judge_score is None
+
+
+def test_load_csv_with_judge_score_column(tmp_path: Path) -> None:
+    p = tmp_path / "judge.csv"
+    header = "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,judge_score,timestamp\n"  # noqa: E501
+    p.write_text(header + "10,40.0,44.0,1200.0,500,transformers,tiny,720.0,,0.85,2026-01-01\n")
+    row = load_csv(p)
+    assert row.judge_score == pytest.approx(0.85)
+
+
+def test_load_csv_judge_score_blank_is_none(tmp_path: Path) -> None:
+    p = tmp_path / "judge_blank.csv"
+    header = "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,judge_score,timestamp\n"  # noqa: E501
+    p.write_text(header + "10,40.0,44.0,1200.0,500,mock,m,45.0,,,2026-01-01\n")
+    row = load_csv(p)
+    assert row.judge_score is None
+
+
 # ---------------------------------------------------------------------------
 # sort_rows
 # ---------------------------------------------------------------------------
@@ -243,6 +265,39 @@ def test_render_table_ppl_value_shown() -> None:
     ]
     table = render_table(rows)
     assert "12.34" in table
+
+
+def test_render_table_judge_header() -> None:
+    table = render_table(_ROWS[:1])
+    assert "Judge" in table
+
+
+def test_render_table_judge_na_when_none() -> None:
+    rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None)]
+    assert "N/A" in render_table(rows)
+
+
+def test_render_table_judge_value_shown() -> None:
+    rows = [
+        RunRow(
+            "transformers",
+            "tiny-gpt2",
+            10,
+            40.0,
+            44.0,
+            1200.0,
+            720.0,
+            0.0,
+            None,
+            None,
+            None,
+            None,
+            perplexity=None,
+            judge_score=0.85,
+        )
+    ]
+    table = render_table(rows)
+    assert "85.0%" in table
 
 
 # ---------------------------------------------------------------------------

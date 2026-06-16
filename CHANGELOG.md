@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [0.21.0] — 2026-06-16
+
+### Added
+- LLM-as-judge quality score: `measure_judge: true` reports the mean P(yes) from a fixed
+  self-judge yes/no question asked about each of a backend's own generated completions.
+  `transformers` backend only; `None` elsewhere. `Judge` column in `compare`/`pareto` tables;
+  `--min-judge` constraint in `llm-bench recommend`.
+
 ## [0.20.0] — 2026-06-16
 
 ### Added

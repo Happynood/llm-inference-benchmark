@@ -29,6 +29,7 @@ _HEADERS = [
     "Sanity %",
     "Task Q %",
     "PPL",
+    "Judge",
 ]
 
 
@@ -47,6 +48,7 @@ class RunRow:
     task_quality_pass_rate: float | None = None  # absent when no quality_file was set
     task_quality_checked_count: int | None = None  # absent when no quality_file was set
     perplexity: float | None = None  # absent unless config.measure_perplexity was set
+    judge_score: float | None = None  # absent unless config.measure_judge was set
 
 
 def _parse_optional_float(row: dict[str, str], key: str, path: str | Path) -> float | None:
@@ -87,6 +89,7 @@ def load_csv(path: str | Path) -> RunRow:
         int(task_quality_checked_raw) if task_quality_checked_raw is not None else None
     )
     perplexity = _parse_optional_float(row, "perplexity", path)
+    judge_score = _parse_optional_float(row, "judge_score", path)
 
     return RunRow(
         backend=row["backend"],
@@ -102,6 +105,7 @@ def load_csv(path: str | Path) -> RunRow:
         task_quality_pass_rate=task_quality,
         task_quality_checked_count=task_quality_checked,
         perplexity=perplexity,
+        judge_score=judge_score,
     )
 
 
@@ -140,6 +144,7 @@ def render_table(rows: list[RunRow]) -> str:
             fmt_rate(r.sanity_pass_rate),
             fmt_rate(r.task_quality_pass_rate),
             fmt_ppl(r.perplexity),
+            fmt_rate(r.judge_score),
         ]
         for r in rows
     ]
