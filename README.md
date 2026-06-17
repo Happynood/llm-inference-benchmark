@@ -455,7 +455,7 @@ make typecheck  # pyright
   For tiny models the runtime dominates; for production models the weights dominate.
 - GPU is slower than CPU for tiny-gpt2 — kernel-launch overhead exceeds compute savings at
   117 K params. Production models reverse this.
-- Concurrency > 1 is config-exposed but sequential execution only.
+- Concurrent execution (`concurrency > 1`) uses `asyncio.to_thread` to run backend calls in the default thread-pool. Throughput is measured as total output tokens / wall-clock time; p50/p95 latencies reflect individual request timings. Thread-pool contention on CPU-bound backends may limit scaling.
 - Tested on Linux x86-64 (Ubuntu-family). macOS should work; Windows untested.
 - `prompts_file` and `config` paths resolve relative to the working directory. Run from the
   project root.
