@@ -40,6 +40,7 @@ class LlamaCppBackend(Backend):
         n_threads: int | None = None,
         verbose: bool = False,
         stream: bool = False,
+        seed: int | None = None,
     ) -> None:
         if not _AVAILABLE or Llama is None:
             raise ImportError(
@@ -57,6 +58,8 @@ class LlamaCppBackend(Backend):
         }
         if n_threads is not None:
             kwargs["n_threads"] = n_threads
+        if seed is not None:
+            kwargs["seed"] = seed
 
         self._llm = Llama(**kwargs)  # type: ignore[misc]
         self._max_tokens = max_tokens

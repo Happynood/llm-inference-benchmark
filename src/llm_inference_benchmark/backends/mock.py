@@ -14,6 +14,7 @@ class MockBackend(Backend):
         latency_ms: float = 10.0,
         tokens_per_response: int = 50,
         ttft_ms: float | None = None,
+        seed: int | None = None,  # accepted for config compatibility; mock output is deterministic
     ) -> None:
         self._model = model
         self._latency_s = latency_ms / 1000.0

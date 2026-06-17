@@ -129,6 +129,7 @@ def test_write_manifest_contains_required_keys(manifest: RunManifest, tmp_path: 
         "timestamp",
         "backend",
         "model",
+        "seed",
         "git_commit",
         "git_dirty",
         "config_sha256",
@@ -180,3 +181,46 @@ def test_cli_without_manifest_still_works(tmp_config: Path) -> None:
     result = CliRunner().invoke(main, ["--config", str(tmp_config)])
     assert result.exit_code == 0
     assert "Benchmark Results" in result.output
+
+
+# ---------------------------------------------------------------------------
+# seed field
+# ---------------------------------------------------------------------------
+
+
+def test_manifest_seed_is_none_when_not_set(manifest: RunManifest) -> None:
+    assert manifest.seed is None
+
+
+def test_manifest_seed_matches_config(tmp_path: Path, tmp_prompts: Path) -> None:
+    cfg_file = tmp_path / "seeded.yaml"
+    cfg_file.write_text(
+        f"backend: mock\nmodel: x\nrequests: 1\nwarmup_requests: 0\n"
+        f"prompts_file: {tmp_prompts}\nseed: 42\n"
+    )
+    cfg = load_config(cfg_file)
+    m = collect_manifest(cfg_file, cfg)
+    assert m.seed == 42
+
+
+def test_write_manifest_includes_seed(tmp_path: Path, tmp_prompts: Path) -> None:
+    cfg_file = tmp_path / "seeded.yaml"
+    cfg_file.write_text(
+        f"backend: mock\nmodel: x\nrequests: 1\nwarmup_requests: 0\n"
+        f"prompts_file: {tmp_prompts}\nseed: 99\n"
+    )
+    cfg = load_config(cfg_file)
+    m = collect_manifest(cfg_file, cfg)
+    out = tmp_path / "manifest.json"
+    write_manifest(m, out)
+    data = json.loads(out.read_text())
+    assert "seed" in data
+    assert data["seed"] == 99
+
+
+def test_write_manifest_seed_null_when_not_set(manifest: RunManifest, tmp_path: Path) -> None:
+    out = tmp_path / "manifest.json"
+    write_manifest(manifest, out)
+    data = json.loads(out.read_text())
+    assert "seed" in data
+    assert data["seed"] is None

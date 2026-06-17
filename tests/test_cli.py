@@ -79,6 +79,20 @@ def test_validate_config_optional_fields_hidden_when_not_set(tmp_config: Path) -
     assert "quality_file" not in result.output
     assert "measure_perplexity" not in result.output
     assert "measure_judge" not in result.output
+    assert "seed" not in result.output
+
+
+def test_validate_config_shows_seed_when_set(tmp_path: Path, tmp_prompts: Path) -> None:
+    cfg = tmp_path / "seeded.yaml"
+    cfg.write_text(
+        f"backend: mock\nmodel: x\nrequests: 1\nwarmup_requests: 0\n"
+        f"prompts_file: {tmp_prompts}\nseed: 42\n"
+        f"mock:\n  latency_ms: 0\n  tokens_per_response: 5\n"
+    )
+    result = CliRunner().invoke(main, ["validate-config", "--config", str(cfg)])
+    assert result.exit_code == 0, result.output
+    assert "seed" in result.output
+    assert "42" in result.output
 
 
 def test_validate_config_missing_config_fails() -> None:

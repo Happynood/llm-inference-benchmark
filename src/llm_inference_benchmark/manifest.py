@@ -37,6 +37,7 @@ class RunManifest:
     timestamp: str
     backend: str
     model: str
+    seed: int | None
     git_commit: str | None
     git_dirty: bool | None
     config_sha256: str
@@ -58,6 +59,7 @@ def collect_manifest(config_path: str | Path, cfg: BenchmarkConfig) -> RunManife
         timestamp=datetime.now(UTC).isoformat(),
         backend=cfg.backend,
         model=cfg.model,
+        seed=cfg.seed,
         git_commit=_git_commit(),
         git_dirty=_git_dirty(),
         config_sha256=_file_sha256(config_path),

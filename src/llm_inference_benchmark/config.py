@@ -48,6 +48,7 @@ class BenchmarkConfig(BaseModel):
     workload_profile: str | None = None
     warmup_requests: int = Field(default=2, ge=0)
     repeats: int = Field(default=1, ge=1)
+    seed: int | None = None
     measure_perplexity: bool = False
     measure_judge: bool = False
     mock: MockBackendConfig = Field(default_factory=MockBackendConfig)

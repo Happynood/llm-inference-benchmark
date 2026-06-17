@@ -472,6 +472,40 @@ def test_non_streaming_does_not_send_stream_in_payload() -> None:
     assert "stream" not in payload
 
 
+def test_seed_included_in_blocking_payload_when_set() -> None:
+    mock_urlopen = _make_mock_urlopen(_make_chat_response())
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(
+            base_url=_BASE_URL, model=_MODEL, seed=42
+        )
+        backend.generate("hi")
+    request = mock_urlopen.call_args.args[0]
+    payload = json.loads(request.data.decode("utf-8"))
+    assert payload.get("seed") == 42
+
+
+def test_seed_omitted_from_blocking_payload_when_none() -> None:
+    mock_urlopen = _make_mock_urlopen(_make_chat_response())
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(base_url=_BASE_URL, model=_MODEL)
+        backend.generate("hi")
+    request = mock_urlopen.call_args.args[0]
+    payload = json.loads(request.data.decode("utf-8"))
+    assert "seed" not in payload
+
+
+def test_seed_included_in_streaming_payload_when_set() -> None:
+    mock_urlopen = _make_streaming_mock_urlopen(["ok"])
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(
+            base_url=_BASE_URL, model=_MODEL, stream=True, seed=7
+        )
+        backend.generate("hi")
+    request = mock_urlopen.call_args.args[0]
+    payload = json.loads(request.data.decode("utf-8"))
+    assert payload.get("seed") == 7
+
+
 def test_non_streaming_ttft_is_none() -> None:
     mock_urlopen = _make_mock_urlopen(_make_chat_response())
     with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):

@@ -46,3 +46,28 @@ def test_config_accepts_concurrency_1() -> None:
 def test_config_accepts_concurrency_gt_1() -> None:
     cfg = BenchmarkConfig(concurrency=4)
     assert cfg.concurrency == 4
+
+
+def test_config_seed_defaults_to_none() -> None:
+    cfg = BenchmarkConfig()
+    assert cfg.seed is None
+
+
+def test_config_seed_accepts_int() -> None:
+    cfg = BenchmarkConfig(seed=42)
+    assert cfg.seed == 42
+
+
+def test_config_seed_zero_accepted() -> None:
+    cfg = BenchmarkConfig(seed=0)
+    assert cfg.seed == 0
+
+
+def test_config_seed_parsed_from_yaml(tmp_path: Path, tmp_prompts: Path) -> None:
+    cfg_file = tmp_path / "seed.yaml"
+    cfg_file.write_text(
+        f"backend: mock\nmodel: x\nrequests: 1\nwarmup_requests: 0\n"
+        f"prompts_file: {tmp_prompts}\nseed: 7\n"
+    )
+    cfg = load_config(cfg_file)
+    assert cfg.seed == 7

@@ -8,6 +8,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `seed` field in `BenchmarkConfig`: optional random seed for stochastic sampling.
+  Applied per-request via `torch.manual_seed` in the `transformers` backend and at model
+  load via `Llama(seed=...)` in the `llama-cpp` backend. Forwarded as a best-effort hint
+  in the `openai` backend (server support varies). Recorded in `RunManifest` to complete
+  the reproducibility fingerprint. Has no effect on greedy decoding (`temperature: 0.0`).
 - `llm-bench compare --format json`: machine-readable JSON output from the compare command.
   Returns a JSON array of objects — one per CSV — with all fields present (`null` for absent
   optional metrics). Compatible with `--sort` and `--output`; useful for CI dashboards and

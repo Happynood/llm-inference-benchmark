@@ -374,6 +374,7 @@ All fields are optional unless marked required.
 | `concurrency` | int ≥ 1 | `1` | Maximum number of requests in-flight at once |
 | `warmup_requests` | int ≥ 0 | `2` | Warmup requests (excluded from metrics) |
 | `repeats` | int ≥ 1 | `1` | Repeat the full benchmark loop N times; p95/tok/s become the median |
+| `seed` | int | — | Random seed for stochastic sampling (`temperature > 0`). Applied per-request in `transformers` (`torch.manual_seed`) and at model load in `llama-cpp`. For `openai`, the value is forwarded as a best-effort hint — server support varies. Has no effect on greedy decoding (`temperature: 0.0`). |
 | `prompts_file` | path | `data/prompts/smoke.txt` | Path to newline-delimited prompts file |
 | `workload_profile` | string | — | Named profile: `short_chat`, `summarization`, `code_completion`, `long_context_smoke` |
 | `quality_file` | path | — | YAML rubric spec for per-prompt quality evaluation |

@@ -38,6 +38,7 @@ class OpenAIEndpointBackend(Backend):
         timeout_s: float = 60.0,
         api_key_env: str | None = None,
         stream: bool = False,
+        seed: int | None = None,
     ) -> None:
         self._base_url = base_url.rstrip("/")
         self._model = model
@@ -46,6 +47,7 @@ class OpenAIEndpointBackend(Backend):
         self._timeout_s = timeout_s
         self._api_key_env = api_key_env
         self._stream = stream
+        self._seed = seed
 
     @property
     def name(self) -> str:
@@ -72,12 +74,14 @@ class OpenAIEndpointBackend(Backend):
         return self._generate_blocking(prompt)
 
     def _generate_blocking(self, prompt: str) -> GenerationResult:
-        payload = {
+        payload: dict[str, object] = {
             "model": self._model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": self._max_tokens,
             "temperature": self._temperature,
         }
+        if self._seed is not None:
+            payload["seed"] = self._seed  # advisory: server may ignore
         req = self._make_request(payload)
 
         try:
@@ -113,13 +117,15 @@ class OpenAIEndpointBackend(Backend):
         ttft_ms is the wall-clock time from request start to the first non-empty
         content delta received from the server.
         """
-        payload = {
+        payload: dict[str, object] = {
             "model": self._model,
             "messages": [{"role": "user", "content": prompt}],
             "max_tokens": self._max_tokens,
             "temperature": self._temperature,
             "stream": True,
         }
+        if self._seed is not None:
+            payload["seed"] = self._seed  # advisory: server may ignore
         req = self._make_request(payload)
 
         try:

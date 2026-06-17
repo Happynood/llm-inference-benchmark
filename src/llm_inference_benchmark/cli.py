@@ -333,6 +333,8 @@ def validate_config_cmd(config_path: str) -> None:
         click.echo(f"  workload_profile : {cfg.workload_profile}")
     if cfg.quality_file:
         click.echo(f"  quality_file     : {cfg.quality_file}")
+    if cfg.seed is not None:
+        click.echo(f"  seed             : {cfg.seed}")
     if cfg.measure_perplexity:
         click.echo(f"  measure_perplexity: {cfg.measure_perplexity}")
     if cfg.measure_judge:
@@ -598,6 +600,7 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             model=cfg.model,
             latency_ms=cfg.mock.latency_ms,
             tokens_per_response=cfg.mock.tokens_per_response,
+            seed=cfg.seed,
         )
     if cfg.backend == "transformers":
         from llm_inference_benchmark.backends.hf import HFBackend  # lazy: optional dep
@@ -608,6 +611,7 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             device=cfg.hf.device,
             torch_dtype=cfg.hf.torch_dtype,
             do_sample=cfg.hf.do_sample,
+            seed=cfg.seed,
         )
     if cfg.backend == "llama-cpp":
         from llm_inference_benchmark.backends.llama_cpp import LlamaCppBackend  # lazy: optional dep
@@ -621,6 +625,7 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             n_threads=cfg.llama_cpp.n_threads,
             verbose=cfg.llama_cpp.verbose,
             stream=cfg.llama_cpp.stream,
+            seed=cfg.seed,
         )
     if cfg.backend == "openai":
         from llm_inference_benchmark.backends.openai_endpoint import OpenAIEndpointBackend
@@ -633,5 +638,6 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             timeout_s=cfg.openai.timeout_s,
             api_key_env=cfg.openai.api_key_env,
             stream=cfg.openai.stream,
+            seed=cfg.seed,
         )
     raise ValueError(f"Unknown backend: {cfg.backend!r}")

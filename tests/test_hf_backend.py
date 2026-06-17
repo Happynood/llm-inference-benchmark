@@ -116,6 +116,29 @@ def test_compute_judge_score_none_for_empty_lists(hf_backend) -> None:  # type: 
 
 
 @skip_without_transformers
+def test_generate_calls_torch_manual_seed_when_seed_set(hf_backend) -> None:  # type: ignore[no-untyped-def]
+    from unittest.mock import patch
+
+    hf_backend._seed = 99
+    try:
+        with patch("torch.manual_seed") as mock_ms:
+            hf_backend.generate("hello")
+        mock_ms.assert_called_once_with(99)
+    finally:
+        hf_backend._seed = None
+
+
+@skip_without_transformers
+def test_generate_does_not_call_manual_seed_when_seed_is_none(hf_backend) -> None:  # type: ignore[no-untyped-def]
+    from unittest.mock import patch
+
+    assert hf_backend._seed is None
+    with patch("torch.manual_seed") as mock_ms:
+        hf_backend.generate("hello")
+    mock_ms.assert_not_called()
+
+
+@skip_without_transformers
 def test_run_benchmark_with_hf_backend(tmp_prompts: pytest.FixtureRequest) -> None:
     from llm_inference_benchmark.backends.hf import HFBackend
     from llm_inference_benchmark.config import BenchmarkConfig
