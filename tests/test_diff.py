@@ -8,7 +8,12 @@ import pytest
 from click.testing import CliRunner
 
 from llm_inference_benchmark.cli import main
-from llm_inference_benchmark.diff import _fmt_change, _pct_change, build_diff_table, find_regressions
+from llm_inference_benchmark.diff import (
+    _fmt_change,
+    _pct_change,
+    build_diff_table,
+    find_regressions,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures"
 MOCK_CSV = FIXTURES / "mock_run.csv"
