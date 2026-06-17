@@ -88,12 +88,14 @@ uv run llm-bench --config configs/profile-summarization.yaml --output results/su
 
 **llama.cpp backend (GGUF quantized inference, local model):**
 ```bash
-make install-llama-cpp           # uv sync --extra llama-cpp
-# Edit configs/llama-cpp-cpu.yaml to set model: /path/to/model.gguf
-uv run llm-bench --config configs/llama-cpp-cpu.yaml --output results/llama-cpp.csv
-# GPU (CUDA build required):
-make install-llama-cpp-cuda     # CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
-uv run llm-bench --config configs/llama-cpp-gpu.yaml --output results/llama-cpp-gpu.csv
+# CPU:
+make install-llama-cpp         # uv sync --extra llama-cpp
+# set model: /path/to/model.gguf in configs/llama-cpp-cpu.yaml
+make run-llama-cpp-cpu
+# GPU (pre-built CUDA wheel, no nvcc required):
+make install-llama-cpp-prebuilt
+# set model: /path/to/model.gguf in configs/llama-cpp-gpu.yaml
+make run-llama-cpp-gpu
 ```
 
 **Run matrix (multiple configs in one command):**
@@ -391,12 +393,15 @@ make install-llama-cpp         # uv sync --extra llama-cpp
 make run-llama-cpp-cpu
 ```
 
-**llama.cpp backend — GPU (CUDA build):**
+**llama.cpp backend — GPU (pre-built CUDA wheel, no nvcc required):**
 ```bash
-make install-llama-cpp-cuda   # CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
+make install-llama-cpp-prebuilt   # pre-built cu124 wheel, works without a CUDA toolkit
 # set model: /path/to/model.gguf in configs/llama-cpp-gpu.yaml, tune n_gpu_layers
 make run-llama-cpp-gpu
 ```
+
+> If you have the CUDA toolkit installed (`nvcc` on PATH), you can also build from source:
+> `make install-llama-cpp-cuda` then `make run-llama-cpp-gpu`.
 
 **Run matrix (all four profiles, one command):**
 ```bash
@@ -413,14 +418,8 @@ make run-matrix  # llm-bench matrix --config configs/matrix-example.yaml
 
 # 2. Set model: paths in configs/llama-cpp-q4km-best.yaml and configs/llama-cpp-q8-best.yaml
 
-# 3. Run the comparison matrix (CUDA 12/13 workaround for pre-built cu124 wheel):
-CUDA_LIBS=$(find .venv/lib/python3.12/site-packages/nvidia -name "*.so*" \
-  | xargs -I{} dirname {} | sort -u | tr '\n' ':')
-LD_LIBRARY_PATH="${CUDA_LIBS}${LD_LIBRARY_PATH}" \
-  uv run llm-bench matrix --config configs/llama-cpp-quant-compare.yaml
-
-# 4. Compare results:
-uv run llm-bench compare results/quant-q4km.csv results/quant-q8.csv
+# 3. Run comparison and print results table:
+make run-quant-compare
 ```
 
 **Save a run manifest (environment fingerprint):**
@@ -473,9 +472,9 @@ make typecheck  # pyright
 **llama.cpp backend**
 - Requires a local GGUF model file — no automatic download. Obtain models from Hugging Face Hub
   (e.g. `huggingface_hub.hf_hub_download`).
-- GPU support: pre-built cu124 wheels are available at `https://abetlen.github.io/llama-cpp-python/whl/cu124`.
-  On systems without nvcc (no CUDA toolkit), install `nvidia-cublas-cu12` + `nvidia-cuda-runtime-cu12`
-  alongside the wheel and set `LD_LIBRARY_PATH` to cover all `nvidia/*/lib/` dirs in the venv
+- GPU support: use `make install-llama-cpp-prebuilt` to install a pre-built CUDA wheel without
+  requiring a CUDA toolkit. The `make run-llama-cpp-gpu` and `make run-quant-compare` targets
+  automatically resolve bundled CUDA library paths so no manual `LD_LIBRARY_PATH` setup is needed
   (see [docs/results/llama-cpp-rtx3050-llama32-3b.md](docs/results/llama-cpp-rtx3050-llama32-3b.md)).
 - `n_gpu_layers` must be tuned to your VRAM budget. For Llama 3.2 3B Q4\_K\_M, `n_gpu_layers: 99`
   offloads all 28 layers (2361 MiB VRAM on RTX 3050). For larger models, increase gradually.
