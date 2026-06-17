@@ -8,6 +8,7 @@ COPY pyproject.toml uv.lock ./
 RUN uv sync --extra transformers --no-dev --frozen --no-install-project
 
 COPY src/ ./src/
+COPY README.md ./
 RUN uv sync --extra transformers --no-dev --frozen
 
 ENTRYPOINT ["/app/.venv/bin/llm-bench"]
