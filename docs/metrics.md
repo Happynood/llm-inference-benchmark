@@ -28,6 +28,9 @@
 | `tokens_per_second_std` | tok/s | Sample standard deviation of `tokens_per_second` across repeats (n−1 denominator); blank when `repeats == 1` |
 | `perplexity` | float ≥ 1.0 | Corpus-level self-perplexity; blank unless `measure_perplexity: true` and the backend exposes logits |
 | `judge_score` | ratio [0, 1] | Mean P(yes) from a fixed self-judge yes/no question; blank unless `measure_judge: true` and the backend exposes logits |
+| `mean_input_tokens` | tokens | Mean input token count per request across the benchmark run |
+| `mean_output_tokens` | tokens | Mean output token count per request across the benchmark run |
+| `decode_tokens_per_second` | tok/s | Output tokens divided by total latency. Equal to `tokens_per_second` under sequential execution. Blank when no output tokens were produced. |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
 
 ## Memory Measurement
@@ -249,6 +252,32 @@ existing `--min-quality` / `--max-perplexity` pattern.
 **Pareto treatment**: `llm-bench pareto` treats higher judge score as strictly better and
 compares it only when both rows in a pairwise comparison have a value — a row missing
 `judge_score` neither gains nor loses on that axis.
+
+## Workload Composition (v0.22)
+
+Three fields describe the token-level composition of each run. They are always populated for
+runs from v0.22 onward and blank in older CSVs, which the compare/pareto/recommend pipeline
+treats as `N/A` — the established convention for optional columns.
+
+### `mean_input_tokens` and `mean_output_tokens`
+
+Mean token counts per request. These let you compare runs across workload profiles: a
+`short_chat` run with `mean_input_tokens ≈ 40` and a `long_context_smoke` run with
+`mean_input_tokens ≈ 1500` produce incomparable p95 latency figures without knowing the input
+length. Knowing the mean token counts is also a prerequisite for interpreting why a
+configuration benefits more from GPU offload at long context than at short context.
+
+### `decode_tokens_per_second`
+
+Output tokens divided by total latency — the same formula as `tokens_per_second`. Under the
+current sequential execution model the two values are identical; `decode_tokens_per_second` is
+blank only when no output tokens were produced (the run produced all-empty completions), while
+`tokens_per_second` shows `0.0`.
+
+The distinction will become meaningful when concurrent execution is added: wall-clock elapsed
+time (the planned denominator for `tokens_per_second` under concurrency) differs from the sum
+of per-request decode times. Until then use either column interchangeably; `toks` sort key and
+Pareto/recommend constraints continue to use `tokens_per_second`.
 
 ## Lifecycle Metrics (v0.18)
 

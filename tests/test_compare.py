@@ -455,3 +455,57 @@ def test_build_comparison_table_mixed_old_and_new() -> None:
     assert "mock" in table
     assert "N/A" in table  # old row has no sanity
     assert "100.0%" in table  # new row has sanity=1.0
+
+
+# ---------------------------------------------------------------------------
+# Workload composition fields (v0.22)
+# ---------------------------------------------------------------------------
+
+
+def test_load_csv_old_fixture_decode_fields_are_none() -> None:
+    row = load_csv(MOCK_CSV)
+    assert row.mean_input_tokens is None
+    assert row.mean_output_tokens is None
+    assert row.decode_tokens_per_second is None
+
+
+def test_load_csv_new_row_with_decode_fields(tmp_path: Path) -> None:
+    header = (
+        "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,"
+        "backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,"
+        "mean_input_tokens,mean_output_tokens,decode_tokens_per_second,timestamp\n"
+    )
+    data = "10,5.0,5.1,9000.0,150,mock,m,45.0,,5.0,10.0,9000.0,2026-01-01T00:00:00+00:00\n"
+    p = tmp_path / "new.csv"
+    p.write_text(header + data)
+    row = load_csv(p)
+    assert row.mean_input_tokens == pytest.approx(5.0)
+    assert row.mean_output_tokens == pytest.approx(10.0)
+    assert row.decode_tokens_per_second == pytest.approx(9000.0)
+
+
+def test_load_csv_blank_decode_tokens_per_second(tmp_path: Path) -> None:
+    header = (
+        "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,"
+        "backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,"
+        "mean_input_tokens,mean_output_tokens,decode_tokens_per_second,timestamp\n"
+    )
+    data = "5,5.0,5.1,0.0,25,mock,m,45.0,,5.0,0.0,,2026-01-01T00:00:00+00:00\n"
+    p = tmp_path / "noop.csv"
+    p.write_text(header + data)
+    row = load_csv(p)
+    assert row.decode_tokens_per_second is None
+
+
+def test_render_table_has_out_tok_s_header() -> None:
+    table = render_table(_ROWS[:1])
+    assert "Out tok/s" in table
+    assert "In tok" in table
+    assert "Out tok" in table
+
+
+def test_render_table_decode_tps_na_for_old_rows() -> None:
+    row = load_csv(MOCK_CSV)
+    table = render_table([row])
+    assert "Out tok/s" in table
+    assert "N/A" in table  # decode_tokens_per_second is None for old CSV
