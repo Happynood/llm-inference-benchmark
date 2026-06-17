@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -11,6 +12,7 @@ from llm_inference_benchmark.cli import main
 from llm_inference_benchmark.diff import (
     _fmt_change,
     _pct_change,
+    build_diff_json,
     build_diff_table,
     find_regressions,
 )
@@ -509,3 +511,207 @@ def test_diff_fail_on_regression_negative_threshold_rejected(tmp_path: Path) -> 
     _write_csv(a)
     result = CliRunner().invoke(main, ["diff", str(a), str(a), "--fail-on-regression", "-1"])
     assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# build_diff_json — unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_build_diff_json_valid_json(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = json.loads(build_diff_json(a, b))
+    assert isinstance(result, dict)
+
+
+def test_build_diff_json_has_required_keys(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = json.loads(build_diff_json(a, b))
+    assert "baseline" in result
+    assert "current" in result
+    assert "metrics" in result
+
+
+def test_build_diff_json_run_metadata(tmp_path: Path) -> None:
+    a = tmp_path / "before.csv"
+    b = tmp_path / "after.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = json.loads(build_diff_json(a, b))
+    assert result["baseline"]["file"] == "before.csv"
+    assert result["current"]["file"] == "after.csv"
+    assert result["baseline"]["backend"] == "mock"
+    assert result["baseline"]["request_count"] == 10
+
+
+def test_build_diff_json_required_metrics_always_present(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = json.loads(build_diff_json(a, b))
+    labels = {m["label"] for m in result["metrics"]}
+    assert "p50 (ms)" in labels
+    assert "p95 (ms)" in labels
+    assert "tok/s" in labels
+    assert "CPU mem (MB)" in labels
+
+
+def test_build_diff_json_optional_metric_absent_omitted(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = json.loads(build_diff_json(a, b))
+    labels = {m["label"] for m in result["metrics"]}
+    assert "TTFT p50 (ms)" not in labels
+    assert "VRAM (MB)" not in labels
+    assert "Sanity %" not in labels
+
+
+def test_build_diff_json_optional_metric_included_when_present(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_ttft_ms="40.0", p95_ttft_ms="80.0", peak_vram_memory_mb="2361.0")
+    _write_csv(b, p50_ttft_ms="35.0", p95_ttft_ms="70.0", peak_vram_memory_mb="2200.0")
+    result = json.loads(build_diff_json(a, b))
+    labels = {m["label"] for m in result["metrics"]}
+    assert "TTFT p50 (ms)" in labels
+    assert "TTFT p95 (ms)" in labels
+    assert "VRAM (MB)" in labels
+
+
+def test_build_diff_json_metric_fields(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p95_latency_ms="100.0")
+    _write_csv(b, p95_latency_ms="80.0")  # 20% improvement
+    result = json.loads(build_diff_json(a, b))
+    p95 = next(m for m in result["metrics"] if m["label"] == "p95 (ms)")
+    assert p95["baseline"] == pytest.approx(100.0)
+    assert p95["current"] == pytest.approx(80.0)
+    assert p95["change_pct"] == pytest.approx(-20.0)
+    assert p95["direction"] == "improvement"
+
+
+def test_build_diff_json_direction_regression(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p95_latency_ms="100.0")
+    _write_csv(b, p95_latency_ms="130.0")  # 30% regression
+    result = json.loads(build_diff_json(a, b))
+    p95 = next(m for m in result["metrics"] if m["label"] == "p95 (ms)")
+    assert p95["direction"] == "regression"
+
+
+def test_build_diff_json_direction_neutral(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_latency_ms="100.0")
+    _write_csv(b, p50_latency_ms="100.0")
+    result = json.loads(build_diff_json(a, b))
+    p50 = next(m for m in result["metrics"] if m["label"] == "p50 (ms)")
+    assert p50["direction"] == "neutral"
+
+
+def test_build_diff_json_direction_na_when_one_side_missing(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_ttft_ms="40.0", p95_ttft_ms="80.0")
+    _write_csv(b)  # no TTFT
+    result = json.loads(build_diff_json(a, b))
+    ttft = next(m for m in result["metrics"] if m["label"] == "TTFT p50 (ms)")
+    assert ttft["direction"] == "n/a"
+    assert ttft["change_pct"] is None
+    assert ttft["baseline"] == pytest.approx(40.0)
+    assert ttft["current"] is None
+
+
+def test_build_diff_json_throughput_improvement(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, tokens_per_second="50.0")
+    _write_csv(b, tokens_per_second="60.0")  # higher = better
+    result = json.loads(build_diff_json(a, b))
+    toks = next(m for m in result["metrics"] if m["label"] == "tok/s")
+    assert toks["direction"] == "improvement"
+
+
+def test_build_diff_json_throughput_regression(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, tokens_per_second="60.0")
+    _write_csv(b, tokens_per_second="50.0")  # lower = worse
+    result = json.loads(build_diff_json(a, b))
+    toks = next(m for m in result["metrics"] if m["label"] == "tok/s")
+    assert toks["direction"] == "regression"
+
+
+# ---------------------------------------------------------------------------
+# CLI --format json
+# ---------------------------------------------------------------------------
+
+
+def test_diff_format_json_stdout(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = CliRunner().invoke(main, ["diff", str(a), str(b), "--format", "json"])
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert "baseline" in parsed
+    assert "metrics" in parsed
+
+
+def test_diff_format_json_no_markdown(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = CliRunner().invoke(main, ["diff", str(a), str(b), "--format", "json"])
+    assert result.exit_code == 0, result.output
+    assert "## Benchmark Diff" not in result.output
+
+
+def test_diff_format_json_output_file(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    out = tmp_path / "diff.json"
+    _write_csv(a)
+    _write_csv(b)
+    result = CliRunner().invoke(
+        main, ["diff", str(a), str(b), "--format", "json", "--output", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    parsed = json.loads(out.read_text())
+    assert "metrics" in parsed
+
+
+def test_diff_format_json_with_fail_on_regression(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p95_latency_ms="100.0")
+    _write_csv(b, p95_latency_ms="130.0")  # 30% regression
+    result = CliRunner().invoke(
+        main, ["diff", str(a), str(b), "--format", "json", "--fail-on-regression", "0"]
+    )
+    assert result.exit_code == 1
+    assert "✗ Regression check failed" in result.output
+
+
+def test_diff_format_table_is_default(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = CliRunner().invoke(main, ["diff", str(a), str(b)])
+    assert result.exit_code == 0, result.output
+    assert "## Benchmark Diff" in result.output

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -210,3 +211,88 @@ def find_regressions(
         if mag is not None and mag > threshold_pct:
             regressions.append(label)
     return regressions
+
+
+def build_diff_json(baseline_path: str | Path, current_path: str | Path) -> str:
+    """Load two benchmark CSVs and return a JSON diff string.
+
+    The returned object has three keys:
+    - ``baseline`` / ``current``: run metadata (file, backend, model, request_count).
+    - ``metrics``: list of per-metric objects with ``label``, ``baseline``,
+      ``current``, ``change_pct`` (null when not computable), and ``direction``
+      (``"improvement"``, ``"regression"``, ``"neutral"``, or ``"n/a"``).
+
+    Optional metrics absent from *both* runs are omitted from the list,
+    consistent with the Markdown table output.
+    """
+    b = load_csv(baseline_path)
+    c = load_csv(current_path)
+
+    def _direction(b_val: float | None, c_val: float | None, lower_is_better: bool) -> str:
+        if b_val is None or c_val is None:
+            return "n/a"
+        pct = _pct_change(b_val, c_val)
+        if pct is None:
+            return "n/a"
+        if abs(pct) < 0.05:
+            return "neutral"
+        good = (pct < 0) == lower_is_better
+        return "improvement" if good else "regression"
+
+    def _entry(
+        label: str,
+        b_val: float | None,
+        c_val: float | None,
+        lower_is_better: bool,
+    ) -> dict[str, object]:
+        pct: float | None = None
+        if b_val is not None and c_val is not None:
+            raw = _pct_change(b_val, c_val)
+            pct = round(raw, 2) if raw is not None else None
+        return {
+            "label": label,
+            "baseline": b_val,
+            "current": c_val,
+            "change_pct": pct,
+            "direction": _direction(b_val, c_val, lower_is_better),
+        }
+
+    # (label, baseline_val, current_val, lower_is_better, required)
+    candidates: list[tuple[str, float | None, float | None, bool, bool]] = [
+        ("p50 (ms)", b.p50_latency_ms, c.p50_latency_ms, True, True),
+        ("p95 (ms)", b.p95_latency_ms, c.p95_latency_ms, True, True),
+        ("tok/s", b.tokens_per_second, c.tokens_per_second, False, True),
+        ("Decode tok/s", b.decode_tokens_per_second, c.decode_tokens_per_second, False, False),
+        ("Load (ms)", b.model_load_ms, c.model_load_ms, True, False),
+        ("TTFT p50 (ms)", b.p50_ttft_ms, c.p50_ttft_ms, True, False),
+        ("TTFT p95 (ms)", b.p95_ttft_ms, c.p95_ttft_ms, True, False),
+        ("VRAM (MB)", b.peak_vram_memory_mb, c.peak_vram_memory_mb, True, False),
+        ("CPU mem (MB)", b.peak_cpu_memory_mb, c.peak_cpu_memory_mb, True, True),
+        ("Sanity %", b.sanity_pass_rate, c.sanity_pass_rate, False, False),
+        ("Task Q %", b.task_quality_pass_rate, c.task_quality_pass_rate, False, False),
+        ("PPL", b.perplexity, c.perplexity, True, False),
+        ("Judge", b.judge_score, c.judge_score, False, False),
+    ]
+
+    metrics = [
+        _entry(label, b_val, c_val, lower_is_better)
+        for label, b_val, c_val, lower_is_better, required in candidates
+        if required or not (b_val is None and c_val is None)
+    ]
+
+    data: dict[str, object] = {
+        "baseline": {
+            "file": Path(baseline_path).name,
+            "backend": b.backend,
+            "model": b.model,
+            "request_count": b.request_count,
+        },
+        "current": {
+            "file": Path(current_path).name,
+            "backend": c.backend,
+            "model": c.model,
+            "request_count": c.request_count,
+        },
+        "metrics": metrics,
+    }
+    return json.dumps(data, indent=2)

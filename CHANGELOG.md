@@ -26,6 +26,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   rows that lack data.
 
 ### Added
+- `llm-bench diff --format json`: machine-readable JSON output from the diff command.
+  Returns an object with `baseline`/`current` run metadata and a `metrics` list — one
+  entry per tracked metric — each with `label`, `baseline`, `current`, `change_pct`
+  (null when not computable), and `direction` (`"improvement"`, `"regression"`,
+  `"neutral"`, or `"n/a"`). Optional metrics absent from both runs are omitted,
+  consistent with Markdown table output. Compatible with `--output` and
+  `--fail-on-regression`; useful for CI dashboards and scripting. The default format
+  remains `table` (Markdown).
 - `llm-bench diff baseline.csv current.csv`: per-metric percentage-change comparison between
   two benchmark runs. Shows p50/p95 latency, tok/s, TTFT, VRAM, load time, and quality
   metrics side-by-side with ✓ (improvement) / ✗ (regression) annotations. Optional metrics

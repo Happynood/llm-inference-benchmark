@@ -373,6 +373,14 @@ def validate_config_cmd(config_path: str) -> None:
     help="Write diff to file instead of stdout",
 )
 @click.option(
+    "--format",
+    "output_format",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format: table=Markdown, json=machine-readable JSON",
+)
+@click.option(
     "--fail-on-regression",
     "fail_threshold",
     default=None,
@@ -387,6 +395,7 @@ def diff_cmd(
     baseline_csv: str,
     current_csv: str,
     output_path: str | None,
+    output_format: str,
     fail_threshold: float | None,
 ) -> None:
     """Compare two benchmark CSVs and show per-metric percentage change.
@@ -395,19 +404,24 @@ def diff_cmd(
     Annotates each metric with ✓ (improvement) or ✗ (regression):
 
         llm-bench diff results/before.csv results/after.csv
+        llm-bench diff baseline.csv current.csv --format json
 
     Use --fail-on-regression to gate CI pipelines on metric quality:
 
         llm-bench diff baseline.csv current.csv --fail-on-regression 5
     """
-    from llm_inference_benchmark.diff import build_diff_table, find_regressions
+    from llm_inference_benchmark.diff import build_diff_json, build_diff_table, find_regressions
 
-    table = build_diff_table(baseline_csv, current_csv)
+    if output_format == "json":
+        text = build_diff_json(baseline_csv, current_csv)
+    else:
+        text = build_diff_table(baseline_csv, current_csv)
+
     if output_path:
-        Path(output_path).write_text(table + "\n")
+        Path(output_path).write_text(text + "\n")
         click.echo(f"Diff written to {output_path}")
     else:
-        click.echo(table)
+        click.echo(text)
 
     if fail_threshold is not None:
         regressions = find_regressions(baseline_csv, current_csv, fail_threshold)
