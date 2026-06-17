@@ -1,239 +1,237 @@
-# LLM Inference Benchmark
+# llm-inference-benchmark
 
-A reproducible harness for LLM inference optimization experiments: compare backends,
-quantization modes, runtime parameters, latency, throughput, memory, and eventually quality under
-identical workloads.
+[![CI](https://github.com/Happynood/llm-inference-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/Happynood/llm-inference-benchmark/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/Happynood/llm-inference-benchmark?color=blue)](https://github.com/Happynood/llm-inference-benchmark/releases)
+[![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
+[![Docker](https://img.shields.io/badge/docker-ghcr.io-informational)](https://github.com/Happynood/llm-inference-benchmark/pkgs/container/llm-inference-benchmark)
+[![uv](https://img.shields.io/badge/uv-managed-blueviolet)](https://docs.astral.sh/uv/)
 
-Project direction is fixed in [docs/project-charter.md](docs/project-charter.md): start with a
-small benchmark harness, then grow toward configuration comparison, Pareto analysis, and
-constraint-based recommendations. See [CHANGELOG.md](CHANGELOG.md) for release history.
-Current stable release: **v1.1.0**. Full CLI reference: [docs/cli.md](docs/cli.md).
+A reproducible harness for LLM inference optimization experiments. Compare backends, quantization
+modes, runtime parameters, latency, throughput, TTFT, and quality under identical workloads —
+then get a constraint-based recommendation for the best configuration.
 
-## Problem
+---
+
+## Why
 
 Choosing between `transformers`, `llama.cpp`, `onnxruntime`, `vllm`, precision modes, and runtime
 parameters requires apples-to-apples experiments under identical prompts and hardware.
-Ad-hoc timing scripts per experiment produce inconsistent results that can't be compared or reproduced later.
-This project wraps the benchmark loop in a typed, config-driven CLI so every run is reproducible,
-comparable, and suitable for later recommendation logic.
+Ad-hoc timing scripts produce inconsistent results that cannot be compared or reproduced.
 
-## Demo
+This harness wraps the benchmark loop in a typed, config-driven CLI so every run is reproducible,
+comparable, and feeds directly into Pareto analysis and constraint-based recommendation.
 
-**CI/harness validation (mock backend, no model downloads):**
+```
+model × backend × precision × parameters × workload  →  Pareto-optimal configuration
+```
+
+---
+
+## Goals
+
+1. Make benchmark runs reproducible from repository files alone.
+2. Compare multiple inference backends under the same prompts, config schema, and metric definitions.
+3. Track quantization and precision metadata so runs are compared as configurations, not just backend names.
+4. Report latency (p50/p95/TTFT), throughput, peak memory, and lifecycle timings transparently.
+5. Add lightweight quality checks so speed and memory are not optimized in isolation.
+6. Produce comparison tables, Pareto analysis, and constraint-based recommendations.
+7. Keep the implementation small, typed, tested, CI-friendly, and easy to extend.
+8. Separate harness validation results from production performance claims.
+
+---
+
+## Quick Start
+
 ```bash
-uv run llm-bench --config configs/example.yaml --output benchmark.csv
-```
-> The mock backend sleeps for a configured `latency_ms` — no model is loaded.
-> These numbers validate that the measurement pipeline is wired correctly, not that any model is fast.
-```
-Backend: mock  Model: mock-gpt2  Requests: 20
-p50_latency_ms: 5.01  p95_latency_ms: 5.09  tokens_per_second: 9971.18  (simulated)
+# Install (no GPU required)
+git clone https://github.com/Happynood/llm-inference-benchmark
+cd llm-inference-benchmark
+uv sync
+
+# Run mock backend — validates the harness pipeline, no model download
+uv run llm-bench --config configs/example.yaml --output results/mock.csv
+
+# Compare results
+uv run llm-bench compare results/mock.csv
 ```
 
-**Real inference (transformers backend, CPU):**
+For full installation options (transformers, llama.cpp, GPU), see **[docs/quickstart.md](docs/quickstart.md)**.
+
+---
+
+## Backends
+
+| Backend | Install extra | GPU support | Notes |
+|---|---|---|---|
+| `mock` | — | — | Deterministic CI backend, no model |
+| `transformers` | `--extra transformers` | CUDA | HuggingFace `AutoModelForCausalLM` |
+| `llama-cpp` | `--extra llama-cpp` | CUDA (pre-built wheel) | GGUF quantized inference |
+| `openai` | — | server-side | Any `/v1/chat/completions`-compatible server |
+
+---
+
+## CLI
+
+```
+llm-bench [OPTIONS] [--config YAML] [--output CSV]     # single run
+llm-bench compare   FILE [FILE...]                     # Markdown comparison table
+llm-bench pareto    FILE [FILE...]                     # Pareto classification
+llm-bench recommend FILE [FILE...] [CONSTRAINTS]       # best config under constraints
+llm-bench matrix    --config MATRIX_YAML               # multi-run sweep
+llm-bench profiles                                     # list built-in workload profiles
+llm-bench validate-config --config YAML                # validate config without running
+llm-bench --version
+```
+
+Full reference: **[docs/cli.md](docs/cli.md)**
+
+### Runtime overrides
+
 ```bash
-make install-hf   # uv sync --extra transformers
-uv run llm-bench --config configs/transformers-cpu.yaml --output benchmark-hf.csv
-```
-```
-Backend: transformers  Model: sshleifer/tiny-gpt2  Requests: 10
-
-=== Benchmark Results ===
-  request_count: 10
-  p50_latency_ms: 40.95
-  p95_latency_ms: 44.67
-  tokens_per_second: 1211.23
-  total_tokens: 598
-  backend: transformers
-  model: sshleifer/tiny-gpt2
+# Override config values without editing YAML
+uv run llm-bench --config configs/example.yaml --requests 50 --concurrency 4 --warmup-requests 2
 ```
 
-**Run manifest (environment fingerprint):**
+### Constraint-based recommendation
+
 ```bash
-uv run llm-bench --config configs/example.yaml --output results.csv --manifest results/manifest.json
-```
-```json
-{
-  "timestamp": "2026-06-14T10:00:00+00:00",
-  "backend": "mock",
-  "model": "mock-gpt2",
-  "git_commit": "a43a16f...",
-  "git_dirty": false,
-  "config_sha256": "e3b0c442...",
-  "prompts_sha256": "d4a3c1f...",
-  "python_version": "3.12.13",
-  "platform_info": "Linux-7.0.0-x86_64",
-  "cpu_model": "Intel(R) Core(TM) i5-11400H @ 2.70GHz",
-  "cpu_count": 12,
-  "package_version": "0.20.0",
-  "torch_version": "2.12.0",
-  "transformers_version": "5.12.0",
-  "psutil_version": "6.1.1",
-  "gpu": {
-    "name": "NVIDIA GeForce RTX 3050 Laptop GPU",
-    "driver_version": "535.183.01",
-    "cuda_version": "12.2",
-    "vram_total_mb": 4096,
-    "torch_cuda_available": true,
-    "torch_cuda_device_name": "NVIDIA GeForce RTX 3050 Laptop GPU"
-  }
-}
+llm-bench recommend results/q4km.csv results/q8.csv \
+  --max-vram-mb 4096 \
+  --max-p95-ms 1000 \
+  --max-ttft-ms 200 \
+  --min-sanity 1.0
 ```
 
-**Workload profiles:**
-```bash
-uv run llm-bench --config configs/profile-short-chat.yaml --output results/short-chat.csv
-uv run llm-bench --config configs/profile-summarization.yaml --output results/summarization.csv
-```
-
-**CLI run-time overrides (no YAML editing required):**
-```bash
-# Override request count and concurrency without touching the config file:
-uv run llm-bench --config configs/example.yaml --requests 50 --concurrency 4
-uv run llm-bench --config configs/example.yaml --warmup-requests 0 --requests 5
-```
-
-**llama.cpp backend (GGUF quantized inference, local model):**
-```bash
-# CPU:
-make install-llama-cpp         # uv sync --extra llama-cpp
-# set model: /path/to/model.gguf in configs/llama-cpp-cpu.yaml
-make run-llama-cpp-cpu
-# GPU (pre-built CUDA wheel, no nvcc required):
-make install-llama-cpp-prebuilt
-# set model: /path/to/model.gguf in configs/llama-cpp-gpu.yaml
-make run-llama-cpp-gpu
-```
-
-**Run matrix (multiple configs in one command):**
-```bash
-uv run llm-bench matrix --config configs/matrix-example.yaml
-# Preview without running:
-uv run llm-bench matrix --config configs/matrix-example.yaml --dry-run
-# Compare all results:
-uv run llm-bench compare results/*.csv --sort p95
-```
-
-**Repeated trials with variance reporting:**
-```bash
-# Add repeats: 5 to any config YAML, then run as normal:
-uv run llm-bench --config configs/example-repeats.yaml --output results/repeated.csv
-```
-> Add `repeats: 5` to a config to run the full benchmark loop 5 times. The reported p95
-> latency and tok/s become the median across all repeats. Two new CSV columns
-> (`p95_latency_ms_std`, `tokens_per_second_std`) carry the sample standard deviation
-> across repeats. When `repeats: 1` (the default), CSV output is unchanged.
-```
-p95_latency_ms: 5.02 ± 0.08 (n=5)   ← median ± std dev across 5 repeats
-tokens_per_second: 9968.34 ± 42.17 (n=5)
-```
-
-> Variance captured here is in-process loop jitter (warm cache, loaded model) — not
-> cold-start variance. A low std dev confirms the benchmark is stable enough for
-> single-run comparisons to be meaningful.
-
-**Parameter sweep (cartesian product from one base config):**
-```bash
-uv run llm-bench matrix --config configs/sweep-example.yaml --dry-run
-```
-```
-Matrix: 9 run(s) → results/
-  [1/9] sweep-latency_ms-5-tokens_per_response-25
-        config: configs/example.yaml
-        overrides: mock.latency_ms=5, mock.tokens_per_response=25
-        output: results/sweep-latency_ms-5-tokens_per_response-25.csv
-  [2/9] sweep-latency_ms-5-tokens_per_response-50
-  ...
-```
-
-> Define a sweep grid with `base_config:` + `sweep:` in a matrix YAML instead of
-> writing one config per combination.  Supports top-level and nested backend params
-> (`llama_cpp.n_gpu_layers`, `hf.max_new_tokens`, `mock.latency_ms`, …).
-> See `configs/sweep-example.yaml` and [docs/metrics.md](docs/metrics.md#parameter-sweeps-v017).
-
-**Comparison table (across saved CSVs):**
-```bash
-llm-bench compare mock.csv transformers.csv --sort p95
-```
-```
-| Backend      | Model               | N  | p50 (ms) | p95 (ms) | tok/s  | CPU mem (MB) | CUDA mem (MB) | VRAM mem (MB) | Sanity % | Task Q % |
-|--------------|---------------------|----|----------|----------|--------|--------------|---------------|---------------|----------|----------|
-| mock         | mock-gpt2           | 20 | 5.01     | 5.09     | 9971.2 | 45.2         | N/A           | N/A           | 100.0%   | N/A      |
-| transformers | sshleifer/tiny-gpt2 | 10 | 40.95    | 44.67    | 1211.2 | 721.4        | 0.0           | N/A           | 100.0%   | N/A      |
-```
-
-> `CUDA mem` is PyTorch allocator memory (zero for CPU runs, absent when torch unavailable).
-> `VRAM mem` is driver-level VRAM from `nvidia-smi` — captures llama.cpp GPU usage that
-> `peak_cuda_memory_mb` misses. `N/A` when `nvidia-smi` is not available.
-> `Task Q %` is `task_quality_pass_rate × 100` — fraction of completions that passed the
-> per-prompt rubric checks. `N/A` when no `quality_file` was set in the config.
-
-> **Note**: Each row is one unrepeated benchmark run. p95 at N=10 requests is the single
-> worst-latency observation, not a stable statistical estimate.
-
-**Pareto analysis (identify efficient configurations):**
-```bash
-llm-bench pareto results/quant-q4km-quality.csv results/quant-q8-quality.csv
-```
-```
-| Backend   | Model                                  | N  | p95 (ms) | tok/s | CPU mem (MB) | VRAM mem (MB) | Sanity % | Task Q % | Pareto  |
-|-----------|----------------------------------------|----|----------|-------|--------------|---------------|----------|----------|---------|
-| llama-cpp | .../Llama-3.2-3B-Instruct-Q4_K_M.gguf | 10 | 915.86   | 55.5  | 1291.8       | 2361.0        | 100.0%   | 100.0%   | optimal |
-| llama-cpp | .../Llama-3.2-3B-Instruct-Q8_0.gguf   | 10 | 1226.97  | 41.8  | 708.2        | 3697.0        | 100.0%   | 80.0%    | -       |
-```
-
-> A run is **optimal** when no other run is at least as good on every metric and strictly
-> better on at least one (lower p95, higher tok/s, lower VRAM, higher sanity, higher task
-> quality). Missing optional metrics are excluded from comparisons rather than penalising
-> either run.
-
-> See [docs/metrics.md](docs/metrics.md) for benchmark results and hardware context.
-
-**Constraint-based recommendation (with task quality floor):**
-```bash
-llm-bench recommend results/quant-q4km-quality.csv results/quant-q8-quality.csv \
-    --max-vram-mb 4096 --max-p95-ms 1000 --min-sanity 1.0 --min-quality 1.0
-```
 ```
 Recommendation
 ──────────────────────────────────────────
   Backend  : llama-cpp
   Model    : Llama-3.2-3B-Instruct-Q4_K_M.gguf
-  N        : 10
   p95      : 915.86 ms
   tok/s    : 55.5
+  TTFT p50 : 142.0 ms
   VRAM     : 2361.0 MB
   Sanity   : 100.0%
-  Task Q   : 100.0%
 
 Why: lowest p95 among 1 candidate(s) passing all constraints; Pareto-optimal.
 
 Excluded (1)
 ──────────────────────────────────────────
-  llama-cpp  Llama-3.2-3B-Instruct-Q8_0.gguf  →  p95 latency too high (1227.0 ms > 1000.0 ms)
+  llama-cpp  Llama-3.2-3B-Instruct-Q8_0.gguf  →  p95 latency too high (1227 ms > 1000 ms)
 ```
 
-> Exits with code 1 and lists all excluded runs when no configuration satisfies the constraints.
-> `--min-quality` requires a `quality_file:` in the benchmark config — runs without it have
-> unknown task quality and are excluded when the constraint is active.
+---
+
+## Architecture
+
+```
+configs/*.yaml
+      │
+      ▼
+load_config() → BenchmarkConfig (Pydantic v2)
+      │
+      ▼
+_build_backend() → Backend (ABC)
+                       ├── MockBackend            ← zero-dep, CI-safe
+                       ├── HFBackend              ← transformers + PyTorch
+                       ├── LlamaCppBackend        ← GGUF, n_gpu_layers
+                       ├── OpenAIEndpointBackend  ← HTTP /v1/chat/completions
+                       └── ONNXBackend            ← roadmap
+      │
+      ▼
+run_benchmark(backend, config, prompts)
+      ├── warmup loop   (excluded from metrics)
+      └── benchmark loop → [RequestMetrics]
+                                  │
+                                  ▼
+                           compute_metrics()
+                                  │
+                                  ▼
+                           MetricsReport → CSV / stdout
+                                  │
+                            ┌─────┴─────┐
+                            ▼           ▼
+                         pareto     recommend
+                      (Pareto table) (best config)
+```
+
+---
+
+## Benchmark Results
+
+Full metric definitions: **[docs/metrics.md](docs/metrics.md)** · Curated hardware reports: **[docs/results/](docs/results/)**
+
+### Llama 3.2 3B Instruct — Q4\_K\_M vs Q8\_0 · RTX 3050 (4 GB)
+
+> llama.cpp backend, all 28 layers on GPU, 10 prompts per run.
+
+| Quantization | p50 (ms) | p95 (ms) | tok/s | VRAM (MiB) | Sanity |
+|---|---|---|---|---|---|
+| **Q4\_K\_M** | **904** | **915** | **55.3** | 2361 (58%) | 100% |
+| Q8\_0 | 1185 | 1187 | 42.2 | 3697 (90%) | 100% |
+
+Q4\_K\_M is **1.31× faster** and uses **1.57× less VRAM** — memory bandwidth bound, not compute bound.
+
+### n\_gpu\_layers Sweep — Llama 3.2 3B · RTX 3050
+
+> VRAM scales ~60 MiB/layer after a 655 MiB CUDA-init baseline.
+
+| Layers on GPU | p95 (ms) | tok/s | VRAM (MiB) |
+|---|---|---|---|
+| 0 / 28 (CPU only) | 3093 | 17.5 | 655 |
+| 20 / 28 (partial) | 1420 | 36.6 | 1829 |
+| **28 / 28 (full)** | **984** | **51.4** | **2361** |
+
+Full offload is **3.1× faster** than CPU-only. Partial offload (20/28) captures 71% of the speedup at 78% of the VRAM cost.
+
+### Harness Validation — mock backend
+
+> The mock backend does `time.sleep(latency_ms / 1000)`. These numbers validate measurement
+> plumbing, not inference speed.
+
+| Metric | Value |
+|---|---|
+| p50 latency | ~5 ms |
+| p95 latency | ~5 ms |
+| tokens/sec | ~10,000 (simulated) |
+
+---
+
+## Features
+
+- **YAML config** — backend, model, requests, warmup, prompts file or workload profile
+- **CLI overrides** — `--requests`, `--warmup-requests`, `--concurrency` at run time
+- **Workload profiles** — `short_chat`, `summarization`, `code_completion`, `long_context_smoke`
+- **Run matrix** — cartesian-product sweep from one YAML; one CSV + manifest per combination
+- **Metrics** — p50/p95 latency, TTFT p50/p95 (streaming), tok/s, total tokens, decode throughput
+- **Memory** — CPU RSS, PyTorch CUDA peak, driver-level VRAM via `nvidia-smi`
+- **Lifecycle** — model load time, warmup latency
+- **Variance** — `repeats: N` reports median ± std dev across N trial loops
+- **Sanity checks** — empty, min/mean chars, repeated output, `sanity_pass_rate`
+- **Task quality** — `quality_file:` YAML rubric (`contains_all`, `regex`, `forbidden`, …)
+- **Self-perplexity** — teacher-forcing PPL on generated completions (`transformers` only)
+- **LLM-as-judge** — P(Yes) from fixed yes/no relevance question (`transformers` only)
+- **Pareto analysis** — classifies configs as optimal or dominated across all metrics
+- **Constraint-based recommender** — `--max-vram-mb`, `--max-p95-ms`, `--max-ttft-ms`, `--min-sanity`, `--min-quality`, `--max-perplexity`, `--min-judge`, `--max-load-ms`
+- **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU/GPU fingerprint
+- **Docker image** — mock + transformers CPU published to ghcr.io on each release
+
+---
 
 ## Docker
-
-A pre-built image (mock + transformers CPU) is published to
-[GitHub Container Registry](https://github.com/Happynood/llm-inference-benchmark/pkgs/container/llm-inference-benchmark)
-on each release.
 
 ```bash
 docker pull ghcr.io/happynood/llm-inference-benchmark:latest
 
-# Mock backend — no model download, validates the harness
+# Mock backend — no model download
 docker run --rm \
   -v "$(pwd)/configs:/app/configs" \
   -v "$(pwd)/results:/app/results" \
   ghcr.io/happynood/llm-inference-benchmark:latest \
   --config /app/configs/example.yaml --output /app/results/bench.csv
 
-# Transformers CPU — mount HuggingFace cache to skip re-downloads
+# Transformers CPU — reuse HuggingFace cache
 docker run --rm \
   -v "$(pwd)/configs:/app/configs" \
   -v "$(pwd)/results:/app/results" \
@@ -242,319 +240,63 @@ docker run --rm \
   --config /app/configs/transformers-cpu.yaml --output /app/results/bench-hf.csv
 ```
 
-> For GPU inference (llama.cpp CUDA or transformers CUDA), extend from a `nvidia/cuda`
-> base image and rebuild with `--extra llama-cpp` or set `--gpus all` at runtime.
-
-## Features
-
-- **YAML-driven config** — backend, model, request count, warmup, prompts file or workload profile
-- **CLI run-time overrides** — `--requests N`, `--warmup-requests N`, `--concurrency N` override YAML values without editing the config file
-- **Workload profiles** — named prompt sets (`short_chat`, `summarization`, `code_completion`, `long_context_smoke`) for reproducible cross-experiment comparisons
-- **Run matrix** — define multiple experiment runs in one YAML; `llm-bench matrix` executes all sequentially with one CSV + manifest per run
-- **p50/p95 latency, tokens/sec, total tokens** per run
-- **Peak memory reporting** — CPU RSS via `psutil`; PyTorch allocator CUDA peak via `torch.cuda`; driver-level VRAM via `nvidia-smi` (`peak_vram_memory_mb`) for non-PyTorch GPU backends such as llama.cpp
-- **Output sanity checks** — `empty_output_count`, `min/mean_output_chars`, `repeated_output_count`, `sanity_pass_rate` computed per run; shown as `Sanity %` in compare tables (structural check: was any text produced?)
-- **Task quality evaluation** — optional `quality_file:` in config points to a YAML rubric spec; evaluates each completion against per-prompt `contains_all`, `contains_any`, `forbidden`, `regex`, and `min_chars` checks; shown as `Task Q %` in compare tables (semantic check: did the answer match the expected content?). `Sanity %` and `Task Q %` are independent: a run can be 100% sane but 0% quality if the model produces text that misses the rubric
-- **Self-perplexity quality metric** — optional `measure_perplexity: true` scores a backend's own generated completions via teacher forcing; shown as `PPL` in compare/pareto tables (intrinsic fluency check: how confident was the model in the tokens it generated?). `transformers` backend only; other backends report `None`
-- **LLM-as-judge quality score** — optional `measure_judge: true` asks the model a fixed yes/no question about whether each of its own completions addresses its prompt, scored from the "Yes"/"No" logprobs; shown as `Judge` in compare/pareto tables (self-judged relevance check, not a calibrated preference model). `transformers` backend only; other backends report `None`
-- **Pareto analysis** — `llm-bench pareto` classifies configurations as optimal or dominated across p95 latency, throughput, VRAM, sanity, task quality, perplexity, and judge score; missing optional metrics narrow the comparison rather than crashing
-- **Constraint-based recommender** — `llm-bench recommend` filters CSVs by `--max-vram-mb`, `--max-p95-ms`, `--min-sanity`, `--min-quality`, `--max-perplexity`, `--min-judge`; returns the Pareto-optimal winner or exits 1 with a clear exclusion table
-- **CSV output** + **Markdown comparison table** across multiple runs (`llm-bench compare`)
-- **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU, dep versions, optional GPU fingerprint (`--manifest`)
-- **Optimization-oriented roadmap** — run manifests, workload profiles, quality checks, Pareto
-  analysis, and constraint-based recommendations
-- **Pluggable backends** — add a new backend by subclassing one abstract class
-- **Mock backend** — deterministic, zero-dependency, CI-friendly
-- **Transformers backend** — real CPU/GPU inference via `AutoModelForCausalLM` (optional extra)
-- **llama.cpp backend** — GGUF quantized inference via `llama-cpp-python` (optional extra); GPU via CUDA build
-- **OpenAI-compatible endpoint backend** — benchmark any running server (Ollama, llama.cpp server, LM Studio, vLLM) via the `/v1/chat/completions` HTTP API; no extra dependency; API key read from env variable only
-- **Type-checked and tested** — Pyright (basic) + Ruff + pytest
-- **GitHub Actions CI** — lint + type-check + mock tests on every push
-- **Docker image** — pre-built CPU image (mock + transformers) published to ghcr.io on each release; mount configs and HuggingFace cache as volumes
+---
 
 ## Tech Stack
 
 | Layer | Tool |
-|-------|------|
+|---|---|
 | Runtime | Python 3.11+, [uv](https://docs.astral.sh/uv/) |
-| Config | Pydantic v2, PyYAML |
+| Config validation | Pydantic v2, PyYAML |
 | CLI | Click |
-| Transformers backend | HuggingFace `transformers` + PyTorch (optional) |
-| OpenAI endpoint backend | stdlib `urllib` (no extra dependency) |
+| Transformers backend | HuggingFace `transformers` + PyTorch |
+| OpenAI endpoint backend | stdlib `urllib` |
 | Tests | pytest, pytest-cov |
-| Lint/format | Ruff |
+| Lint / format | Ruff |
 | Type checking | Pyright |
 | CI | GitHub Actions |
-| Container | Docker, GitHub Container Registry (ghcr.io) |
+| Container | Docker, GitHub Container Registry |
 
-## Architecture
-
-```
-configs/*.yaml
-        │
-        ▼
-  load_config() → BenchmarkConfig (Pydantic v2)
-        │
-        ▼
-  _build_backend() → Backend (ABC)
-                         ├── MockBackend            ← zero-dep, CI-safe    ✓ v0.1
-                         ├── HFBackend              ← transformers extra   ✓ v0.2
-                         ├── LlamaCppBackend        ← GGUF quantization    ✓ v0.10
-                         ├── OpenAIEndpointBackend  ← HTTP /v1/chat API    ✓ v0.22
-                         └── ONNXBackend            ← ONNX export          roadmap
-        │
-        ▼
-  run_benchmark(backend, config, prompts)
-        ├── warmup loop   (excluded from metrics)
-        └── benchmark loop → [RequestMetrics]
-                                    │
-                                    ▼
-                             compute_metrics()
-                                    │
-                                    ▼
-                             MetricsReport → CSV / stdout
-```
-
-## Results
-
-Metric definitions and computation notes: [docs/metrics.md](docs/metrics.md).  
-Real-run curated reports: [docs/results/](docs/results/).
-
-### CI / Harness Validation — mock backend
-
-> These numbers validate that the harness measures correctly. They are not inference benchmarks.
-> The mock backend does `time.sleep(latency_ms / 1000)` — no model is loaded.
-
-| Metric | Value | What it validates |
-|--------|-------|-------------------|
-| p50 latency | ~5 ms | configured latency is measured |
-| p95 latency | ~5 ms | p95 ≈ p50 for deterministic mock |
-| tokens/sec | ~10,000 (simulated) | tokens/sec formula is correct |
-
-### Real Hardware — `sshleifer/tiny-gpt2`, i5-11400H + RTX 3050 Laptop
-
-> `sshleifer/tiny-gpt2` is a 2-layer toy model (~117 K params, ~4 MB). It is used to
-> validate that the harness measures **real** inference (actual model weights, tokenizer,
-> CPU/CUDA kernels). Numbers are not representative of production-size models.
-> Full report: [docs/results/gpu-rtx3050-tiny-gpt2.md](docs/results/gpu-rtx3050-tiny-gpt2.md)
-
-| Metric | CPU (float32) | GPU — RTX 3050 (float16) |
-|--------|--------------|--------------------------|
-| p50 latency | 40.95 ms | 59.95 ms |
-| p95 latency | 44.67 ms | 61.86 ms |
-| tokens/sec | 1211.23 | 829.60 |
-| Peak CPU memory | 721 MB | 1383 MB |
-| Peak CUDA memory | 0 MB | **8.82 MB** |
-
-> GPU is slower than CPU here — expected for a 2-layer toy model where kernel-launch overhead
-> exceeds compute savings. Production models (Llama 3 8B Q4) reverse this decisively.
-
-### Real Hardware — Llama 3.2 3B Instruct Q4\_K\_M, i5-11400H + RTX 3050 (llama.cpp)
-
-> 3B parameter production LLM, Q4\_K\_M quantization, 1.9 GB GGUF, all 28 layers on CUDA0.
-> Full report: [docs/results/llama-cpp-rtx3050-llama32-3b.md](docs/results/llama-cpp-rtx3050-llama32-3b.md)
-
-| Metric | CPU (`n_gpu_layers=0`) | GPU — RTX 3050 (`n_gpu_layers=99`) |
-|--------|----------------------|-------------------------------------|
-| p50 latency | 2750.56 ms | 931.18 ms |
-| p95 latency | 2939.79 ms | 939.69 ms |
-| tokens/sec | 18.01 | **53.71** |
-| Peak VRAM | — | 2361 MiB |
-
-> GPU is **2.95× faster** — all 28 model layers offloaded to CUDA0. 53.7 tok/s is
-> real-time capable for interactive inference.
-
-### Real Hardware — n\_gpu\_layers Sweep (0 / 20 / 99), RTX 3050 (llama.cpp)
-
-> Three-point sweep via `llm-bench matrix`. Quantifies the latency and VRAM trade-off
-> from CPU-only to full GPU offload.
-> Full report: [docs/results/llama-cpp-rtx3050-vram-sweep.md](docs/results/llama-cpp-rtx3050-vram-sweep.md)
-
-| `n_gpu_layers` | Layers on GPU | p50 (ms) | p95 (ms) | tok/s | Peak VRAM (MiB) |
-|----------------|---------------|----------|----------|-------|-----------------|
-| 0 | 0 / 28 (CPU only) | 2836.98 | 3092.79 | 17.52 | 655 |
-| 20 | 20 / 28 (partial) | 1357.39 | 1420.41 | 36.59 | 1829 |
-| 99 | 28 / 28 (full) | **970.65** | **984.31** | **51.44** | **2361** |
-
-> VRAM scales **~60 MiB/layer** after a 655 MiB CUDA-init baseline (present even at
-> `n_gpu_layers=0`). Partial offload (20/28 layers) delivers 71% of the full-offload
-> speedup at 78% of the VRAM cost. Full offload uses 2361/4096 MiB (57.6%).
-> `peak_cuda_memory_mb = 0.0` for all llama.cpp runs — use `peak_vram_memory_mb` instead.
-
-### Real Hardware — Q4\_K\_M vs Q8\_0 Quantization Comparison, RTX 3050 (llama.cpp)
-
-> Same model, same prompts, same GPU offload — different quantization.
-> Full report: [docs/results/llama-cpp-rtx3050-quant-compare.md](docs/results/llama-cpp-rtx3050-quant-compare.md)
-
-| Quantization | n\_gpu\_layers | p50 (ms) | p95 (ms) | tok/s | Peak VRAM (MiB) | Sanity % |
-|---|---|---|---|---|---|---|
-| Q4\_K\_M | 99 (28/28) | **904.33** | **915.22** | **55.28** | 2361 (57.6%) | 100% |
-| Q8\_0 | 99 (28/28) | 1185.23 | 1186.75 | 42.21 | 3697 (90.2%) | 100% |
-
-> Q4\_K\_M is **1.31× faster** and uses **1.57× less VRAM** than Q8\_0. The speedup comes from
-> memory bandwidth: fewer bits per weight = fewer bytes read from VRAM per forward pass.
-> Q8\_0 fits in 4 GB but leaves only 399 MiB headroom — practical for benchmarking,
-> tight for interactive use with longer contexts. Sanity % = fraction of non-empty completions
-> (100% = all outputs contained text; repeated outputs due to deterministic cycling are expected).
-
-## How to Run
-
-**Prerequisites**: Python 3.11+, [uv](https://docs.astral.sh/uv/)
-
-```bash
-git clone https://github.com/happynood/llm-inference-benchmark
-cd llm-inference-benchmark
-```
-
-**Mock backend (no downloads):**
-```bash
-make install    # uv sync
-make run        # llm-bench --config configs/example.yaml
-```
-
-**Transformers backend (downloads ~4 MB model on first run):**
-```bash
-make install-hf  # uv sync --extra transformers
-make run-hf      # llm-bench --config configs/transformers-cpu.yaml
-```
-
-**GPU benchmark — transformers backend (requires CUDA):**
-```bash
-make install-hf
-make run-gpu   # llm-bench --config configs/transformers-gpu.yaml ...
-```
-
-**llama.cpp backend — CPU:**
-```bash
-make install-llama-cpp         # uv sync --extra llama-cpp
-# set model: /path/to/model.gguf in configs/llama-cpp-cpu.yaml
-make run-llama-cpp-cpu
-```
-
-**llama.cpp backend — GPU (pre-built CUDA wheel, no nvcc required):**
-```bash
-make install-llama-cpp-prebuilt   # pre-built cu124 wheel, works without a CUDA toolkit
-# set model: /path/to/model.gguf in configs/llama-cpp-gpu.yaml, tune n_gpu_layers
-make run-llama-cpp-gpu
-```
-
-> If you have the CUDA toolkit installed (`nvcc` on PATH), you can also build from source:
-> `make install-llama-cpp-cuda` then `make run-llama-cpp-gpu`.
-
-**Run matrix (all four profiles, one command):**
-```bash
-make run-matrix  # llm-bench matrix --config configs/matrix-example.yaml
-```
-
-**Quantization comparison — Q4\_K\_M vs Q8\_0 (llama.cpp, CUDA):**
-```bash
-# 1. Download both quantizations (Llama 3.2 3B Instruct example):
-#    huggingface-cli download bartowski/Llama-3.2-3B-Instruct-GGUF \
-#      Llama-3.2-3B-Instruct-Q4_K_M.gguf --local-dir ~/models/
-#    huggingface-cli download bartowski/Llama-3.2-3B-Instruct-GGUF \
-#      Llama-3.2-3B-Instruct-Q8_0.gguf   --local-dir ~/models/
-
-# 2. Set model: paths in configs/llama-cpp-q4km-best.yaml and configs/llama-cpp-q8-best.yaml
-
-# 3. Run comparison and print results table:
-make run-quant-compare
-```
-
-**Save a run manifest (environment fingerprint):**
-```bash
-llm-bench --config configs/example.yaml --output results.csv --manifest manifest.json
-```
-
-**Compare multiple runs into a Markdown table:**
-```bash
-llm-bench compare results_a.csv results_b.csv --sort p95
-llm-bench compare results_a.csv results_b.csv --sort backend --output table.md
-```
-
-**Run all checks:**
-```bash
-make test       # pytest -v (mock tests only, CI-safe)
-make test-hf    # pytest -m integration (requires install-hf)
-make lint       # ruff check .
-make format     # ruff format .
-make typecheck  # pyright
-```
+---
 
 ## Limitations
 
-**Mock backend**
-- Produces no real inference — latency is `time.sleep(latency_ms / 1000)`. Numbers validate
-  the harness pipeline only; never compare mock results to real backend results.
+- Mock backend numbers validate harness plumbing only — never compare them to real backends.
+- `sshleifer/tiny-gpt2` results validate the transformers backend; GPU is slower than CPU at 117 K params (kernel-launch overhead dominates). Production models reverse this.
+- `peak_cuda_memory_mb = 0.0` for llama.cpp runs — use `peak_vram_memory_mb` from `nvidia-smi` instead.
+- `measure_perplexity` and `measure_judge` are `transformers` backend only.
+- OpenAI endpoint latency includes network round-trip and server-side queueing.
+- Concurrent execution (`concurrency > 1`) uses `asyncio.to_thread`; CPU-bound backends may not scale linearly.
+- Tested on Linux x86-64 (Ubuntu). macOS should work; Windows untested.
 
-**Real backends (current)**
-- `sshleifer/tiny-gpt2` results are harness validation for the `transformers` backend, not
-  production benchmarks. Llama 3 8B latency is 100–1000× higher.
-- `peak_cpu_memory_mb` is total process RSS including PyTorch runtime (~700 MB base overhead).
-  For tiny models the runtime dominates; for production models the weights dominate.
-- GPU is slower than CPU for tiny-gpt2 — kernel-launch overhead exceeds compute savings at
-  117 K params. Production models reverse this.
-- Concurrent execution (`concurrency > 1`) uses `asyncio.to_thread` to run backend calls in the default thread-pool. Throughput is measured as total output tokens / wall-clock time; p50/p95 latencies reflect individual request timings. Thread-pool contention on CPU-bound backends may limit scaling.
-- Tested on Linux x86-64 (Ubuntu-family). macOS should work; Windows untested.
-- `prompts_file` and `config` paths resolve relative to the working directory. Run from the
-  project root.
-
-**OpenAI-compatible endpoint backend**
-- Reported latency includes network round-trip and server-side queueing overhead and is not
-  directly comparable to in-process backend latency from the `transformers` or `llama-cpp`
-  backends.
-- Token counts are taken from the `usage` field in the server response when present. When
-  the server omits `usage`, counts fall back to a word-count estimate (less accurate).
-- `measure_perplexity` and `measure_judge` are not supported for this backend (no logit
-  access); both report `None`.
-
-**llama.cpp backend**
-- Requires a local GGUF model file — no automatic download. Obtain models from Hugging Face Hub
-  (e.g. `huggingface_hub.hf_hub_download`).
-- GPU support: use `make install-llama-cpp-prebuilt` to install a pre-built CUDA wheel without
-  requiring a CUDA toolkit. The `make run-llama-cpp-gpu` and `make run-quant-compare` targets
-  automatically resolve bundled CUDA library paths so no manual `LD_LIBRARY_PATH` setup is needed
-  (see [docs/results/llama-cpp-rtx3050-llama32-3b.md](docs/results/llama-cpp-rtx3050-llama32-3b.md)).
-- `n_gpu_layers` must be tuned to your VRAM budget. For Llama 3.2 3B Q4\_K\_M, `n_gpu_layers: 99`
-  offloads all 28 layers (2361 MiB VRAM on RTX 3050). For larger models, increase gradually.
-- `peak_cuda_memory_mb` will be `0.0` even on GPU runs — llama-cpp uses its own VRAM allocator,
-  not PyTorch's. Use `peak_vram_memory_mb` instead: it captures driver-level VRAM via `nvidia-smi`
-  automatically during the benchmark loop (blank when `nvidia-smi` is not on `PATH`).
+---
 
 ## Roadmap
 
-**Harness foundation (complete)**
-- [x] Mock backend — CI/harness validation, zero deps (v0.1)
-- [x] `transformers` backend — real CPU inference (v0.2)
-- [x] Peak memory reporting — CPU RSS + CUDA peak (v0.3)
-- [x] Markdown comparison table (`llm-bench compare`) (v0.4)
-- [x] Run manifest and environment fingerprint (`--manifest`) (v0.5)
-- [x] Optional NVIDIA GPU fingerprint in manifest (v0.6)
-- [x] Workload profiles (`short_chat`, `summarization`, `code_completion`, `long_context_smoke`) (v0.7)
-- [x] GPU baseline — RTX 3050 Laptop, tiny-gpt2 (v0.7)
-- [x] Run matrix — multi-experiment YAML (`llm-bench matrix`) (v0.8)
-- [x] CI/real-evidence separation — docs/results/ registry (v0.9)
+**Stable (v1.0.0+)**
+- [x] Mock, transformers, llama.cpp, OpenAI endpoint backends
+- [x] p50/p95 latency, TTFT, tok/s, VRAM, lifecycle, variance metrics
+- [x] Sanity checks, task quality, perplexity, LLM-as-judge
+- [x] Pareto analysis, constraint-based recommender
+- [x] Run matrix, parameter sweeps, workload profiles
+- [x] JSON manifest, CSV output, Markdown comparison table
+- [x] Docker image (ghcr.io), GitHub Actions CI
 
-**Production-size models on 4 GB VRAM (complete)**
-- [x] `llama-cpp-python` backend — GGUF quantization, `n_gpu_layers` for partial GPU offload (v0.10)
-- [x] First real run: Llama 3.2 3B Instruct Q4\_K\_M on RTX 3050 — curated results report (v0.11)
-- [x] n\_gpu\_layers sweep (0 / 20 / 99) via `llm-bench matrix` — VRAM scaling and latency documented
-- [x] Quantization comparison: Q4\_K\_M vs Q8\_0 — 1.31× speed difference, 1.57× VRAM difference documented
-- [x] Output sanity checks — `empty_output_count`, `repeated_output_count`, `sanity_pass_rate` per run (v0.13)
-- [x] Pareto analysis — `llm-bench pareto` classifies configurations as optimal or dominated (v0.14)
-- [x] Constraint-based recommender — `llm-bench recommend` selects the best Pareto-optimal config under explicit VRAM / latency / sanity constraints (v0.15)
-- [x] Task-quality evaluation — optional `quality_file:` YAML rubric spec; `task_quality_pass_rate` / `task_quality_checked_count` in CSV; `Task Q %` in compare/pareto tables; `--min-quality` constraint in `llm-bench recommend` (v0.16)
+**Planned**
+- [ ] `onnxruntime` backend — ONNX export + quantization
+- [ ] `vllm` backend — high-throughput GPU serving
+- [ ] Real parameter sweep evidence: RTX 3050, n\_gpu\_layers × max\_tokens on Llama 3.2 3B
 
-**Optimization analysis (active)**
-- [x] Parameter sweep matrix — `base_config:` + `sweep:` in matrix YAML; cartesian product expansion; dot-path nested overrides (`llama_cpp.n_gpu_layers`, `hf.max_new_tokens`, `mock.latency_ms`); deterministic run names; dry-run preview with override list (v0.17)
-- [x] Lifecycle metrics: model load time (`model_load_ms`) and warmup latency (`warmup_p50_latency_ms`) — wired into CSV and CLI; mock values validate plumbing, not real model load time (v0.18)
-- [x] Repeated-trial variance: `repeats: N` in config runs the benchmark loop N times; reported p95/tok/s become median across repeats; `p95_latency_ms_std` and `tokens_per_second_std` hold sample std dev; single-run CSVs unchanged (v0.19)
-- [x] Self-perplexity quality metric: `measure_perplexity: true` reports corpus-level perplexity of a backend's own generated completions via teacher forcing; `transformers` backend only, `None` elsewhere; `PPL` column in compare/pareto, `--max-perplexity` constraint in recommend (v0.20)
-- [x] LLM-as-judge quality score: `measure_judge: true` asks the model a fixed yes/no question about each of its own completions and scores the mean P(yes) from the "Yes"/"No" logprobs; `transformers` backend only, `None` elsewhere; `Judge` column in compare/pareto, `--min-judge` constraint in recommend (v0.21)
-- [x] OpenAI-compatible endpoint backend — `/v1/chat/completions` HTTP API; works with Ollama, llama.cpp server, LM Studio, vLLM; no extra dependency; API key via env var (v0.22)
-- [x] Lifecycle and variance metrics in analysis commands: `Load (ms)` column in `compare` and `pareto`; `±std` variance in compare p95/tok/s cells; `model_load_ms` as Pareto dimension; `--max-load-ms` constraint in `recommend` (v0.23)
-- [x] `llm-bench --version`; stable public API declared — CLI commands, YAML config schema, CSV format, and manifest format are stable (v1.0.0)
-- [ ] Real parameter sweep evidence: RTX 3050 sweep of n\_gpu\_layers × max\_tokens on Llama 3.2 3B — infrastructure ready, real runs not yet committed
+---
 
-**Additional backends (later)**
-- [ ] `onnxruntime` (ONNX export + quantization)
-- [ ] `vllm` (high-throughput GPU serving)
+## Contributing
+
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for development setup, test instructions, and PR guidelines.
+
+## Security
+
+See **[SECURITY.md](SECURITY.md)** for the vulnerability disclosure policy.
+
+## License
+
+MIT — see [LICENSE](LICENSE).
