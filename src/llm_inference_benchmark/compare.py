@@ -23,6 +23,9 @@ _HEADERS = [
     "p50 (ms)",
     "p95 (ms)",
     "tok/s",
+    "Out tok/s",
+    "In tok",
+    "Out tok",
     "Load (ms)",
     "CPU mem (MB)",
     "CUDA mem (MB)",
@@ -53,6 +56,9 @@ class RunRow:
     model_load_ms: float | None = None  # absent in pre-v0.18 CSVs → None
     p95_latency_ms_std: float | None = None  # absent unless config.repeats > 1
     tokens_per_second_std: float | None = None  # absent unless config.repeats > 1
+    mean_input_tokens: float | None = None  # absent in pre-v0.22 CSVs → None
+    mean_output_tokens: float | None = None  # absent in pre-v0.22 CSVs → None
+    decode_tokens_per_second: float | None = None  # absent in pre-v0.22 CSVs or zero-output runs
 
 
 def _parse_optional_float(row: dict[str, str], key: str, path: str | Path) -> float | None:
@@ -97,6 +103,9 @@ def load_csv(path: str | Path) -> RunRow:
     model_load_ms = _parse_optional_float(row, "model_load_ms", path)
     p95_std = _parse_optional_float(row, "p95_latency_ms_std", path)
     toks_std = _parse_optional_float(row, "tokens_per_second_std", path)
+    mean_input_tokens = _parse_optional_float(row, "mean_input_tokens", path)
+    mean_output_tokens = _parse_optional_float(row, "mean_output_tokens", path)
+    decode_tps = _parse_optional_float(row, "decode_tokens_per_second", path)
 
     return RunRow(
         backend=row["backend"],
@@ -116,6 +125,9 @@ def load_csv(path: str | Path) -> RunRow:
         model_load_ms=model_load_ms,
         p95_latency_ms_std=p95_std,
         tokens_per_second_std=toks_std,
+        mean_input_tokens=mean_input_tokens,
+        mean_output_tokens=mean_output_tokens,
+        decode_tokens_per_second=decode_tps,
     )
 
 
@@ -163,6 +175,9 @@ def render_table(rows: list[RunRow]) -> str:
             f"{r.p50_latency_ms:.2f}",
             fmt_p95(r),
             fmt_toks(r),
+            fmt_optional(r.decode_tokens_per_second),
+            fmt_optional(r.mean_input_tokens),
+            fmt_optional(r.mean_output_tokens),
             fmt_optional(r.model_load_ms),
             f"{r.peak_cpu_memory_mb:.1f}",
             fmt_optional(r.peak_cuda_memory_mb),

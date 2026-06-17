@@ -132,3 +132,32 @@ def test_judge_score_passed_through() -> None:
     assert report.judge_score == pytest.approx(0.85)
     assert report.repeated_output_count == 0
     assert report.sanity_pass_rate == pytest.approx(1.0)
+
+
+# ---------------------------------------------------------------------------
+# Workload composition fields (v0.22)
+# ---------------------------------------------------------------------------
+
+
+def test_mean_token_counts() -> None:
+    results = [
+        RequestMetrics(latency_ms=10.0, input_tokens=4, output_tokens=8),
+        RequestMetrics(latency_ms=10.0, input_tokens=6, output_tokens=12),
+    ]
+    report = compute_metrics(results, backend="mock", model="t")
+    assert report.mean_input_tokens == pytest.approx(5.0)
+    assert report.mean_output_tokens == pytest.approx(10.0)
+
+
+def test_decode_tokens_per_second_equals_tokens_per_second() -> None:
+    results = [RequestMetrics(latency_ms=100.0, input_tokens=5, output_tokens=10)] * 10
+    report = compute_metrics(results, backend="mock", model="t")
+    assert report.decode_tokens_per_second is not None
+    assert report.decode_tokens_per_second == pytest.approx(report.tokens_per_second, rel=1e-9)
+
+
+def test_decode_tokens_per_second_none_when_no_output() -> None:
+    results = [RequestMetrics(latency_ms=10.0, input_tokens=5, output_tokens=0)]
+    report = compute_metrics(results, backend="mock", model="t")
+    assert report.decode_tokens_per_second is None
+    assert report.tokens_per_second == pytest.approx(0.0)

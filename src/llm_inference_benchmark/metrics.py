@@ -50,6 +50,13 @@ class MetricsReport:
     # LLM-as-judge score (v0.21) — None unless config.measure_judge is set and the
     # backend exposes token-level log-probabilities (currently transformers only).
     judge_score: float | None = None
+    # Workload composition (v0.22) — mean token counts per request and decode
+    # throughput.  decode_tokens_per_second == tokens_per_second for sequential
+    # execution; they diverge when concurrent execution tracks prefill separately.
+    # None when no output tokens were produced in the run.
+    mean_input_tokens: float = 0.0
+    mean_output_tokens: float = 0.0
+    decode_tokens_per_second: float | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -72,6 +79,7 @@ def compute_metrics(
         raise ValueError("No results to compute metrics from")
 
     latencies = sorted(r.latency_ms for r in results)
+    n = len(results)
     total_output_tokens = sum(r.output_tokens for r in results)
     total_tokens = sum(r.input_tokens + r.output_tokens for r in results)
     # For sequential execution, sum-of-latencies equals wall-clock time.
@@ -79,7 +87,7 @@ def compute_metrics(
     total_latency_s = sum(latencies) / 1000.0
 
     return MetricsReport(
-        request_count=len(results),
+        request_count=n,
         p50_latency_ms=_percentile_sorted(latencies, 50),
         p95_latency_ms=_percentile_sorted(latencies, 95),
         tokens_per_second=total_output_tokens / total_latency_s if total_latency_s > 0 else 0.0,
@@ -104,6 +112,13 @@ def compute_metrics(
         warmup_p50_latency_ms=warmup_p50_latency_ms,
         perplexity=perplexity,
         judge_score=judge_score,
+        mean_input_tokens=sum(r.input_tokens for r in results) / n,
+        mean_output_tokens=sum(r.output_tokens for r in results) / n,
+        decode_tokens_per_second=(
+            total_output_tokens / total_latency_s
+            if total_output_tokens > 0 and total_latency_s > 0
+            else None
+        ),
     )
 
 
@@ -121,6 +136,11 @@ def _percentile_sorted(sorted_data: list[float], p: int) -> float:
 def _max_optional(values: list[float | None]) -> float | None:
     present = [v for v in values if v is not None]
     return max(present) if present else None
+
+
+def _median_optional(values: list[float | None]) -> float | None:
+    present = [v for v in values if v is not None]
+    return statistics.median(present) if present else None
 
 
 def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
@@ -177,6 +197,9 @@ def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
         warmup_p50_latency_ms=last.warmup_p50_latency_ms,
         perplexity=last.perplexity,
         judge_score=last.judge_score,
+        mean_input_tokens=last.mean_input_tokens,
+        mean_output_tokens=last.mean_output_tokens,
+        decode_tokens_per_second=_median_optional([r.decode_tokens_per_second for r in reports]),
         repeats=n,
         p95_latency_ms_std=statistics.stdev(p95s),
         tokens_per_second_std=statistics.stdev(toks),
