@@ -349,15 +349,35 @@ def validate_config_cmd(config_path: str) -> None:
     type=click.Path(),
     help="Write diff to file instead of stdout",
 )
-def diff_cmd(baseline_csv: str, current_csv: str, output_path: str | None) -> None:
+@click.option(
+    "--fail-on-regression",
+    "fail_threshold",
+    default=None,
+    type=click.FloatRange(min=0.0),
+    metavar="PCT",
+    help=(
+        "Exit 1 if any metric regresses by more than PCT% (use 0 for any regression). "
+        "Useful for CI gating."
+    ),
+)
+def diff_cmd(
+    baseline_csv: str,
+    current_csv: str,
+    output_path: str | None,
+    fail_threshold: float | None,
+) -> None:
     """Compare two benchmark CSVs and show per-metric percentage change.
 
     Shows how key metrics changed between a baseline run and a current run.
     Annotates each metric with ✓ (improvement) or ✗ (regression):
 
         llm-bench diff results/before.csv results/after.csv
+
+    Use --fail-on-regression to gate CI pipelines on metric quality:
+
+        llm-bench diff baseline.csv current.csv --fail-on-regression 5
     """
-    from llm_inference_benchmark.diff import build_diff_table
+    from llm_inference_benchmark.diff import build_diff_table, find_regressions
 
     table = build_diff_table(baseline_csv, current_csv)
     if output_path:
@@ -365,6 +385,15 @@ def diff_cmd(baseline_csv: str, current_csv: str, output_path: str | None) -> No
         click.echo(f"Diff written to {output_path}")
     else:
         click.echo(table)
+
+    if fail_threshold is not None:
+        regressions = find_regressions(baseline_csv, current_csv, fail_threshold)
+        if regressions:
+            click.echo(
+                f"\n✗ Regression check failed (threshold: {fail_threshold:.1f}%): "
+                + ", ".join(regressions)
+            )
+            sys.exit(1)
 
 
 @main.command("profiles")

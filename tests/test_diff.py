@@ -8,7 +8,7 @@ import pytest
 from click.testing import CliRunner
 
 from llm_inference_benchmark.cli import main
-from llm_inference_benchmark.diff import _fmt_change, _pct_change, build_diff_table
+from llm_inference_benchmark.diff import _fmt_change, _pct_change, build_diff_table, find_regressions
 
 FIXTURES = Path(__file__).parent / "fixtures"
 MOCK_CSV = FIXTURES / "mock_run.csv"
@@ -362,4 +362,145 @@ def test_diff_subcommand_one_arg_fails(tmp_path: Path) -> None:
     a = tmp_path / "a.csv"
     _write_csv(a)
     result = CliRunner().invoke(main, ["diff", str(a)])
+    assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# find_regressions — unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_find_regressions_none_when_identical(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    _write_csv(a)
+    assert find_regressions(a, a) == []
+
+
+def test_find_regressions_latency_increase(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_latency_ms="100.0", p95_latency_ms="120.0")
+    _write_csv(b, p50_latency_ms="130.0", p95_latency_ms="150.0")  # slower = regression
+    regressions = find_regressions(a, b)
+    assert "p50 (ms)" in regressions
+    assert "p95 (ms)" in regressions
+
+
+def test_find_regressions_throughput_decrease(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, tokens_per_second="60.0")
+    _write_csv(b, tokens_per_second="50.0")  # lower tok/s = regression
+    assert "tok/s" in find_regressions(a, b)
+
+
+def test_find_regressions_throughput_increase_not_regression(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, tokens_per_second="50.0")
+    _write_csv(b, tokens_per_second="60.0")  # higher = improvement
+    assert "tok/s" not in find_regressions(a, b)
+
+
+def test_find_regressions_threshold_filters_small_change(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p95_latency_ms="100.0")
+    _write_csv(b, p95_latency_ms="103.0")  # 3% regression
+    assert find_regressions(a, b, threshold_pct=5.0) == []  # within tolerance
+    assert "p95 (ms)" in find_regressions(a, b, threshold_pct=0.0)  # caught at 0% threshold
+
+
+def test_find_regressions_optional_metric_absent_both_skipped(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    regressions = find_regressions(a, b)
+    assert "TTFT p50 (ms)" not in regressions
+    assert "VRAM (MB)" not in regressions
+
+
+def test_find_regressions_optional_metric_present(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_ttft_ms="40.0", p95_ttft_ms="80.0")
+    _write_csv(b, p50_ttft_ms="55.0", p95_ttft_ms="90.0")  # higher TTFT = worse
+    regressions = find_regressions(a, b)
+    assert "TTFT p50 (ms)" in regressions
+    assert "TTFT p95 (ms)" in regressions
+
+
+# ---------------------------------------------------------------------------
+# CLI --fail-on-regression
+# ---------------------------------------------------------------------------
+
+
+def test_diff_fail_on_regression_exits_1_when_regressed(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p95_latency_ms="100.0")
+    _write_csv(b, p95_latency_ms="130.0")  # 30% regression
+    result = CliRunner().invoke(main, ["diff", str(a), str(b), "--fail-on-regression", "0"])
+    assert result.exit_code == 1
+    assert "✗ Regression check failed" in result.output
+
+
+def test_diff_fail_on_regression_exits_0_when_no_regression(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p95_latency_ms="100.0")
+    _write_csv(b, p95_latency_ms="90.0")  # improvement
+    result = CliRunner().invoke(main, ["diff", str(a), str(b), "--fail-on-regression", "0"])
+    assert result.exit_code == 0
+    assert "✗ Regression check failed" not in result.output
+
+
+def test_diff_fail_on_regression_threshold_respected(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p95_latency_ms="100.0")
+    _write_csv(b, p95_latency_ms="104.0")  # 4% regression
+    # 5% threshold — 4% is within tolerance
+    result = CliRunner().invoke(main, ["diff", str(a), str(b), "--fail-on-regression", "5"])
+    assert result.exit_code == 0
+    # 3% threshold — 4% exceeds it
+    result2 = CliRunner().invoke(main, ["diff", str(a), str(b), "--fail-on-regression", "3"])
+    assert result2.exit_code == 1
+
+
+def test_diff_fail_on_regression_lists_metrics_in_output(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_latency_ms="100.0", tokens_per_second="60.0")
+    _write_csv(b, p50_latency_ms="120.0", tokens_per_second="50.0")
+    result = CliRunner().invoke(main, ["diff", str(a), str(b), "--fail-on-regression", "0"])
+    assert result.exit_code == 1
+    assert "p50 (ms)" in result.output
+    assert "tok/s" in result.output
+
+
+def test_diff_fail_on_regression_still_prints_table(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p95_latency_ms="100.0")
+    _write_csv(b, p95_latency_ms="130.0")
+    result = CliRunner().invoke(main, ["diff", str(a), str(b), "--fail-on-regression", "0"])
+    assert result.exit_code == 1
+    assert "## Benchmark Diff" in result.output  # table still printed
+
+
+def test_diff_without_flag_exits_0_even_with_regression(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p95_latency_ms="100.0")
+    _write_csv(b, p95_latency_ms="200.0")  # massive regression
+    result = CliRunner().invoke(main, ["diff", str(a), str(b)])
+    assert result.exit_code == 0  # no --fail-on-regression flag = never exits 1
+
+
+def test_diff_fail_on_regression_negative_threshold_rejected(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    _write_csv(a)
+    result = CliRunner().invoke(main, ["diff", str(a), str(a), "--fail-on-regression", "-1"])
     assert result.exit_code != 0

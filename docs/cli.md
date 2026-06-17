@@ -175,6 +175,7 @@ llm-bench diff [OPTIONS] BASELINE_CSV CURRENT_CSV
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--output PATH` | path | — | Write diff table to file instead of stdout |
+| `--fail-on-regression PCT` | float ≥ 0 | — | Exit 1 if any metric regresses by more than PCT% |
 
 Each metric row shows the baseline value, the current value, and the percentage change.
 Changes are annotated with **✓** (improvement) or **✗** (regression) based on direction
@@ -184,11 +185,26 @@ load time, quality, perplexity, judge) are omitted when absent from both runs, o
 with `N/A` when only one side has data. Changes smaller than 0.05 % are displayed without
 an annotation.
 
+**`--fail-on-regression`** makes `llm-bench diff` usable as a CI gate. Pass `0` to fail
+on any regression, or a positive number to tolerate small changes:
+
+```bash
+# fail if any metric regresses at all
+llm-bench diff baseline.csv current.csv --fail-on-regression 0
+
+# tolerate up to 5% degradation (noise-tolerant CI)
+llm-bench diff baseline.csv current.csv --fail-on-regression 5
+```
+
+The diff table is always printed before the exit code check, so the regression detail is
+visible in CI logs regardless of outcome.
+
 **Example**
 
 ```bash
 llm-bench diff results/before.csv results/after.csv
 llm-bench diff results/before.csv results/after.csv --output diff.md
+llm-bench diff results/before.csv results/after.csv --fail-on-regression 5
 ```
 
 ```
