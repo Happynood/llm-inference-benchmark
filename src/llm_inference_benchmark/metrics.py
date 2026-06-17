@@ -44,6 +44,10 @@ class MetricsReport:
     repeats: int | None = None
     p95_latency_ms_std: float | None = None
     tokens_per_second_std: float | None = None
+    # TTFT (v0.23) — None unless the backend was run in streaming mode (currently
+    # openai_endpoint with stream=True only).
+    p50_ttft_ms: float | None = None
+    p95_ttft_ms: float | None = None
     # Self-perplexity (v0.20) — None unless config.measure_perplexity is set and the
     # backend exposes token-level log-probabilities (currently transformers only).
     perplexity: float | None = None
@@ -74,6 +78,7 @@ def compute_metrics(
     perplexity: float | None = None,
     judge_score: float | None = None,
     wall_clock_elapsed_s: float | None = None,
+    ttft_values: list[float] | None = None,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -89,6 +94,8 @@ def compute_metrics(
     total_latency_s = (
         wall_clock_elapsed_s if wall_clock_elapsed_s is not None else sum(latencies) / 1000.0
     )
+
+    sorted_ttft = sorted(ttft_values) if ttft_values else None
 
     return MetricsReport(
         request_count=n,
@@ -114,6 +121,8 @@ def compute_metrics(
         ),
         model_load_ms=model_load_ms,
         warmup_p50_latency_ms=warmup_p50_latency_ms,
+        p50_ttft_ms=_percentile_sorted(sorted_ttft, 50) if sorted_ttft else None,
+        p95_ttft_ms=_percentile_sorted(sorted_ttft, 95) if sorted_ttft else None,
         perplexity=perplexity,
         judge_score=judge_score,
         mean_input_tokens=sum(r.input_tokens for r in results) / n,
@@ -199,6 +208,8 @@ def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
         task_quality_checked_count=last.task_quality_checked_count,
         model_load_ms=first.model_load_ms,
         warmup_p50_latency_ms=last.warmup_p50_latency_ms,
+        p50_ttft_ms=_median_optional([r.p50_ttft_ms for r in reports]),
+        p95_ttft_ms=_median_optional([r.p95_ttft_ms for r in reports]),
         perplexity=last.perplexity,
         judge_score=last.judge_score,
         mean_input_tokens=last.mean_input_tokens,

@@ -378,6 +378,154 @@ def test_full_run_benchmark_with_mock(tmp_prompts: Path) -> None:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Streaming (stream=True) — SSE path
+# ---------------------------------------------------------------------------
+
+
+def _make_streaming_mock_urlopen(
+    chunks: list[str],
+    usage: dict | None = None,
+) -> MagicMock:
+    """Build a urlopen mock whose response yields SSE lines via readline()."""
+    lines: list[bytes] = []
+    for content in chunks:
+        data: dict = {"choices": [{"delta": {"content": content}, "finish_reason": None}]}
+        lines.append(f"data: {json.dumps(data)}\n".encode())
+    if usage is not None:
+        final: dict = {"choices": [{"delta": {}, "finish_reason": "stop"}], "usage": usage}
+        lines.append(f"data: {json.dumps(final)}\n".encode())
+    lines.append(b"data: [DONE]\n")
+    lines.append(b"")  # EOF sentinel
+
+    line_iter = iter(lines)
+    response = MagicMock()
+    response.readline.side_effect = lambda: next(line_iter, b"")
+    response.__enter__.return_value = response
+    response.__exit__.return_value = False
+    return MagicMock(return_value=response)
+
+
+def test_streaming_returns_ttft() -> None:
+    mock_urlopen = _make_streaming_mock_urlopen(["Hello", " world"])
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(
+            base_url=_BASE_URL, model=_MODEL, stream=True
+        )
+        result = backend.generate("hi")
+    assert result.ttft_ms is not None
+    assert result.ttft_ms > 0
+
+
+def test_streaming_assembles_full_text() -> None:
+    mock_urlopen = _make_streaming_mock_urlopen(["Hello", ",", " world", "!"])
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(
+            base_url=_BASE_URL, model=_MODEL, stream=True
+        )
+        result = backend.generate("hi")
+    assert result.text == "Hello, world!"
+
+
+def test_streaming_uses_usage_tokens_when_present() -> None:
+    usage = {"prompt_tokens": 4, "completion_tokens": 6, "total_tokens": 10}
+    mock_urlopen = _make_streaming_mock_urlopen(["one two three"], usage=usage)
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(
+            base_url=_BASE_URL, model=_MODEL, stream=True
+        )
+        result = backend.generate("hello there")
+    assert result.input_tokens == 4
+    assert result.output_tokens == 6
+
+
+def test_streaming_falls_back_to_word_count_when_no_usage() -> None:
+    mock_urlopen = _make_streaming_mock_urlopen(["one two three four"])
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(
+            base_url=_BASE_URL, model=_MODEL, stream=True
+        )
+        result = backend.generate("two words")
+    assert result.input_tokens == 2
+    assert result.output_tokens == 4
+
+
+def test_streaming_sends_stream_true_in_payload() -> None:
+    mock_urlopen = _make_streaming_mock_urlopen(["ok"])
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(
+            base_url=_BASE_URL, model=_MODEL, stream=True
+        )
+        backend.generate("hi")
+    request = mock_urlopen.call_args.args[0]
+    payload = json.loads(request.data.decode("utf-8"))
+    assert payload.get("stream") is True
+
+
+def test_non_streaming_does_not_send_stream_in_payload() -> None:
+    mock_urlopen = _make_mock_urlopen(_make_chat_response())
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(base_url=_BASE_URL, model=_MODEL)
+        backend.generate("hi")
+    request = mock_urlopen.call_args.args[0]
+    payload = json.loads(request.data.decode("utf-8"))
+    assert "stream" not in payload
+
+
+def test_non_streaming_ttft_is_none() -> None:
+    mock_urlopen = _make_mock_urlopen(_make_chat_response())
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(base_url=_BASE_URL, model=_MODEL)
+        result = backend.generate("hi")
+    assert result.ttft_ms is None
+
+
+def test_streaming_ttft_is_none_when_no_content_chunks() -> None:
+    mock_urlopen = _make_streaming_mock_urlopen([])
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(
+            base_url=_BASE_URL, model=_MODEL, stream=True
+        )
+        result = backend.generate("hi")
+    assert result.ttft_ms is None
+
+
+def test_streaming_skips_empty_deltas_for_ttft() -> None:
+    """First delta is empty string; TTFT must come from the second non-empty one."""
+    mock_urlopen = _make_streaming_mock_urlopen(["", "actual content"])
+    with patch.object(openai_endpoint_mod, "urlopen", mock_urlopen):
+        backend = openai_endpoint_mod.OpenAIEndpointBackend(
+            base_url=_BASE_URL, model=_MODEL, stream=True
+        )
+        result = backend.generate("hi")
+    assert result.ttft_ms is not None
+    assert result.text == "actual content"
+
+
+def test_streaming_default_is_off() -> None:
+    backend = openai_endpoint_mod.OpenAIEndpointBackend(base_url=_BASE_URL, model=_MODEL)
+    assert backend._stream is False
+
+
+def test_openai_endpoint_config_stream_defaults_false() -> None:
+    from llm_inference_benchmark.config import OpenAIEndpointConfig
+
+    cfg = OpenAIEndpointConfig()
+    assert cfg.stream is False
+
+
+def test_openai_endpoint_config_stream_can_be_enabled() -> None:
+    from llm_inference_benchmark.config import OpenAIEndpointConfig
+
+    cfg = OpenAIEndpointConfig(stream=True)
+    assert cfg.stream is True
+
+
+# ---------------------------------------------------------------------------
+# Integration test (requires a real running OpenAI-compatible server)
+# ---------------------------------------------------------------------------
+
+
 @pytest.mark.integration
 def test_integration_real_endpoint() -> None:
     """Real HTTP call — set OPENAI_ENDPOINT_BASE_URL to a running server's base URL."""

@@ -204,3 +204,20 @@ def test_run_benchmark_concurrent_throughput_uses_wall_clock(tmp_prompts: Path) 
     # should be considerably higher than the sequential baseline.
     sequential_tps = (4 * 10) / (4 * 0.05)  # 200 tok/s
     assert report.tokens_per_second > sequential_tps * 1.5
+
+
+def test_run_benchmark_collects_ttft_from_mock(tmp_prompts: Path) -> None:
+    backend = MockBackend(model="test", latency_ms=5, tokens_per_response=10, ttft_ms=2.5)
+    cfg = BenchmarkConfig(requests=4, warmup_requests=0, prompts_file=str(tmp_prompts))
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.p50_ttft_ms is not None
+    assert report.p95_ttft_ms is not None
+    assert report.p50_ttft_ms == pytest.approx(2.5)
+
+
+def test_run_benchmark_ttft_none_when_backend_does_not_provide_it(tmp_prompts: Path) -> None:
+    backend = MockBackend(model="test", latency_ms=5, tokens_per_response=10)
+    cfg = BenchmarkConfig(requests=4, warmup_requests=0, prompts_file=str(tmp_prompts))
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.p50_ttft_ms is None
+    assert report.p95_ttft_ms is None

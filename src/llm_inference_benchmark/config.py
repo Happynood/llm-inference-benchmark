@@ -34,6 +34,7 @@ class OpenAIEndpointConfig(BaseModel):
     max_tokens: int = Field(default=50, ge=1)
     temperature: float = Field(default=0.0, ge=0.0)
     timeout_s: float = Field(default=60.0, gt=0.0)
+    stream: bool = False
 
 
 class BenchmarkConfig(BaseModel):

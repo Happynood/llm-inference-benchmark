@@ -544,5 +544,6 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             temperature=cfg.openai.temperature,
             timeout_s=cfg.openai.timeout_s,
             api_key_env=cfg.openai.api_key_env,
+            stream=cfg.openai.stream,
         )
     raise ValueError(f"Unknown backend: {cfg.backend!r}")
