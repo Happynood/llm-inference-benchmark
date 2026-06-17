@@ -460,6 +460,7 @@ def test_generate_streaming_ttft_ms_is_positive() -> None:
     ):
         backend = llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, stream=True)
         result = backend.generate("prompt")
+        assert result.ttft_ms is not None
         assert result.ttft_ms > 0
 
 
