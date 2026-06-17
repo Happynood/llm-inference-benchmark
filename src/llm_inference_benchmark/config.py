@@ -26,6 +26,7 @@ class LlamaCppBackendConfig(BaseModel):
     temperature: float = Field(default=0.0, ge=0.0)
     n_threads: int | None = None
     verbose: bool = False
+    stream: bool = False
 
 
 class OpenAIEndpointConfig(BaseModel):

@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- TTFT (time-to-first-token) measurement for the `llama-cpp` backend: set `stream: true`
+  under `llama_cpp:` in the config to enable streaming mode. `p50_ttft_ms` and `p95_ttft_ms`
+  are populated in CSV output, matching the existing `transformers` and `openai` backend
+  behaviour. Input tokens are counted via the model's tokenizer; output tokens are counted
+  as non-empty streaming chunks (each chunk = one decoded token). Blocking mode (`stream:
+  false`, the default) is unchanged.
 - TTFT (time-to-first-token) measurement for the `transformers` backend: `p50_ttft_ms` and
   `p95_ttft_ms` are now populated for HuggingFace runs alongside the existing OpenAI-endpoint
   metrics. Implemented via a `LogitsProcessor` hook — no threading, token counts unchanged.

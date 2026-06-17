@@ -320,6 +320,7 @@ def validate_config_cmd(config_path: str) -> None:
         click.echo(f"  llama_cpp.n_ctx       : {cfg.llama_cpp.n_ctx}")
         click.echo(f"  llama_cpp.n_gpu_layers: {cfg.llama_cpp.n_gpu_layers}")
         click.echo(f"  llama_cpp.max_tokens  : {cfg.llama_cpp.max_tokens}")
+        click.echo(f"  llama_cpp.stream      : {cfg.llama_cpp.stream}")
     elif cfg.backend == "openai":
         click.echo(f"  openai.base_url  : {cfg.openai.base_url}")
         click.echo(f"  openai.max_tokens: {cfg.openai.max_tokens}")
@@ -533,6 +534,7 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             temperature=cfg.llama_cpp.temperature,
             n_threads=cfg.llama_cpp.n_threads,
             verbose=cfg.llama_cpp.verbose,
+            stream=cfg.llama_cpp.stream,
         )
     if cfg.backend == "openai":
         from llm_inference_benchmark.backends.openai_endpoint import OpenAIEndpointBackend
