@@ -29,6 +29,7 @@ _PARETO_HEADERS = [
     "p95 (ms)",
     "tok/s",
     "Load (ms)",
+    "TTFT p50 (ms)",
     "CPU mem (MB)",
     "VRAM mem (MB)",
     "Sanity %",
@@ -63,6 +64,8 @@ def dominates(a: RunRow, b: RunRow) -> bool:
         comparisons.append((a.judge_score, b.judge_score, False))
     if a.model_load_ms is not None and b.model_load_ms is not None:
         comparisons.append((a.model_load_ms, b.model_load_ms, True))
+    if a.p50_ttft_ms is not None and b.p50_ttft_ms is not None:
+        comparisons.append((a.p50_ttft_ms, b.p50_ttft_ms, True))
 
     strictly_better = False
     for a_val, b_val, minimise in comparisons:
@@ -116,6 +119,7 @@ def render_pareto_table(classified: list[tuple[RunRow, bool]]) -> str:
             f"{r.p95_latency_ms:.2f}",
             f"{r.tokens_per_second:.1f}",
             fmt_opt(r.model_load_ms),
+            fmt_opt(r.p50_ttft_ms),
             f"{r.peak_cpu_memory_mb:.1f}",
             fmt_opt(r.peak_vram_memory_mb),
             fmt_rate(r.sanity_pass_rate),

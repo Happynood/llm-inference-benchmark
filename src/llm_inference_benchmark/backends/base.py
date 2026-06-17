@@ -10,6 +10,7 @@ class GenerationResult:
     input_tokens: int
     output_tokens: int
     latency_ms: float
+    ttft_ms: float | None = None
 
 
 class Backend(ABC):

@@ -509,3 +509,45 @@ def test_render_table_decode_tps_na_for_old_rows() -> None:
     table = render_table([row])
     assert "Out tok/s" in table
     assert "N/A" in table  # decode_tokens_per_second is None for old CSV
+
+
+def test_load_csv_ttft_columns_blank_for_old_csv() -> None:
+    row = load_csv(MOCK_CSV)
+    assert row.p50_ttft_ms is None
+    assert row.p95_ttft_ms is None
+
+
+def test_load_csv_parses_ttft_columns(tmp_path: Path) -> None:
+    header = (
+        "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,total_tokens,"
+        "backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,peak_vram_memory_mb,"
+        "empty_output_count,min_output_chars,mean_output_chars,repeated_output_count,"
+        "sanity_pass_rate,task_quality_pass_rate,task_quality_checked_count,"
+        "model_load_ms,warmup_p50_latency_ms,p50_ttft_ms,p95_ttft_ms,"
+        "repeats,p95_latency_ms_std,tokens_per_second_std,perplexity,judge_score,"
+        "mean_input_tokens,mean_output_tokens,decode_tokens_per_second,timestamp\n"
+    )
+    data = (
+        "10,12.5,18.0,80.0,100,openai,my-model,200.0,,,"
+        "0,5,20.0,0,1.0,,,,"
+        ",8.3,15.1,"
+        ",,,,,"
+        "5.0,10.0,,2026-01-01T00:00:00+00:00\n"
+    )
+    p = tmp_path / "ttft.csv"
+    p.write_text(header + data)
+    row = load_csv(p)
+    assert row.p50_ttft_ms == pytest.approx(8.3)
+    assert row.p95_ttft_ms == pytest.approx(15.1)
+
+
+def test_render_table_shows_ttft_headers() -> None:
+    table = render_table(_ROWS[:1])
+    assert "TTFT p50 (ms)" in table
+    assert "TTFT p95 (ms)" in table
+
+
+def test_render_table_shows_na_for_missing_ttft() -> None:
+    row = load_csv(MOCK_CSV)
+    table = render_table([row])
+    assert "TTFT p50 (ms)" in table

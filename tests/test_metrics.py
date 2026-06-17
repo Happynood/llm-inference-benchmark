@@ -171,3 +171,27 @@ def test_wall_clock_elapsed_overrides_sum_of_latencies() -> None:
     concurrent = compute_metrics(results, backend="mock", model="t", wall_clock_elapsed_s=0.1)
     assert seq.tokens_per_second == pytest.approx(100.0)
     assert concurrent.tokens_per_second == pytest.approx(400.0)
+
+
+def test_compute_metrics_with_ttft_values() -> None:
+    results = [RequestMetrics(latency_ms=100.0, input_tokens=5, output_tokens=10)] * 4
+    ttft = [20.0, 30.0, 25.0, 35.0]
+    report = compute_metrics(results, backend="mock", model="t", ttft_values=ttft)
+    assert report.p50_ttft_ms is not None
+    assert report.p95_ttft_ms is not None
+    assert report.p50_ttft_ms == pytest.approx(27.5)
+    assert report.p95_ttft_ms == pytest.approx(34.25)
+
+
+def test_compute_metrics_without_ttft_returns_none() -> None:
+    results = [RequestMetrics(latency_ms=100.0, input_tokens=5, output_tokens=10)]
+    report = compute_metrics(results, backend="mock", model="t")
+    assert report.p50_ttft_ms is None
+    assert report.p95_ttft_ms is None
+
+
+def test_compute_metrics_empty_ttft_list_returns_none() -> None:
+    results = [RequestMetrics(latency_ms=100.0, input_tokens=5, output_tokens=10)]
+    report = compute_metrics(results, backend="mock", model="t", ttft_values=[])
+    assert report.p50_ttft_ms is None
+    assert report.p95_ttft_ms is None
