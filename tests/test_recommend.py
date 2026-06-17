@@ -35,6 +35,7 @@ def _row(
     cpu: float = 500.0,
     ppl: float | None = None,
     judge: float | None = None,
+    ttft: float | None = None,
 ) -> RunRow:
     return RunRow(
         backend=backend,
@@ -49,6 +50,7 @@ def _row(
         sanity_pass_rate=sanity,
         perplexity=ppl,
         judge_score=judge,
+        p50_ttft_ms=ttft,
     )
 
 
@@ -452,3 +454,38 @@ def test_cli_recommend_min_judge_constraint(tmp_path: Path) -> None:
     result = CliRunner().invoke(main, ["recommend", str(p), "--min-judge", "0.5"])
     assert result.exit_code != 0
     assert "judge score too low" in result.output
+
+
+# ---------------------------------------------------------------------------
+# max_ttft_ms constraint
+# ---------------------------------------------------------------------------
+
+
+def test_apply_constraints_max_ttft_filters() -> None:
+    rows = [_row(model="fast-stream", ttft=50.0), _row(model="slow-stream", ttft=300.0)]
+    candidates, excluded = apply_constraints(rows, Constraints(max_ttft_ms=100.0))
+    assert len(candidates) == 1
+    assert candidates[0].model == "fast-stream"
+    assert "TTFT too high" in excluded[0].reason
+    assert "300.0 ms" in excluded[0].reason
+
+
+def test_apply_constraints_missing_ttft_excluded_when_constrained() -> None:
+    row = _row(ttft=None)
+    candidates, excluded = apply_constraints([row], Constraints(max_ttft_ms=100.0))
+    assert candidates == []
+    assert "TTFT unknown" in excluded[0].reason
+
+
+def test_apply_constraints_missing_ttft_ok_when_unconstrained() -> None:
+    row = _row(ttft=None)
+    candidates, excluded = apply_constraints([row], Constraints())
+    assert len(candidates) == 1
+    assert excluded == []
+
+
+def test_apply_constraints_ttft_below_threshold_passes() -> None:
+    row = _row(ttft=80.0)
+    candidates, excluded = apply_constraints([row], Constraints(max_ttft_ms=100.0))
+    assert len(candidates) == 1
+    assert excluded == []

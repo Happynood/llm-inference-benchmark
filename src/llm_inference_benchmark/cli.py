@@ -223,6 +223,12 @@ def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None) -> None:
     help="Maximum model load time in ms (requires v0.18+ benchmark run)",
 )
 @click.option(
+    "--max-ttft-ms",
+    type=float,
+    default=None,
+    help="Maximum time-to-first-token p50 in ms (requires stream=True benchmark run)",
+)
+@click.option(
     "--output",
     "output_path",
     default=None,
@@ -238,6 +244,7 @@ def recommend_cmd(
     max_perplexity: float | None,
     min_judge: float | None,
     max_load_ms: float | None,
+    max_ttft_ms: float | None,
     output_path: str | None,
 ) -> None:
     """Recommend the best benchmark configuration under explicit constraints.
@@ -260,6 +267,7 @@ def recommend_cmd(
         max_perplexity=max_perplexity,
         min_judge=min_judge,
         max_load_ms=max_load_ms,
+        max_ttft_ms=max_ttft_ms,
     )
     text, has_winner = build_recommendation(list(csv_files), constraints)
     if output_path:

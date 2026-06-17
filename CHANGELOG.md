@@ -10,6 +10,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [1.1.0] — 2026-06-17
 
 ### Added
+- `--max-ttft-ms` constraint for `llm-bench recommend`: exclude runs where TTFT p50 exceeds the
+  threshold. Runs without a TTFT reading are excluded when the constraint is active (requires
+  `stream: true` backend run). Consistent with the `--max-load-ms` pattern added in v0.23.
 - TTFT (time-to-first-token) measurement for the `llama-cpp` backend: set `stream: true`
   under `llama_cpp:` in the config to enable streaming mode. `p50_ttft_ms` and `p95_ttft_ms`
   are populated in CSV output, matching the existing `transformers` and `openai` backend

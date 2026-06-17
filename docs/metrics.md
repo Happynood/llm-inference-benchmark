@@ -476,7 +476,7 @@ is the sole Pareto-optimal configuration in this two-run comparison.
 
 ## Constraint-based Recommender
 
-`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N] [--min-quality N] [--max-perplexity N] [--min-judge N] [--max-load-ms N]`
+`llm-bench recommend results/*.csv [--max-vram-mb N] [--max-p95-ms N] [--min-sanity N] [--min-quality N] [--max-perplexity N] [--min-judge N] [--max-load-ms N] [--max-ttft-ms N]`
 reads saved benchmark CSVs, filters them against explicit constraints, and recommends
 the best configuration.
 
@@ -491,6 +491,7 @@ the best configuration.
 | `--max-perplexity` | `perplexity` | value > threshold, or value missing when flag is set |
 | `--min-judge` | `judge_score` | value < threshold, or value missing when flag is set |
 | `--max-load-ms` | `model_load_ms` | value > threshold, or value missing when flag is set (v0.23) |
+| `--max-ttft-ms` | `p50_ttft_ms` | value > threshold, or value missing when flag is set (v1.1.0, requires `stream: true`) |
 
 All constraints are optional.  With no flags every run is a candidate.
 

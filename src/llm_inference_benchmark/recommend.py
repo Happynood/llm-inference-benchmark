@@ -21,6 +21,12 @@ Constraint semantics:
   - min_judge     : exclude runs where judge_score < threshold;
                     also excludes runs with a missing judge_score reading
                     when the constraint is active
+  - max_load_ms   : exclude runs where model_load_ms > threshold;
+                    also excludes runs with a missing load time when
+                    the constraint is active
+  - max_ttft_ms   : exclude runs where p50_ttft_ms > threshold;
+                    also excludes runs with a missing TTFT reading when
+                    the constraint is active (requires stream=True backend run)
   - No constraint set for an optional metric → missing value is allowed.
 """
 
@@ -42,6 +48,7 @@ class Constraints:
     max_perplexity: float | None = None
     min_judge: float | None = None
     max_load_ms: float | None = None
+    max_ttft_ms: float | None = None
 
 
 @dataclass(frozen=True)
@@ -109,6 +116,12 @@ def _check_row(row: RunRow, constraints: Constraints) -> str | None:
                 f"load time too high "
                 f"({row.model_load_ms:.1f} ms > {constraints.max_load_ms:.1f} ms)"
             )
+
+    if constraints.max_ttft_ms is not None:
+        if row.p50_ttft_ms is None:
+            return f"TTFT unknown (constraint requires ≤ {constraints.max_ttft_ms:.0f} ms)"
+        if row.p50_ttft_ms > constraints.max_ttft_ms:
+            return f"TTFT too high ({row.p50_ttft_ms:.1f} ms > {constraints.max_ttft_ms:.1f} ms)"
 
     return None
 
@@ -212,6 +225,7 @@ def render_recommendation(result: RecommendationResult) -> str:
             f"  p95      : {w.p95_latency_ms:.2f} ms",
             f"  tok/s    : {w.tokens_per_second:.1f}",
             f"  Load     : {_fmt_ms(w.model_load_ms)}",
+            f"  TTFT p50 : {_fmt_ms(w.p50_ttft_ms)}",
             f"  VRAM     : {_fmt_vram(w.peak_vram_memory_mb)}",
             f"  Sanity   : {_fmt_rate(w.sanity_pass_rate)}",
             f"  Task Q   : {_fmt_rate(w.task_quality_pass_rate)}",
