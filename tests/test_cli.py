@@ -166,3 +166,21 @@ def test_validate_config_llama_cpp_backend(tmp_path: Path, tmp_prompts: Path) ->
     assert result.exit_code == 0, result.output
     assert "llama_cpp.n_ctx" in result.output
     assert "OK" in result.output
+
+
+def test_validate_config_shows_concurrency(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["validate-config", "--config", str(tmp_config)])
+    assert result.exit_code == 0, result.output
+    assert "concurrency" in result.output
+
+
+def test_validate_config_concurrency_gt1_fails(tmp_path: Path, tmp_prompts: Path) -> None:
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"backend: mock\nmodel: x\nrequests: 2\nwarmup_requests: 0\n"
+        f"concurrency: 2\nprompts_file: {tmp_prompts}\n"
+        f"mock:\n  latency_ms: 0\n  tokens_per_response: 5\n"
+    )
+    result = CliRunner().invoke(main, ["validate-config", "--config", str(cfg)])
+    assert result.exit_code != 0
+    assert "not yet supported" in result.output

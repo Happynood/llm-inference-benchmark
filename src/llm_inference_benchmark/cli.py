@@ -256,6 +256,7 @@ def validate_config_cmd(config_path: str) -> None:
     click.echo(f"  backend          : {cfg.backend}")
     click.echo(f"  model            : {cfg.model}")
     click.echo(f"  requests         : {cfg.requests}")
+    click.echo(f"  concurrency      : {cfg.concurrency}")
     click.echo(f"  warmup_requests  : {cfg.warmup_requests}")
     click.echo(f"  repeats          : {cfg.repeats}")
     click.echo(f"  prompts_file     : {cfg.resolve_prompts_file()}")

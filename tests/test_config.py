@@ -36,3 +36,13 @@ def test_config_rejects_zero_requests() -> None:
 def test_config_rejects_negative_concurrency() -> None:
     with pytest.raises(ValidationError):
         BenchmarkConfig(concurrency=0)
+
+
+def test_config_accepts_concurrency_1() -> None:
+    cfg = BenchmarkConfig(concurrency=1)
+    assert cfg.concurrency == 1
+
+
+def test_config_rejects_concurrency_gt_1() -> None:
+    with pytest.raises(ValidationError, match="not yet supported"):
+        BenchmarkConfig(concurrency=2)
