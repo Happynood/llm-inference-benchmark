@@ -59,6 +59,7 @@ class HFBackend(Backend):
         device: str = "cpu",
         torch_dtype: str = "float32",
         do_sample: bool = False,
+        seed: int | None = None,
     ) -> None:
         if not _AVAILABLE:
             raise ImportError(
@@ -87,12 +88,18 @@ class HFBackend(Backend):
         self._device = device
         self._max_new_tokens = max_new_tokens
         self._do_sample = do_sample
+        self._seed = seed
 
     @property
     def name(self) -> str:
         return "transformers"
 
     def generate(self, prompt: str) -> GenerationResult:
+        if self._seed is not None:
+            torch.manual_seed(self._seed)
+            if torch.cuda.is_available():
+                torch.cuda.manual_seed_all(self._seed)
+
         inputs = self._tokenizer(prompt, return_tensors="pt").to(self._device)
         input_len: int = inputs["input_ids"].shape[1]
 

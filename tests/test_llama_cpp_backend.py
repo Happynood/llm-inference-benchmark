@@ -161,6 +161,26 @@ def test_constructor_n_threads_omitted_when_none() -> None:
         assert "n_threads" not in cls.call_args.kwargs
 
 
+def test_constructor_seed_omitted_when_none() -> None:
+    cls, _ = _make_mock_llama()
+    with (
+        patch.object(llama_cpp_mod, "_AVAILABLE", True),
+        patch.object(llama_cpp_mod, "Llama", cls),
+    ):
+        llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, seed=None)
+        assert "seed" not in cls.call_args.kwargs
+
+
+def test_constructor_seed_passed_when_set() -> None:
+    cls, _ = _make_mock_llama()
+    with (
+        patch.object(llama_cpp_mod, "_AVAILABLE", True),
+        patch.object(llama_cpp_mod, "Llama", cls),
+    ):
+        llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, seed=42)
+        assert cls.call_args.kwargs["seed"] == 42
+
+
 def test_constructor_n_threads_passed_when_set() -> None:
     cls, _ = _make_mock_llama()
     with (
