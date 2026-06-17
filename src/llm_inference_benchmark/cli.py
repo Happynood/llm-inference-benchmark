@@ -40,17 +40,48 @@ from llm_inference_benchmark.runner import load_prompts, run_repeated
     type=click.Path(),
     help="JSON manifest path for environment fingerprint and reproducibility",
 )
+@click.option(
+    "--requests",
+    "requests_override",
+    default=None,
+    type=click.IntRange(min=1),
+    metavar="N",
+    help="Override config requests count",
+)
+@click.option(
+    "--warmup-requests",
+    "warmup_requests_override",
+    default=None,
+    type=click.IntRange(min=0),
+    metavar="N",
+    help="Override config warmup_requests",
+)
+@click.option(
+    "--concurrency",
+    "concurrency_override",
+    default=None,
+    type=click.IntRange(min=1),
+    metavar="N",
+    help="Override config concurrency",
+)
 def main(
     ctx: click.Context,
     config_path: str | None,
     output_path: str | None,
     manifest_path: str | None,
+    requests_override: int | None,
+    warmup_requests_override: int | None,
+    concurrency_override: int | None,
 ) -> None:
     """LLM inference benchmark toolkit.
 
     Run without a subcommand to execute a benchmark:
 
         llm-bench --config configs/example.yaml --output results.csv
+
+    Override individual config knobs without editing the YAML:
+
+        llm-bench --config configs/example.yaml --requests 50 --concurrency 4
 
     Use the compare subcommand to generate a Markdown table from saved CSVs:
 
@@ -63,6 +94,15 @@ def main(
         raise click.UsageError("--config is required when running a benchmark")
 
     cfg = load_config(config_path)
+    overrides: dict[str, int] = {}
+    if requests_override is not None:
+        overrides["requests"] = requests_override
+    if warmup_requests_override is not None:
+        overrides["warmup_requests"] = warmup_requests_override
+    if concurrency_override is not None:
+        overrides["concurrency"] = concurrency_override
+    if overrides:
+        cfg = cfg.model_copy(update=overrides)
     _t0 = time.perf_counter()
     backend = _build_backend(cfg)
     model_load_ms = (time.perf_counter() - _t0) * 1000.0

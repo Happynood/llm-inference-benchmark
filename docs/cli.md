@@ -28,6 +28,9 @@ llm-bench [OPTIONS]
 | `--config PATH` | path (required) | — | YAML benchmark config file |
 | `--output PATH` | path | — | Write results CSV to this path (omit for stdout summary only) |
 | `--manifest PATH` | path | — | Write JSON environment fingerprint to this path |
+| `--requests N` | int ≥ 1 | — | Override `requests` from the config |
+| `--warmup-requests N` | int ≥ 0 | — | Override `warmup_requests` from the config |
+| `--concurrency N` | int ≥ 1 | — | Override `concurrency` from the config |
 
 **Examples**
 
@@ -40,10 +43,18 @@ llm-bench --config configs/example.yaml --output results/run-a.csv
 
 # Save CSV + environment manifest
 llm-bench --config configs/example.yaml --output results/run-a.csv --manifest results/run-a.manifest.json
+
+# Quick one-off: override request count and concurrency without editing YAML
+llm-bench --config configs/example.yaml --requests 50 --concurrency 4
+
+# Disable warmup for a fast sanity check
+llm-bench --config configs/example.yaml --warmup-requests 0 --requests 5
 ```
 
 The YAML config file controls which backend is used, the model, request count, and all
-backend-specific parameters. See [metrics.md](metrics.md) for CSV column definitions.
+backend-specific parameters. CLI flags (`--requests`, `--warmup-requests`, `--concurrency`)
+take precedence over the YAML values when provided. See [metrics.md](metrics.md) for CSV
+column definitions.
 
 ---
 
@@ -293,6 +304,7 @@ All fields are optional unless marked required.
 | `backend` | string | `mock` | Backend to use: `mock`, `transformers`, `llama-cpp`, `openai` |
 | `model` | string | `mock-gpt2` | Model identifier (path or HuggingFace repo ID) |
 | `requests` | int ≥ 1 | `20` | Number of benchmark requests (excluding warmup) |
+| `concurrency` | int ≥ 1 | `1` | Maximum number of requests in-flight at once |
 | `warmup_requests` | int ≥ 0 | `2` | Warmup requests (excluded from metrics) |
 | `repeats` | int ≥ 1 | `1` | Repeat the full benchmark loop N times; p95/tok/s become the median |
 | `prompts_file` | path | `data/prompts/smoke.txt` | Path to newline-delimited prompts file |

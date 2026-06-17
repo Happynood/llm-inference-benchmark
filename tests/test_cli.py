@@ -184,3 +184,54 @@ def test_validate_config_concurrency_gt1_passes(tmp_path: Path, tmp_prompts: Pat
     result = CliRunner().invoke(main, ["validate-config", "--config", str(cfg)])
     assert result.exit_code == 0, result.output
     assert "concurrency" in result.output
+
+
+# ---------------------------------------------------------------------------
+# CLI run-time overrides (--requests / --warmup-requests / --concurrency)
+# ---------------------------------------------------------------------------
+
+
+def test_requests_override(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--requests", "3"])
+    assert result.exit_code == 0, result.output
+    assert "request_count: 3" in result.output
+
+
+def test_warmup_requests_override_zero(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--warmup-requests", "0"])
+    assert result.exit_code == 0, result.output
+    assert "Benchmark Results" in result.output
+
+
+def test_concurrency_override(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--concurrency", "2"])
+    assert result.exit_code == 0, result.output
+    assert "Benchmark Results" in result.output
+
+
+def test_requests_override_below_minimum_fails(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--requests", "0"])
+    assert result.exit_code != 0
+
+
+def test_concurrency_override_below_minimum_fails(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--concurrency", "0"])
+    assert result.exit_code != 0
+
+
+def test_all_overrides_combined(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "--config",
+            str(tmp_config),
+            "--requests",
+            "2",
+            "--warmup-requests",
+            "0",
+            "--concurrency",
+            "1",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "request_count: 2" in result.output

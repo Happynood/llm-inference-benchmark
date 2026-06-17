@@ -86,6 +86,13 @@ uv run llm-bench --config configs/profile-short-chat.yaml --output results/short
 uv run llm-bench --config configs/profile-summarization.yaml --output results/summarization.csv
 ```
 
+**CLI run-time overrides (no YAML editing required):**
+```bash
+# Override request count and concurrency without touching the config file:
+uv run llm-bench --config configs/example.yaml --requests 50 --concurrency 4
+uv run llm-bench --config configs/example.yaml --warmup-requests 0 --requests 5
+```
+
 **llama.cpp backend (GGUF quantized inference, local model):**
 ```bash
 # CPU:
@@ -213,6 +220,7 @@ Excluded (1)
 ## Features
 
 - **YAML-driven config** — backend, model, request count, warmup, prompts file or workload profile
+- **CLI run-time overrides** — `--requests N`, `--warmup-requests N`, `--concurrency N` override YAML values without editing the config file
 - **Workload profiles** — named prompt sets (`short_chat`, `summarization`, `code_completion`, `long_context_smoke`) for reproducible cross-experiment comparisons
 - **Run matrix** — define multiple experiment runs in one YAML; `llm-bench matrix` executes all sequentially with one CSV + manifest per run
 - **p50/p95 latency, tokens/sec, total tokens** per run
@@ -518,6 +526,5 @@ make typecheck  # pyright
 - [ ] Real parameter sweep evidence: RTX 3050 sweep of n\_gpu\_layers × max\_tokens on Llama 3.2 3B — infrastructure ready, real runs not yet committed
 
 **Additional backends (later)**
-- [x] OpenAI-compatible endpoint backend — `/v1/chat/completions` HTTP API; works with Ollama, llama.cpp server, LM Studio, vLLM; no extra dependency; API key via env var (v0.22)
 - [ ] `onnxruntime` (ONNX export + quantization)
 - [ ] `vllm` (high-throughput GPU serving)

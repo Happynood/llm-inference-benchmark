@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+- `llm-bench --requests N`, `--warmup-requests N`, `--concurrency N` flags let callers
+  override the corresponding YAML config values from the command line without editing the
+  file. Useful for quick one-off experiments, especially with the concurrent-execution
+  backend (`--concurrency 4`). CLI values take precedence over YAML; all existing
+  behaviour when the flags are absent is unchanged.
+
 ## [1.0.0] — 2026-06-17
 
 ### Added
