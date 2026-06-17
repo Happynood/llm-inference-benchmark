@@ -22,6 +22,19 @@ def _pct_change(baseline: float, current: float) -> float | None:
     return (current - baseline) / abs(baseline) * 100.0
 
 
+def _regression_pct(
+    baseline: float | None, current: float | None, lower_is_better: bool
+) -> float | None:
+    """Return regression magnitude as a positive %, or None if not a regression / not computable."""
+    if baseline is None or current is None:
+        return None
+    pct = _pct_change(baseline, current)
+    if pct is None:
+        return None
+    magnitude = pct if lower_is_better else -pct
+    return magnitude if magnitude > 0 else None
+
+
 def _fmt_change(baseline: float | None, current: float | None, lower_is_better: bool) -> str:
     if baseline is None or current is None:
         return "N/A"
@@ -158,3 +171,42 @@ def build_diff_table(baseline_path: str | Path, current_path: str | Path) -> str
         "  (lower is better for latency/VRAM/PPL; higher for tok/s, sanity, quality, judge)"
     )
     return header + _render_table(rows) + legend
+
+
+def find_regressions(
+    baseline_path: str | Path,
+    current_path: str | Path,
+    threshold_pct: float = 0.0,
+) -> list[str]:
+    """Return labels of metrics that regressed by more than threshold_pct percent.
+
+    Optional metrics absent from both runs are skipped.  Pass threshold_pct=5.0
+    to ignore regressions smaller than 5 %, which is useful for noisy workloads.
+    """
+    b = load_csv(baseline_path)
+    c = load_csv(current_path)
+
+    candidates: list[tuple[str, float | None, float | None, bool]] = [
+        ("p50 (ms)", b.p50_latency_ms, c.p50_latency_ms, True),
+        ("p95 (ms)", b.p95_latency_ms, c.p95_latency_ms, True),
+        ("tok/s", b.tokens_per_second, c.tokens_per_second, False),
+        ("Decode tok/s", b.decode_tokens_per_second, c.decode_tokens_per_second, False),
+        ("Load (ms)", b.model_load_ms, c.model_load_ms, True),
+        ("TTFT p50 (ms)", b.p50_ttft_ms, c.p50_ttft_ms, True),
+        ("TTFT p95 (ms)", b.p95_ttft_ms, c.p95_ttft_ms, True),
+        ("VRAM (MB)", b.peak_vram_memory_mb, c.peak_vram_memory_mb, True),
+        ("CPU mem (MB)", b.peak_cpu_memory_mb, c.peak_cpu_memory_mb, True),
+        ("Sanity %", b.sanity_pass_rate, c.sanity_pass_rate, False),
+        ("Task Q %", b.task_quality_pass_rate, c.task_quality_pass_rate, False),
+        ("PPL", b.perplexity, c.perplexity, True),
+        ("Judge", b.judge_score, c.judge_score, False),
+    ]
+
+    regressions: list[str] = []
+    for label, b_val, c_val, lower_is_better in candidates:
+        if b_val is None and c_val is None:
+            continue
+        mag = _regression_pct(b_val, c_val, lower_is_better)
+        if mag is not None and mag > threshold_pct:
+            regressions.append(label)
+    return regressions

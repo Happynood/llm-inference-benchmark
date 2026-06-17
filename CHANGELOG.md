@@ -19,6 +19,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   two benchmark runs. Shows p50/p95 latency, tok/s, TTFT, VRAM, load time, and quality
   metrics side-by-side with ✓ (improvement) / ✗ (regression) annotations. Optional metrics
   are suppressed when absent from both runs. Accepts `--output` to write Markdown to a file.
+- `llm-bench diff --fail-on-regression PCT`: exit code 1 when any tracked metric degrades
+  beyond the given percentage threshold. Use `0` to fail on any regression; use a positive
+  value (e.g. `5`) to tolerate noise. The diff table is always printed before the exit code
+  check, so CI logs retain full regression detail. Enables `llm-bench diff` as a CI gate
+  without any external tooling.
 
 ## [1.1.0] — 2026-06-17
 
