@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+- `llm-bench diff baseline.csv current.csv`: per-metric percentage-change comparison between
+  two benchmark runs. Shows p50/p95 latency, tok/s, TTFT, VRAM, load time, and quality
+  metrics side-by-side with ✓ (improvement) / ✗ (regression) annotations. Optional metrics
+  are suppressed when absent from both runs. Accepts `--output` to write Markdown to a file.
+
 ## [1.1.0] — 2026-06-17
 
 ### Added

@@ -339,6 +339,34 @@ def validate_config_cmd(config_path: str) -> None:
     click.echo("OK")
 
 
+@main.command("diff")
+@click.argument("baseline_csv", type=click.Path(exists=True))
+@click.argument("current_csv", type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "output_path",
+    default=None,
+    type=click.Path(),
+    help="Write diff to file instead of stdout",
+)
+def diff_cmd(baseline_csv: str, current_csv: str, output_path: str | None) -> None:
+    """Compare two benchmark CSVs and show per-metric percentage change.
+
+    Shows how key metrics changed between a baseline run and a current run.
+    Annotates each metric with ✓ (improvement) or ✗ (regression):
+
+        llm-bench diff results/before.csv results/after.csv
+    """
+    from llm_inference_benchmark.diff import build_diff_table
+
+    table = build_diff_table(baseline_csv, current_csv)
+    if output_path:
+        Path(output_path).write_text(table + "\n")
+        click.echo(f"Diff written to {output_path}")
+    else:
+        click.echo(table)
+
+
 @main.command("profiles")
 def profiles_cmd() -> None:
     """List available workload profiles and their descriptions.
