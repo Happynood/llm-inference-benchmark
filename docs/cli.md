@@ -139,6 +139,7 @@ llm-bench recommend [OPTIONS] CSV_FILES...
 | `--min-quality FLOAT` | float | — | Minimum task quality pass rate `[0, 1]` |
 | `--max-perplexity FLOAT` | float | — | Maximum perplexity |
 | `--min-judge FLOAT` | float | — | Minimum judge score `[0, 1]` |
+| `--max-ttft-ms FLOAT` | float | — | Maximum TTFT p50 in ms (requires `stream: true` run) |
 | `--max-load-ms FLOAT` | float | — | Maximum model load time in ms |
 | `--output PATH` | path | — | Write recommendation to file instead of stdout |
 
@@ -154,8 +155,58 @@ llm-bench recommend results/*.csv --max-vram-mb 4096 --max-p95-ms 1000
 # Add quality floors
 llm-bench recommend results/*.csv --max-vram-mb 4096 --min-sanity 1.0 --min-quality 0.9
 
+# Add a TTFT budget (requires stream: true runs)
+llm-bench recommend results/*.csv --max-vram-mb 4096 --max-ttft-ms 100
+
 # Add load time constraint (requires runs from v0.18+)
 llm-bench recommend results/*.csv --max-load-ms 5000
+```
+
+---
+
+## diff
+
+Compare two benchmark CSVs and show per-metric percentage change.
+
+```
+llm-bench diff [OPTIONS] BASELINE_CSV CURRENT_CSV
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--output PATH` | path | — | Write diff table to file instead of stdout |
+
+Each metric row shows the baseline value, the current value, and the percentage change.
+Changes are annotated with **✓** (improvement) or **✗** (regression) based on direction
+(lower is better for latency, TTFT, VRAM, CPU mem, perplexity, and load time; higher is
+better for tok/s, sanity, task quality, and judge score). Optional metrics (TTFT, VRAM,
+load time, quality, perplexity, judge) are omitted when absent from both runs, or shown
+with `N/A` when only one side has data. Changes smaller than 0.05 % are displayed without
+an annotation.
+
+**Example**
+
+```bash
+llm-bench diff results/before.csv results/after.csv
+llm-bench diff results/before.csv results/after.csv --output diff.md
+```
+
+```
+## Benchmark Diff
+
+Baseline : llama-cpp | llama3 | N=20  (before.csv)
+Current  : llama-cpp | llama3 | N=20  (after.csv)
+
+| Metric        | Baseline |  Current |    Change |
+|:--------------|----------|---------:|----------:|
+| p50 (ms)      |  1169.00 |  1050.00 | -10.2% ✓ |
+| p95 (ms)      |  1206.00 |  1100.00 |  -8.8% ✓ |
+| tok/s         |     54.4 |     59.1 |  +8.6% ✓ |
+| TTFT p50 (ms) |    40.80 |    38.20 |  -6.4% ✓ |
+| VRAM (MB)     |   2361.0 |   2361.0 |   0.0%   |
+| CPU mem (MB)  |    800.0 |    790.0 |  -1.2% ✓ |
+
+✓ = improvement  ✗ = regression  (lower is better for latency/VRAM/PPL; higher for tok/s, sanity, quality, judge)
 ```
 
 ---
