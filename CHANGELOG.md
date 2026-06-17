@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Changed
+- `llm-bench compare` now suppresses optional columns (Out tok/s, In/Out tok, Load, TTFT,
+  CUDA/VRAM mem, Sanity, Task Q, PPL, Judge) when every row in the table shows N/A for that
+  column. Mandatory columns (Backend, Model, N, p50, p95, tok/s, CPU mem) are always shown.
+  Mixed tables (some rows with data, some without) still show the column with N/A for the
+  rows that lack data.
+
 ### Added
 - `llm-bench diff baseline.csv current.csv`: per-metric percentage-change comparison between
   two benchmark runs. Shows p50/p95 latency, tok/s, TTFT, VRAM, load time, and quality
