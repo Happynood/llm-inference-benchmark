@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-06-17
+
 ### Added
 - TTFT (time-to-first-token) measurement for the `llama-cpp` backend: set `stream: true`
   under `llama_cpp:` in the config to enable streaming mode. `p50_ttft_ms` and `p95_ttft_ms`
