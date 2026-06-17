@@ -141,27 +141,48 @@ def main(
     help="Sort column: toks=highest throughput first; load=fastest load first (N/A last)",
 )
 @click.option(
+    "--format",
+    "output_format",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format: table=Markdown, json=machine-readable JSON array",
+)
+@click.option(
     "--output",
     "output_path",
     default=None,
     type=click.Path(),
-    help="Write Markdown to file instead of stdout",
+    help="Write output to file instead of stdout",
 )
-def compare_cmd(csv_files: tuple[str, ...], sort_by: str, output_path: str | None) -> None:
-    """Generate a Markdown comparison table from benchmark CSV files.
+def compare_cmd(
+    csv_files: tuple[str, ...], sort_by: str, output_format: str, output_path: str | None
+) -> None:
+    """Generate a comparison table from benchmark CSV files.
 
     Accepts one or more CSV files produced by llm-bench --output:
 
         llm-bench compare mock.csv transformers.csv --sort p95
+        llm-bench compare results/*.csv --format json
     """
-    from llm_inference_benchmark.compare import build_comparison_table
+    from llm_inference_benchmark.compare import (
+        build_comparison_table,
+        load_csv,
+        render_json,
+        sort_rows,
+    )
 
-    table = build_comparison_table(list(csv_files), sort_by=sort_by)
-    if output_path:
-        Path(output_path).write_text(table + "\n")
-        click.echo(f"Table written to {output_path}")
+    if output_format == "json":
+        rows = sort_rows([load_csv(p) for p in csv_files], sort_by=sort_by)
+        text = render_json(rows)
     else:
-        click.echo(table)
+        text = build_comparison_table(list(csv_files), sort_by=sort_by)
+
+    if output_path:
+        Path(output_path).write_text(text + "\n")
+        click.echo(f"Output written to {output_path}")
+    else:
+        click.echo(text)
 
 
 @main.command("pareto")
