@@ -54,6 +54,14 @@ def test_generate_returns_positive_latency(hf_backend) -> None:  # type: ignore[
 
 
 @skip_without_transformers
+def test_generate_returns_ttft_ms(hf_backend) -> None:  # type: ignore[no-untyped-def]
+    result = hf_backend.generate("The capital of France is")
+    assert result.ttft_ms is not None
+    assert result.ttft_ms > 0
+    assert result.ttft_ms <= result.latency_ms
+
+
+@skip_without_transformers
 def test_generate_token_counts(hf_backend) -> None:  # type: ignore[no-untyped-def]
     result = hf_backend.generate("Hello world")
     assert result.input_tokens > 0
