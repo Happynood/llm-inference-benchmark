@@ -7,7 +7,7 @@ identical workloads.
 Project direction is fixed in [docs/project-charter.md](docs/project-charter.md): start with a
 small benchmark harness, then grow toward configuration comparison, Pareto analysis, and
 constraint-based recommendations. See [CHANGELOG.md](CHANGELOG.md) for release history.
-Current stable release: **v1.0.0**.
+Current stable release: **v1.0.0**. Full CLI reference: [docs/cli.md](docs/cli.md).
 
 ## Problem
 
