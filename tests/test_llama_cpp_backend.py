@@ -56,6 +56,32 @@ def _make_mock_llama(
     return cls, instance
 
 
+def _make_mock_llama_streaming(
+    words: tuple[str, ...] = ("hello", "world"),
+    prompt_tokens: int = 5,
+) -> tuple[MagicMock, MagicMock]:
+    """Return (MockLlamaCls, mock_instance) that yields streaming chunks.
+
+    Each word becomes one chunk (one decoded token).  A trailing empty chunk
+    simulates the stop token that llama-cpp-python appends at the end of a stream.
+    instance.tokenize returns a list of fake token IDs of length prompt_tokens.
+    """
+
+    def _side_effect(*args: object, **kwargs: object):
+        def _gen():
+            for w in words:
+                yield {"choices": [{"text": w + " ", "finish_reason": None}]}
+            yield {"choices": [{"text": "", "finish_reason": "stop"}]}
+
+        return _gen()
+
+    instance = MagicMock()
+    instance.side_effect = _side_effect
+    instance.tokenize.return_value = list(range(prompt_tokens))
+    cls = MagicMock(return_value=instance)
+    return cls, instance
+
+
 # ---------------------------------------------------------------------------
 # Import-error path (llama_cpp not installed)
 # ---------------------------------------------------------------------------
@@ -395,6 +421,114 @@ def test_full_run_benchmark_with_mock(tmp_prompts: Path) -> None:
     assert report.p50_latency_ms > 0
     assert report.tokens_per_second > 0
     assert report.total_tokens == (8 + 12) * 5
+
+
+# ---------------------------------------------------------------------------
+# Streaming / TTFT tests
+# ---------------------------------------------------------------------------
+
+
+def test_generate_streaming_returns_generation_result() -> None:
+    from llm_inference_benchmark.backends.base import GenerationResult
+
+    cls, _ = _make_mock_llama_streaming()
+    with (
+        patch.object(llama_cpp_mod, "_AVAILABLE", True),
+        patch.object(llama_cpp_mod, "Llama", cls),
+    ):
+        backend = llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, stream=True)
+        result = backend.generate("prompt")
+        assert isinstance(result, GenerationResult)
+
+
+def test_generate_streaming_ttft_ms_is_populated() -> None:
+    cls, _ = _make_mock_llama_streaming()
+    with (
+        patch.object(llama_cpp_mod, "_AVAILABLE", True),
+        patch.object(llama_cpp_mod, "Llama", cls),
+    ):
+        backend = llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, stream=True)
+        result = backend.generate("prompt")
+        assert result.ttft_ms is not None
+
+
+def test_generate_streaming_ttft_ms_is_positive() -> None:
+    cls, _ = _make_mock_llama_streaming()
+    with (
+        patch.object(llama_cpp_mod, "_AVAILABLE", True),
+        patch.object(llama_cpp_mod, "Llama", cls),
+    ):
+        backend = llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, stream=True)
+        result = backend.generate("prompt")
+        assert result.ttft_ms > 0
+
+
+def test_generate_streaming_text_is_concatenated() -> None:
+    cls, _ = _make_mock_llama_streaming(words=("hello", "world"))
+    with (
+        patch.object(llama_cpp_mod, "_AVAILABLE", True),
+        patch.object(llama_cpp_mod, "Llama", cls),
+    ):
+        backend = llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, stream=True)
+        result = backend.generate("prompt")
+        assert result.text == "hello world "
+
+
+def test_generate_streaming_input_tokens_from_tokenize() -> None:
+    cls, _ = _make_mock_llama_streaming(prompt_tokens=7)
+    with (
+        patch.object(llama_cpp_mod, "_AVAILABLE", True),
+        patch.object(llama_cpp_mod, "Llama", cls),
+    ):
+        backend = llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, stream=True)
+        result = backend.generate("prompt")
+        assert result.input_tokens == 7
+
+
+def test_generate_streaming_output_tokens_counted_per_chunk() -> None:
+    cls, _ = _make_mock_llama_streaming(words=("one", "two", "three"))
+    with (
+        patch.object(llama_cpp_mod, "_AVAILABLE", True),
+        patch.object(llama_cpp_mod, "Llama", cls),
+    ):
+        backend = llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, stream=True)
+        result = backend.generate("prompt")
+        assert result.output_tokens == 3
+
+
+def test_generate_streaming_latency_is_positive() -> None:
+    cls, _ = _make_mock_llama_streaming()
+    with (
+        patch.object(llama_cpp_mod, "_AVAILABLE", True),
+        patch.object(llama_cpp_mod, "Llama", cls),
+    ):
+        backend = llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, stream=True)
+        result = backend.generate("prompt")
+        assert result.latency_ms > 0
+
+
+def test_generate_blocking_ttft_is_none() -> None:
+    cls, _ = _make_mock_llama()
+    with (
+        patch.object(llama_cpp_mod, "_AVAILABLE", True),
+        patch.object(llama_cpp_mod, "Llama", cls),
+    ):
+        backend = llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL, stream=False)
+        result = backend.generate("prompt")
+        assert result.ttft_ms is None
+
+
+def test_stream_config_defaults_to_false() -> None:
+    from llm_inference_benchmark.config import LlamaCppBackendConfig
+
+    assert LlamaCppBackendConfig().stream is False
+
+
+def test_stream_config_can_be_set_true() -> None:
+    from llm_inference_benchmark.config import LlamaCppBackendConfig
+
+    cfg = LlamaCppBackendConfig(stream=True)
+    assert cfg.stream is True
 
 
 # ---------------------------------------------------------------------------
