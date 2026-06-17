@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import statistics
 import time
 from pathlib import Path
@@ -34,6 +35,41 @@ def load_prompts(path: str | Path) -> list[str]:
     return lines
 
 
+async def _run_concurrent(
+    backend: Backend, config: BenchmarkConfig, prompts: list[str]
+) -> tuple[list[RequestMetrics], list[str], list[str], float]:
+    """Fire config.requests requests with up to config.concurrency in flight at once.
+
+    Returns (results, texts, prompts_used, wall_clock_elapsed_s). Uses asyncio.to_thread
+    so sync Backend.generate() calls run in the default thread-pool executor without
+    blocking the event loop.
+    """
+    sem = asyncio.Semaphore(config.concurrency)
+
+    async def _one(i: int) -> tuple[str, RequestMetrics, str]:
+        async with sem:
+            prompt = prompts[i % len(prompts)]
+            r = await asyncio.to_thread(backend.generate, prompt)
+            return (
+                prompt,
+                RequestMetrics(
+                    latency_ms=r.latency_ms,
+                    input_tokens=r.input_tokens,
+                    output_tokens=r.output_tokens,
+                ),
+                r.text,
+            )
+
+    wall_t0 = time.perf_counter()
+    triples = await asyncio.gather(*[_one(i) for i in range(config.requests)])
+    wall_elapsed_s = time.perf_counter() - wall_t0
+
+    prompts_used = [t[0] for t in triples]
+    results = [t[1] for t in triples]
+    texts = [t[2] for t in triples]
+    return results, texts, prompts_used, wall_elapsed_s
+
+
 def run_benchmark(
     backend: Backend,
     config: BenchmarkConfig,
@@ -60,20 +96,27 @@ def run_benchmark(
     results: list[RequestMetrics] = []
     texts: list[str] = []
     prompts_used: list[str] = []
+    wall_clock_elapsed_s: float | None = None
+
     with MemorySampler() as mem, NvidiaSmiSampler() as vram:
         reset_cuda_peak()
-        for i in range(config.requests):
-            prompt = prompts[i % len(prompts)]
-            result = backend.generate(prompt)
-            results.append(
-                RequestMetrics(
-                    latency_ms=result.latency_ms,
-                    input_tokens=result.input_tokens,
-                    output_tokens=result.output_tokens,
-                )
+        if config.concurrency > 1:
+            results, texts, prompts_used, wall_clock_elapsed_s = asyncio.run(
+                _run_concurrent(backend, config, prompts)
             )
-            texts.append(result.text)
-            prompts_used.append(prompt)
+        else:
+            for i in range(config.requests):
+                prompt = prompts[i % len(prompts)]
+                result = backend.generate(prompt)
+                results.append(
+                    RequestMetrics(
+                        latency_ms=result.latency_ms,
+                        input_tokens=result.input_tokens,
+                        output_tokens=result.output_tokens,
+                    )
+                )
+                texts.append(result.text)
+                prompts_used.append(prompt)
 
     task_qual: TaskQualityReport | None = None
     if config.quality_file is not None:
@@ -101,6 +144,7 @@ def run_benchmark(
         warmup_p50_latency_ms=warmup_p50,
         perplexity=perplexity,
         judge_score=judge_score,
+        wall_clock_elapsed_s=wall_clock_elapsed_s,
     )
 
 

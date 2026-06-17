@@ -161,3 +161,13 @@ def test_decode_tokens_per_second_none_when_no_output() -> None:
     report = compute_metrics(results, backend="mock", model="t")
     assert report.decode_tokens_per_second is None
     assert report.tokens_per_second == pytest.approx(0.0)
+
+
+def test_wall_clock_elapsed_overrides_sum_of_latencies() -> None:
+    # 4 requests each 100 ms → sequential sum = 400 ms = 0.4 s → 4*10/0.4 = 100 tok/s
+    # but with wall_clock_elapsed_s=0.1 (all in parallel) → 4*10/0.1 = 400 tok/s
+    results = [RequestMetrics(latency_ms=100.0, input_tokens=5, output_tokens=10)] * 4
+    seq = compute_metrics(results, backend="mock", model="t")
+    concurrent = compute_metrics(results, backend="mock", model="t", wall_clock_elapsed_s=0.1)
+    assert seq.tokens_per_second == pytest.approx(100.0)
+    assert concurrent.tokens_per_second == pytest.approx(400.0)
