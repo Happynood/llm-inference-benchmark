@@ -43,6 +43,6 @@ def test_config_accepts_concurrency_1() -> None:
     assert cfg.concurrency == 1
 
 
-def test_config_rejects_concurrency_gt_1() -> None:
-    with pytest.raises(ValidationError, match="not yet supported"):
-        BenchmarkConfig(concurrency=2)
+def test_config_accepts_concurrency_gt_1() -> None:
+    cfg = BenchmarkConfig(concurrency=4)
+    assert cfg.concurrency == 4

@@ -54,14 +54,6 @@ class BenchmarkConfig(BaseModel):
     openai: OpenAIEndpointConfig = Field(default_factory=OpenAIEndpointConfig)
 
     @model_validator(mode="after")
-    def _validate_concurrency(self) -> BenchmarkConfig:
-        if self.concurrency > 1:
-            raise ValueError(
-                "concurrency > 1 is not yet supported; set concurrency: 1 or omit the field"
-            )
-        return self
-
-    @model_validator(mode="after")
     def _validate_workload_profile(self) -> BenchmarkConfig:
         if self.workload_profile is not None:
             from llm_inference_benchmark.profiles import get_profile

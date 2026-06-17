@@ -73,6 +73,7 @@ def compute_metrics(
     warmup_p50_latency_ms: float | None = None,
     perplexity: float | None = None,
     judge_score: float | None = None,
+    wall_clock_elapsed_s: float | None = None,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -82,9 +83,12 @@ def compute_metrics(
     n = len(results)
     total_output_tokens = sum(r.output_tokens for r in results)
     total_tokens = sum(r.input_tokens + r.output_tokens for r in results)
-    # For sequential execution, sum-of-latencies equals wall-clock time.
-    # When concurrent execution is added, switch to measured wall-clock elapsed.
-    total_latency_s = sum(latencies) / 1000.0
+    # Sequential: sum-of-latencies == wall-clock time.
+    # Concurrent: caller passes measured wall-clock elapsed so throughput reflects
+    # actual parallelism rather than summed per-request times.
+    total_latency_s = (
+        wall_clock_elapsed_s if wall_clock_elapsed_s is not None else sum(latencies) / 1000.0
+    )
 
     return MetricsReport(
         request_count=n,

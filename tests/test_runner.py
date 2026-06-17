@@ -176,3 +176,31 @@ def test_run_benchmark_judge_score_none_for_backend_without_support(tmp_prompts:
     )
     report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
     assert report.judge_score is None
+
+
+def test_run_benchmark_concurrent_request_count(tmp_prompts: Path) -> None:
+    backend = MockBackend(model="test", latency_ms=0)
+    cfg = BenchmarkConfig(
+        requests=6, concurrency=3, warmup_requests=0, prompts_file=str(tmp_prompts)
+    )
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.request_count == 6
+
+
+def test_run_benchmark_concurrent_throughput_uses_wall_clock(tmp_prompts: Path) -> None:
+    """With concurrency > 1 throughput is total_output_tokens / wall_clock, not sum-of-latencies."""
+    import time
+
+    backend = MockBackend(model="test", latency_ms=50, tokens_per_response=10)
+    cfg = BenchmarkConfig(
+        requests=4, concurrency=4, warmup_requests=0, prompts_file=str(tmp_prompts)
+    )
+    wall_t0 = time.perf_counter()
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    _ = time.perf_counter() - wall_t0
+
+    # Sequential sum-of-latencies would be 4 * 50 ms = 200 ms → throughput = 200 tok/s.
+    # With concurrency=4 all requests fire at once; wall clock is ~50 ms → throughput
+    # should be considerably higher than the sequential baseline.
+    sequential_tps = (4 * 10) / (4 * 0.05)  # 200 tok/s
+    assert report.tokens_per_second > sequential_tps * 1.5

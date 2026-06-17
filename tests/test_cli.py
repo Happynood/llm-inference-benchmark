@@ -174,7 +174,7 @@ def test_validate_config_shows_concurrency(tmp_config: Path) -> None:
     assert "concurrency" in result.output
 
 
-def test_validate_config_concurrency_gt1_fails(tmp_path: Path, tmp_prompts: Path) -> None:
+def test_validate_config_concurrency_gt1_passes(tmp_path: Path, tmp_prompts: Path) -> None:
     cfg = tmp_path / "config.yaml"
     cfg.write_text(
         f"backend: mock\nmodel: x\nrequests: 2\nwarmup_requests: 0\n"
@@ -182,5 +182,5 @@ def test_validate_config_concurrency_gt1_fails(tmp_path: Path, tmp_prompts: Path
         f"mock:\n  latency_ms: 0\n  tokens_per_response: 5\n"
     )
     result = CliRunner().invoke(main, ["validate-config", "--config", str(cfg)])
-    assert result.exit_code != 0
-    assert "not yet supported" in result.output
+    assert result.exit_code == 0, result.output
+    assert "concurrency" in result.output
