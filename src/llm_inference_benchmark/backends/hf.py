@@ -18,8 +18,11 @@ from llm_inference_benchmark.perplexity import perplexity_from_nll
 
 try:
     import torch  # type: ignore[import-untyped]
-    from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-untyped]
-    from transformers import LogitsProcessor  # type: ignore[import-untyped]
+    from transformers import (  # type: ignore[import-untyped]
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        LogitsProcessor,
+    )
 
     class _FirstTokenTimer(LogitsProcessor):
         """Records wall-clock time when the first output token's logits are ready."""
@@ -28,7 +31,9 @@ try:
             self._start = start
             self.ttft_ms: float | None = None
 
-        def __call__(self, input_ids: "torch.LongTensor", scores: "torch.FloatTensor") -> "torch.FloatTensor":
+        def __call__(
+            self, input_ids: torch.LongTensor, scores: torch.FloatTensor
+        ) -> torch.FloatTensor:
             if self.ttft_ms is None:
                 self.ttft_ms = (time.perf_counter() - self._start) * 1000.0
             return scores
