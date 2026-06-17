@@ -217,6 +217,34 @@ Excluded (1)
 > `--min-quality` requires a `quality_file:` in the benchmark config — runs without it have
 > unknown task quality and are excluded when the constraint is active.
 
+## Docker
+
+A pre-built image (mock + transformers CPU) is published to
+[GitHub Container Registry](https://github.com/Happynood/llm-inference-benchmark/pkgs/container/llm-inference-benchmark)
+on each release.
+
+```bash
+docker pull ghcr.io/happynood/llm-inference-benchmark:latest
+
+# Mock backend — no model download, validates the harness
+docker run --rm \
+  -v "$(pwd)/configs:/app/configs" \
+  -v "$(pwd)/results:/app/results" \
+  ghcr.io/happynood/llm-inference-benchmark:latest \
+  --config /app/configs/example.yaml --output /app/results/bench.csv
+
+# Transformers CPU — mount HuggingFace cache to skip re-downloads
+docker run --rm \
+  -v "$(pwd)/configs:/app/configs" \
+  -v "$(pwd)/results:/app/results" \
+  -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
+  ghcr.io/happynood/llm-inference-benchmark:latest \
+  --config /app/configs/transformers-cpu.yaml --output /app/results/bench-hf.csv
+```
+
+> For GPU inference (llama.cpp CUDA or transformers CUDA), extend from a `nvidia/cuda`
+> base image and rebuild with `--extra llama-cpp` or set `--gpus all` at runtime.
+
 ## Features
 
 - **YAML-driven config** — backend, model, request count, warmup, prompts file or workload profile
@@ -242,6 +270,7 @@ Excluded (1)
 - **OpenAI-compatible endpoint backend** — benchmark any running server (Ollama, llama.cpp server, LM Studio, vLLM) via the `/v1/chat/completions` HTTP API; no extra dependency; API key read from env variable only
 - **Type-checked and tested** — Pyright (basic) + Ruff + pytest
 - **GitHub Actions CI** — lint + type-check + mock tests on every push
+- **Docker image** — pre-built CPU image (mock + transformers) published to ghcr.io on each release; mount configs and HuggingFace cache as volumes
 
 ## Tech Stack
 
@@ -256,6 +285,7 @@ Excluded (1)
 | Lint/format | Ruff |
 | Type checking | Pyright |
 | CI | GitHub Actions |
+| Container | Docker, GitHub Container Registry (ghcr.io) |
 
 ## Architecture
 

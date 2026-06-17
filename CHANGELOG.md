@@ -8,6 +8,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- Docker image (mock + transformers CPU) published to GitHub Container Registry on each
+  release tag; `Dockerfile` uses a two-layer uv install for optimal cache reuse.
+- `.github/workflows/release.yml` — creates a GitHub Release and pushes versioned
+  Docker tags (`v1.1`, `v1.1.0`, `latest`) to `ghcr.io` on every `v*.*.*` tag push.
 - `llm-bench --requests N`, `--warmup-requests N`, `--concurrency N` flags let callers
   override the corresponding YAML config values from the command line without editing the
   file. Useful for quick one-off experiments, especially with the concurrent-execution
