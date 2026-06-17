@@ -38,6 +38,10 @@ _HEADERS = [
     "Judge",
 ]
 
+# Indices into _HEADERS that are suppressed when every row shows "N/A".
+# Mandatory columns (0-5 and 12) are never suppressed.
+_OPTIONAL_COL_INDICES: frozenset[int] = frozenset({6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18})
+
 
 @dataclass(frozen=True)
 class RunRow:
@@ -200,19 +204,28 @@ def render_table(rows: list[RunRow]) -> str:
         for r in rows
     ]
 
-    widths = [len(h) for h in _HEADERS]
-    for row in data:
+    # Suppress optional columns where every row shows "N/A".
+    visible = [
+        i
+        for i in range(len(_HEADERS))
+        if i not in _OPTIONAL_COL_INDICES or any(row[i] != "N/A" for row in data)
+    ]
+    headers = [_HEADERS[i] for i in visible]
+    filtered_data = [[row[i] for i in visible] for row in data]
+
+    widths = [len(h) for h in headers]
+    for row in filtered_data:
         for i, cell in enumerate(row):
             widths[i] = max(widths[i], len(cell))
 
     def pad(s: str, w: int) -> str:
         return s.ljust(w)
 
-    header_line = "| " + " | ".join(pad(h, w) for h, w in zip(_HEADERS, widths, strict=True)) + " |"
+    header_line = "| " + " | ".join(pad(h, w) for h, w in zip(headers, widths, strict=True)) + " |"
     sep_line = "|" + "|".join("-" * (w + 2) for w in widths) + "|"
     data_lines = [
         "| " + " | ".join(pad(c, w) for c, w in zip(row, widths, strict=True)) + " |"
-        for row in data
+        for row in filtered_data
     ]
     return "\n".join([header_line, sep_line, *data_lines])
 

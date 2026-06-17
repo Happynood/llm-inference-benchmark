@@ -232,21 +232,20 @@ def test_render_table_contains_expected_columns() -> None:
         assert col in table
 
 
-def test_render_table_cuda_none_shows_na() -> None:
+def test_render_table_cuda_none_col_suppressed() -> None:
     rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None)]
-    assert "N/A" in render_table(rows)
+    assert "CUDA mem" not in render_table(rows)
 
 
 def test_render_table_cuda_zero_shows_value() -> None:
     rows = [RunRow("transformers", "tiny", 10, 40.0, 44.0, 1200.0, 720.0, 0.0, 0.0)]
     table = render_table(rows)
-    # cuda=0.0 must appear as "0.0", not "N/A"; the Sanity % column may still show N/A
     assert "| 0.0" in table or "0.0 |" in table
 
 
-def test_render_table_vram_none_shows_na() -> None:
+def test_render_table_vram_none_col_suppressed() -> None:
     rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None)]
-    assert "N/A" in render_table(rows)
+    assert "VRAM mem" not in render_table(rows)
 
 
 def test_render_table_vram_value_shown() -> None:
@@ -261,14 +260,34 @@ def test_render_table_row_count() -> None:
     assert len(lines) == len(_ROWS) + 2  # header + separator + data rows
 
 
-def test_render_table_ppl_header() -> None:
-    table = render_table(_ROWS[:1])
-    assert "PPL" in table
-
-
-def test_render_table_ppl_na_when_none() -> None:
+def test_render_table_mandatory_cols_always_shown() -> None:
     rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None)]
-    assert "N/A" in render_table(rows)
+    table = render_table(rows)
+    for col in ("Backend", "Model", "N", "p50 (ms)", "p95 (ms)", "tok/s", "CPU mem (MB)"):
+        assert col in table, f"Mandatory column {col!r} missing from table"
+
+
+def test_render_table_optional_col_shown_when_any_row_has_value() -> None:
+    import dataclasses
+
+    row_no_ttft = _ROWS[0]
+    row_with_ttft = dataclasses.replace(_ROWS[1], p50_ttft_ms=42.0, p95_ttft_ms=80.0)
+    table = render_table([row_no_ttft, row_with_ttft])
+    assert "TTFT p50" in table
+    assert "N/A" in table  # row_no_ttft shows N/A in the TTFT column
+
+
+def test_render_table_ppl_col_suppressed_when_all_none() -> None:
+    table = render_table(_ROWS[:1])
+    assert "PPL" not in table
+
+
+def test_render_table_ppl_col_shown_when_present() -> None:
+    import dataclasses
+
+    row_with_ppl = dataclasses.replace(_ROWS[0], perplexity=12.34)
+    table = render_table([row_with_ppl])
+    assert "PPL" in table
 
 
 def test_render_table_ppl_value_shown() -> None:
@@ -293,14 +312,17 @@ def test_render_table_ppl_value_shown() -> None:
     assert "12.34" in table
 
 
-def test_render_table_judge_header() -> None:
+def test_render_table_judge_col_suppressed_when_all_none() -> None:
     table = render_table(_ROWS[:1])
+    assert "Judge" not in table
+
+
+def test_render_table_judge_col_shown_when_present() -> None:
+    import dataclasses
+
+    row_with_judge = dataclasses.replace(_ROWS[0], judge_score=0.75)
+    table = render_table([row_with_judge])
     assert "Judge" in table
-
-
-def test_render_table_judge_na_when_none() -> None:
-    rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None)]
-    assert "N/A" in render_table(rows)
 
 
 def test_render_table_judge_value_shown() -> None:
@@ -414,11 +436,10 @@ def test_load_old_transformers_csv_sanity_pass_rate_is_none() -> None:
     assert row.sanity_pass_rate is None
 
 
-def test_render_table_old_csv_sanity_shows_na() -> None:
+def test_render_table_old_csv_sanity_col_suppressed() -> None:
     row = load_csv(MOCK_CSV)
     table = render_table([row])
-    assert "N/A" in table
-    assert "Sanity %" in table
+    assert "Sanity %" not in table
 
 
 # ---------------------------------------------------------------------------
@@ -438,9 +459,9 @@ def test_render_table_quality_shows_percentage() -> None:
     assert "100.0%" in table
 
 
-def test_render_table_sanity_header_present() -> None:
+def test_render_table_sanity_col_suppressed_when_all_none() -> None:
     table = render_table(_ROWS[:1])
-    assert "Sanity %" in table
+    assert "Sanity %" not in table
 
 
 def test_build_comparison_table_with_quality_csv() -> None:
@@ -497,18 +518,17 @@ def test_load_csv_blank_decode_tokens_per_second(tmp_path: Path) -> None:
     assert row.decode_tokens_per_second is None
 
 
-def test_render_table_has_out_tok_s_header() -> None:
+def test_render_table_out_tok_s_suppressed_when_all_none() -> None:
     table = render_table(_ROWS[:1])
-    assert "Out tok/s" in table
-    assert "In tok" in table
-    assert "Out tok" in table
+    assert "Out tok/s" not in table
+    assert "In tok" not in table
+    assert "Out tok" not in table
 
 
-def test_render_table_decode_tps_na_for_old_rows() -> None:
+def test_render_table_decode_tps_cols_suppressed_for_old_csv() -> None:
     row = load_csv(MOCK_CSV)
     table = render_table([row])
-    assert "Out tok/s" in table
-    assert "N/A" in table  # decode_tokens_per_second is None for old CSV
+    assert "Out tok/s" not in table
 
 
 def test_load_csv_ttft_columns_blank_for_old_csv() -> None:
@@ -541,13 +561,13 @@ def test_load_csv_parses_ttft_columns(tmp_path: Path) -> None:
     assert row.p95_ttft_ms == pytest.approx(15.1)
 
 
-def test_render_table_shows_ttft_headers() -> None:
+def test_render_table_ttft_cols_suppressed_when_all_none() -> None:
     table = render_table(_ROWS[:1])
-    assert "TTFT p50 (ms)" in table
-    assert "TTFT p95 (ms)" in table
+    assert "TTFT p50" not in table
+    assert "TTFT p95" not in table
 
 
-def test_render_table_shows_na_for_missing_ttft() -> None:
+def test_render_table_ttft_cols_suppressed_for_old_csv() -> None:
     row = load_csv(MOCK_CSV)
     table = render_table([row])
-    assert "TTFT p50 (ms)" in table
+    assert "TTFT p50" not in table

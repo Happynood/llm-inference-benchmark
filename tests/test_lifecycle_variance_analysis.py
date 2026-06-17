@@ -135,11 +135,10 @@ def test_compare_table_has_load_column() -> None:
     assert "123.4" in table
 
 
-def test_compare_table_load_na_when_none() -> None:
+def test_compare_table_load_col_suppressed_when_none() -> None:
     row = _make_row(model_load_ms=None)
     table = render_table([row])
-    assert "Load (ms)" in table
-    assert "N/A" in table
+    assert "Load (ms)" not in table
 
 
 def test_load_csv_reads_model_load_ms(tmp_path: Path) -> None:
