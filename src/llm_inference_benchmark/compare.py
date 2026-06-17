@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -228,6 +229,37 @@ def render_table(rows: list[RunRow]) -> str:
         for row in filtered_data
     ]
     return "\n".join([header_line, sep_line, *data_lines])
+
+
+def render_json(rows: list[RunRow]) -> str:
+    """Serialize RunRows to a JSON array string (all fields; None for absent values)."""
+    data = [
+        {
+            "backend": r.backend,
+            "model": r.model,
+            "request_count": r.request_count,
+            "p50_latency_ms": r.p50_latency_ms,
+            "p95_latency_ms": r.p95_latency_ms,
+            "tokens_per_second": r.tokens_per_second,
+            "decode_tokens_per_second": r.decode_tokens_per_second,
+            "mean_input_tokens": r.mean_input_tokens,
+            "mean_output_tokens": r.mean_output_tokens,
+            "model_load_ms": r.model_load_ms,
+            "p50_ttft_ms": r.p50_ttft_ms,
+            "p95_ttft_ms": r.p95_ttft_ms,
+            "peak_cpu_memory_mb": r.peak_cpu_memory_mb,
+            "peak_cuda_memory_mb": r.peak_cuda_memory_mb,
+            "peak_vram_memory_mb": r.peak_vram_memory_mb,
+            "sanity_pass_rate": r.sanity_pass_rate,
+            "task_quality_pass_rate": r.task_quality_pass_rate,
+            "perplexity": r.perplexity,
+            "judge_score": r.judge_score,
+            "p95_latency_ms_std": r.p95_latency_ms_std,
+            "tokens_per_second_std": r.tokens_per_second_std,
+        }
+        for r in rows
+    ]
+    return json.dumps(data, indent=2)
 
 
 def build_comparison_table(paths: list[str | Path], sort_by: str = "p95") -> str:

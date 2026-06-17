@@ -7,6 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+- `llm-bench compare --format json`: machine-readable JSON output from the compare command.
+  Returns a JSON array of objects — one per CSV — with all fields present (`null` for absent
+  optional metrics). Compatible with `--sort` and `--output`; useful for CI dashboards and
+  scripting without screen-scraping Markdown. The default format remains `table` (Markdown).
+
 ### Changed
 - `llm-bench compare` now suppresses optional columns (Out tok/s, In/Out tok, Load, TTFT,
   CUDA/VRAM mem, Sanity, Task Q, PPL, Judge) when every row in the table shows N/A for that

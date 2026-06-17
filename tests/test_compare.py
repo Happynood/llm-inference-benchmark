@@ -12,6 +12,7 @@ from llm_inference_benchmark.compare import (
     RunRow,
     build_comparison_table,
     load_csv,
+    render_json,
     render_table,
     sort_rows,
 )
@@ -571,3 +572,155 @@ def test_render_table_ttft_cols_suppressed_for_old_csv() -> None:
     row = load_csv(MOCK_CSV)
     table = render_table([row])
     assert "TTFT p50" not in table
+
+
+# ---------------------------------------------------------------------------
+# render_json
+# ---------------------------------------------------------------------------
+
+
+def test_render_json_returns_valid_json() -> None:
+    import json
+
+    out = render_json(_ROWS)
+    parsed = json.loads(out)
+    assert isinstance(parsed, list)
+    assert len(parsed) == len(_ROWS)
+
+
+def test_render_json_required_fields_present() -> None:
+    import json
+
+    parsed = json.loads(render_json(_ROWS[:1]))
+    record = parsed[0]
+    for key in (
+        "backend",
+        "model",
+        "request_count",
+        "p50_latency_ms",
+        "p95_latency_ms",
+        "tokens_per_second",
+    ):
+        assert key in record, f"Missing key: {key}"
+
+
+def test_render_json_optional_fields_null_when_absent() -> None:
+    import json
+
+    rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None)]
+    parsed = json.loads(render_json(rows))
+    record = parsed[0]
+    assert record["peak_cuda_memory_mb"] is None
+    assert record["peak_vram_memory_mb"] is None
+    assert record["p50_ttft_ms"] is None
+    assert record["model_load_ms"] is None
+    assert record["perplexity"] is None
+    assert record["judge_score"] is None
+
+
+def test_render_json_optional_fields_present_when_set() -> None:
+    import dataclasses
+    import json
+
+    row_with_opts = dataclasses.replace(
+        _ROWS[0],
+        p50_ttft_ms=42.0,
+        p95_ttft_ms=80.0,
+        model_load_ms=1234.5,
+        perplexity=12.34,
+        judge_score=0.85,
+        peak_vram_memory_mb=2048.0,
+    )
+    parsed = json.loads(render_json([row_with_opts]))
+    record = parsed[0]
+    assert record["p50_ttft_ms"] == pytest.approx(42.0)
+    assert record["p95_ttft_ms"] == pytest.approx(80.0)
+    assert record["model_load_ms"] == pytest.approx(1234.5)
+    assert record["perplexity"] == pytest.approx(12.34)
+    assert record["judge_score"] == pytest.approx(0.85)
+    assert record["peak_vram_memory_mb"] == pytest.approx(2048.0)
+
+
+def test_render_json_values_match_row() -> None:
+    import json
+
+    row = _ROWS[0]
+    parsed = json.loads(render_json([row]))
+    record = parsed[0]
+    assert record["backend"] == row.backend
+    assert record["model"] == row.model
+    assert record["request_count"] == row.request_count
+    assert record["p50_latency_ms"] == pytest.approx(row.p50_latency_ms)
+    assert record["tokens_per_second"] == pytest.approx(row.tokens_per_second)
+
+
+def test_render_json_respects_sort_order() -> None:
+    import json
+
+    rows = sort_rows(_ROWS, sort_by="toks")
+    parsed = json.loads(render_json(rows))
+    toks = [r["tokens_per_second"] for r in parsed]
+    assert toks == sorted(toks, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# CLI --format json
+# ---------------------------------------------------------------------------
+
+
+def test_compare_subcommand_format_json_stdout() -> None:
+    import json
+
+    result = CliRunner().invoke(main, ["compare", str(MOCK_CSV), "--format", "json"])
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert isinstance(parsed, list)
+    assert len(parsed) == 1
+    assert parsed[0]["backend"] == "mock"
+    assert parsed[0]["model"] == "mock-gpt2"
+
+
+def test_compare_subcommand_format_json_two_files() -> None:
+    import json
+
+    result = CliRunner().invoke(
+        main, ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert len(parsed) == 2
+    backends = {r["backend"] for r in parsed}
+    assert backends == {"mock", "transformers"}
+
+
+def test_compare_subcommand_format_json_file_output(tmp_path: Path) -> None:
+    import json
+
+    out = tmp_path / "results.json"
+    result = CliRunner().invoke(
+        main, ["compare", str(MOCK_CSV), "--format", "json", "--output", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    parsed = json.loads(out.read_text())
+    assert isinstance(parsed, list)
+    assert parsed[0]["backend"] == "mock"
+
+
+def test_compare_subcommand_format_table_is_default() -> None:
+    result = CliRunner().invoke(main, ["compare", str(MOCK_CSV)])
+    assert result.exit_code == 0, result.output
+    assert "Backend" in result.output  # Markdown table header
+
+
+def test_compare_subcommand_format_json_sorted_by_toks() -> None:
+    import json
+
+    result = CliRunner().invoke(
+        main,
+        ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--format", "json", "--sort", "toks"],
+    )
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    toks = [r["tokens_per_second"] for r in parsed]
+    assert toks == sorted(toks, reverse=True)
