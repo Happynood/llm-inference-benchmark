@@ -8,6 +8,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- TTFT (time-to-first-token) measurement for the `transformers` backend: `p50_ttft_ms` and
+  `p95_ttft_ms` are now populated for HuggingFace runs alongside the existing OpenAI-endpoint
+  metrics. Implemented via a `LogitsProcessor` hook — no threading, token counts unchanged.
 - Docker image (mock + transformers CPU) published to GitHub Container Registry on each
   release tag; `Dockerfile` uses a two-layer uv install for optimal cache reuse.
 - `.github/workflows/release.yml` — creates a GitHub Release and pushes versioned

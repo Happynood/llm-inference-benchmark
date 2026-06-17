@@ -19,6 +19,19 @@ from llm_inference_benchmark.perplexity import perplexity_from_nll
 try:
     import torch  # type: ignore[import-untyped]
     from transformers import AutoModelForCausalLM, AutoTokenizer  # type: ignore[import-untyped]
+    from transformers import LogitsProcessor  # type: ignore[import-untyped]
+
+    class _FirstTokenTimer(LogitsProcessor):
+        """Records wall-clock time when the first output token's logits are ready."""
+
+        def __init__(self, start: float) -> None:
+            self._start = start
+            self.ttft_ms: float | None = None
+
+        def __call__(self, input_ids: "torch.LongTensor", scores: "torch.FloatTensor") -> "torch.FloatTensor":
+            if self.ttft_ms is None:
+                self.ttft_ms = (time.perf_counter() - self._start) * 1000.0
+            return scores
 
     _AVAILABLE = True
 except ImportError:
@@ -78,15 +91,18 @@ class HFBackend(Backend):
         inputs = self._tokenizer(prompt, return_tensors="pt").to(self._device)
         input_len: int = inputs["input_ids"].shape[1]
 
+        start = time.perf_counter()
+        timer = _FirstTokenTimer(start)
+
         with torch.no_grad():
-            start = time.perf_counter()
             output_ids = self._model.generate(
                 **inputs,
                 max_new_tokens=self._max_new_tokens,
                 do_sample=self._do_sample,
                 pad_token_id=self._tokenizer.pad_token_id,
+                logits_processor=[timer],
             )
-            elapsed_ms = (time.perf_counter() - start) * 1000.0
+        elapsed_ms = (time.perf_counter() - start) * 1000.0
 
         output_len: int = output_ids.shape[1] - input_len
         text: str = self._tokenizer.decode(output_ids[0, input_len:], skip_special_tokens=True)
@@ -96,6 +112,7 @@ class HFBackend(Backend):
             input_tokens=input_len,
             output_tokens=output_len,
             latency_ms=elapsed_ms,
+            ttft_ms=timer.ttft_ms,
         )
 
     def compute_perplexity(self, texts: list[str]) -> float | None:
