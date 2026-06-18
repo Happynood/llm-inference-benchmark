@@ -425,6 +425,14 @@ def validate_config_cmd(config_path: str, output_format: str) -> None:
                 "do_sample": cfg.onnx.do_sample,
                 "export": cfg.onnx.export,
             }
+        elif cfg.backend == "vllm":
+            backend_cfg = {
+                "max_new_tokens": cfg.vllm.max_new_tokens,
+                "temperature": cfg.vllm.temperature,
+                "tensor_parallel_size": cfg.vllm.tensor_parallel_size,
+                "gpu_memory_utilization": cfg.vllm.gpu_memory_utilization,
+                "dtype": cfg.vllm.dtype,
+            }
         else:
             backend_cfg = {}
 
@@ -490,6 +498,12 @@ def validate_config_cmd(config_path: str, output_format: str) -> None:
         click.echo(f"  onnx.device        : {cfg.onnx.device}")
         click.echo(f"  onnx.do_sample     : {cfg.onnx.do_sample}")
         click.echo(f"  onnx.export        : {cfg.onnx.export}")
+    elif cfg.backend == "vllm":
+        click.echo(f"  vllm.max_new_tokens        : {cfg.vllm.max_new_tokens}")
+        click.echo(f"  vllm.temperature           : {cfg.vllm.temperature}")
+        click.echo(f"  vllm.tensor_parallel_size  : {cfg.vllm.tensor_parallel_size}")
+        click.echo(f"  vllm.gpu_memory_utilization: {cfg.vllm.gpu_memory_utilization}")
+        click.echo(f"  vllm.dtype                 : {cfg.vllm.dtype}")
 
     click.echo("OK")
 
@@ -818,6 +832,18 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             device=cfg.onnx.device,
             do_sample=cfg.onnx.do_sample,
             export=cfg.onnx.export,
+            seed=cfg.seed,
+        )
+    if cfg.backend == "vllm":
+        from llm_inference_benchmark.backends.vllm_backend import VLLMBackend  # lazy: optional dep
+
+        return VLLMBackend(
+            model_id=cfg.model,
+            max_new_tokens=cfg.vllm.max_new_tokens,
+            temperature=cfg.vllm.temperature,
+            tensor_parallel_size=cfg.vllm.tensor_parallel_size,
+            gpu_memory_utilization=cfg.vllm.gpu_memory_utilization,
+            dtype=cfg.vllm.dtype,
             seed=cfg.seed,
         )
     raise ValueError(f"Unknown backend: {cfg.backend!r}")

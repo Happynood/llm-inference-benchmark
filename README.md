@@ -284,7 +284,7 @@ docker run --rm \
 - [x] Docker image (ghcr.io), GitHub Actions CI
 
 **Planned**
-- [ ] `vllm` backend — high-throughput GPU serving
+- [x] `vllm` backend — high-throughput GPU serving
 - [ ] Real parameter sweep evidence: RTX 3050, n\_gpu\_layers × max\_tokens on Llama 3.2 3B
 
 ---
