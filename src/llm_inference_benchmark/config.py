@@ -45,8 +45,16 @@ class OnnxBackendConfig(BaseModel):
     export: bool = False
 
 
+class VLLMBackendConfig(BaseModel):
+    max_new_tokens: int = Field(default=50, ge=1)
+    temperature: float = Field(default=0.0, ge=0.0)
+    tensor_parallel_size: int = Field(default=1, ge=1)
+    gpu_memory_utilization: float = Field(default=0.9, gt=0.0, le=1.0)
+    dtype: Literal["auto", "float16", "bfloat16", "float32"] = "auto"
+
+
 class BenchmarkConfig(BaseModel):
-    backend: Literal["mock", "transformers", "llama-cpp", "openai", "onnx"] = "mock"
+    backend: Literal["mock", "transformers", "llama-cpp", "openai", "onnx", "vllm"] = "mock"
     model: str = "mock-gpt2"
     requests: int = Field(default=20, ge=1)
     concurrency: int = Field(default=1, ge=1)
@@ -63,6 +71,7 @@ class BenchmarkConfig(BaseModel):
     llama_cpp: LlamaCppBackendConfig = Field(default_factory=LlamaCppBackendConfig)
     openai: OpenAIEndpointConfig = Field(default_factory=OpenAIEndpointConfig)
     onnx: OnnxBackendConfig = Field(default_factory=OnnxBackendConfig)
+    vllm: VLLMBackendConfig = Field(default_factory=VLLMBackendConfig)
 
     @model_validator(mode="after")
     def _validate_workload_profile(self) -> BenchmarkConfig:
