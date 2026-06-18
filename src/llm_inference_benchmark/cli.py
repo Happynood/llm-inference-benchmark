@@ -250,6 +250,14 @@ def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None) -> None:
     help="Maximum time-to-first-token p50 in ms (requires stream=True benchmark run)",
 )
 @click.option(
+    "--format",
+    "output_format",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format: table=human-readable text, json=machine-readable JSON",
+)
+@click.option(
     "--output",
     "output_path",
     default=None,
@@ -266,6 +274,7 @@ def recommend_cmd(
     min_judge: float | None,
     max_load_ms: float | None,
     max_ttft_ms: float | None,
+    output_format: str,
     output_path: str | None,
 ) -> None:
     """Recommend the best benchmark configuration under explicit constraints.
@@ -277,8 +286,15 @@ def recommend_cmd(
     Exits with code 1 when no run satisfies all constraints.
 
         llm-bench recommend results/*.csv --max-vram-mb 4096 --max-p95-ms 1000
+        llm-bench recommend results/*.csv --max-p95-ms 500 --format json
     """
-    from llm_inference_benchmark.recommend import Constraints, build_recommendation
+    from llm_inference_benchmark.compare import load_csv
+    from llm_inference_benchmark.recommend import (
+        Constraints,
+        build_recommendation,
+        recommend,
+        render_recommendation_json,
+    )
 
     constraints = Constraints(
         max_vram_mb=max_vram_mb,
@@ -290,7 +306,15 @@ def recommend_cmd(
         max_load_ms=max_load_ms,
         max_ttft_ms=max_ttft_ms,
     )
-    text, has_winner = build_recommendation(list(csv_files), constraints)
+
+    if output_format == "json":
+        rows = [load_csv(p) for p in csv_files]
+        result = recommend(rows, constraints)
+        text = render_recommendation_json(result)
+        has_winner = result.winner is not None
+    else:
+        text, has_winner = build_recommendation(list(csv_files), constraints)
+
     if output_path:
         Path(output_path).write_text(text + "\n")
         click.echo(f"Recommendation written to {output_path}")

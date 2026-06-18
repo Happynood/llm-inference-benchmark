@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench recommend --format json`: machine-readable JSON output from the recommend command.
+  Returns an object with `winner` (all RunRow fields; `null` when no run satisfies constraints),
+  `is_pareto_optimal` (bool), `candidates_count` (int), and `excluded` (array of objects with
+  `backend`, `model`, and `reason`). Exit code behaviour (0 = winner found, 1 = no winner) is
+  unchanged. Compatible with `--output`; useful for CI pipelines and scripting without
+  screen-scraping the human-readable text output. The default format remains `table`.
 - `seed` field in `BenchmarkConfig`: optional random seed for stochastic sampling.
   Applied per-request via `torch.manual_seed` in the `transformers` backend and at model
   load via `Llama(seed=...)` in the `llama-cpp` backend. Forwarded as a best-effort hint
