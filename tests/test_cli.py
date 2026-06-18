@@ -437,3 +437,40 @@ def test_all_overrides_combined(tmp_config: Path) -> None:
     )
     assert result.exit_code == 0, result.output
     assert "request_count: 2" in result.output
+
+
+# ---------------------------------------------------------------------------
+# --seed override
+# ---------------------------------------------------------------------------
+
+
+def test_seed_override_exits_zero(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--seed", "42"])
+    assert result.exit_code == 0, result.output
+
+
+def test_seed_override_shown_in_header(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--seed", "42"])
+    assert result.exit_code == 0, result.output
+    assert "Seed: 42" in result.output
+
+
+def test_seed_not_shown_when_absent(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config)])
+    assert result.exit_code == 0, result.output
+    assert "Seed:" not in result.output
+
+
+def test_seed_override_zero(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--seed", "0"])
+    assert result.exit_code == 0, result.output
+    assert "Seed: 0" in result.output
+
+
+def test_seed_override_combined_with_requests(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main, ["--config", str(tmp_config), "--seed", "7", "--requests", "2"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Seed: 7" in result.output
+    assert "request_count: 2" in result.output
