@@ -36,6 +36,73 @@ def test_cli_missing_config_fails() -> None:
 
 
 # ---------------------------------------------------------------------------
+# --format json on the main benchmark command
+# ---------------------------------------------------------------------------
+
+
+def test_cli_format_json_emits_valid_json(tmp_config: Path) -> None:
+    import json
+
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--format", "json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["backend"] == "mock"
+    assert "p50_latency_ms" in data
+    assert "timestamp" in data
+
+
+def test_cli_format_json_null_for_none_fields(tmp_config: Path) -> None:
+    import json
+
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--format", "json"])
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    # perplexity is None for mock backend — must be null in JSON, not ""
+    assert data["perplexity"] is None
+
+
+def test_cli_format_json_no_table_text(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--format", "json"])
+    assert result.exit_code == 0, result.output
+    assert "Benchmark Results" not in result.output
+    assert "Backend:" not in result.output
+
+
+def test_cli_format_json_output_writes_json_file(tmp_config: Path, tmp_path: Path) -> None:
+    import json
+
+    out = tmp_path / "results.json"
+    result = CliRunner().invoke(
+        main, ["--config", str(tmp_config), "--format", "json", "--output", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    data = json.loads(out.read_text())
+    assert data["backend"] == "mock"
+    assert "p50_latency_ms" in data
+
+
+def test_cli_format_json_output_no_stdout_json(tmp_config: Path, tmp_path: Path) -> None:
+    out = tmp_path / "results.json"
+    result = CliRunner().invoke(
+        main, ["--config", str(tmp_config), "--format", "json", "--output", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    # When writing to file, stdout should not contain the JSON payload
+    assert result.output.strip() == "" or not _is_json(result.output)
+
+
+def _is_json(text: str) -> bool:
+    import json
+
+    try:
+        json.loads(text)
+        return True
+    except ValueError:
+        return False
+
+
+# ---------------------------------------------------------------------------
 # validate-config subcommand
 # ---------------------------------------------------------------------------
 
