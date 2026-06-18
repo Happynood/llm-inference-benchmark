@@ -66,6 +66,14 @@ from llm_inference_benchmark.runner import load_prompts, run_repeated
     help="Override config concurrency",
 )
 @click.option(
+    "--seed",
+    "seed_override",
+    default=None,
+    type=int,
+    metavar="N",
+    help="Override config seed for reproducible prompt sampling",
+)
+@click.option(
     "--format",
     "output_format",
     default="table",
@@ -81,6 +89,7 @@ def main(
     requests_override: int | None,
     warmup_requests_override: int | None,
     concurrency_override: int | None,
+    seed_override: int | None,
     output_format: str,
 ) -> None:
     """LLM inference benchmark toolkit.
@@ -91,7 +100,7 @@ def main(
 
     Override individual config knobs without editing the YAML:
 
-        llm-bench --config configs/example.yaml --requests 50 --concurrency 4
+        llm-bench --config configs/example.yaml --requests 50 --concurrency 4 --seed 42
 
     Use the compare subcommand to generate a Markdown table from saved CSVs:
 
@@ -111,6 +120,8 @@ def main(
         overrides["warmup_requests"] = warmup_requests_override
     if concurrency_override is not None:
         overrides["concurrency"] = concurrency_override
+    if seed_override is not None:
+        overrides["seed"] = seed_override
     if overrides:
         cfg = cfg.model_copy(update=overrides)
     _t0 = time.perf_counter()
@@ -119,7 +130,10 @@ def main(
     prompts = load_prompts(cfg.resolve_prompts_file())
 
     if output_format != "json":
-        click.echo(f"Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
+        header = f"Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}"
+        if cfg.seed is not None:
+            header += f"  Seed: {cfg.seed}"
+        click.echo(header)
     report = run_repeated(backend, cfg, prompts, model_load_ms=model_load_ms)
 
     if output_format == "json":
