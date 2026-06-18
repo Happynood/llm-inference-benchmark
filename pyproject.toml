@@ -23,6 +23,11 @@ transformers = [
 llama-cpp = [
     "llama-cpp-python>=0.2",
 ]
+onnx = [
+    "optimum[onnxruntime]>=1.17",
+    "torch>=2.0",
+    "transformers>=4.40",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -48,10 +53,11 @@ select = ["E", "F", "I", "UP", "B"]
 [tool.pyright]
 pythonVersion = "3.11"
 include = ["src", "tests"]
-# hf.py and llama_cpp.py use optional heavy deps; excluded from CI type-check
+# hf.py, llama_cpp.py, and onnx.py use optional heavy deps; excluded from CI type-check
 ignore = [
     "src/llm_inference_benchmark/backends/hf.py",
     "src/llm_inference_benchmark/backends/llama_cpp.py",
+    "src/llm_inference_benchmark/backends/onnx.py",
 ]
 venvPath = "."
 venv = ".venv"

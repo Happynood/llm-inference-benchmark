@@ -38,8 +38,15 @@ class OpenAIEndpointConfig(BaseModel):
     stream: bool = False
 
 
+class OnnxBackendConfig(BaseModel):
+    max_new_tokens: int = Field(default=50, ge=1)
+    device: str = "cpu"
+    do_sample: bool = False
+    export: bool = False
+
+
 class BenchmarkConfig(BaseModel):
-    backend: Literal["mock", "transformers", "llama-cpp", "openai"] = "mock"
+    backend: Literal["mock", "transformers", "llama-cpp", "openai", "onnx"] = "mock"
     model: str = "mock-gpt2"
     requests: int = Field(default=20, ge=1)
     concurrency: int = Field(default=1, ge=1)
@@ -55,6 +62,7 @@ class BenchmarkConfig(BaseModel):
     hf: HFBackendConfig = Field(default_factory=HFBackendConfig)
     llama_cpp: LlamaCppBackendConfig = Field(default_factory=LlamaCppBackendConfig)
     openai: OpenAIEndpointConfig = Field(default_factory=OpenAIEndpointConfig)
+    onnx: OnnxBackendConfig = Field(default_factory=OnnxBackendConfig)
 
     @model_validator(mode="after")
     def _validate_workload_profile(self) -> BenchmarkConfig:
