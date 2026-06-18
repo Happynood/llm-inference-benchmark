@@ -620,6 +620,60 @@ def profiles_cmd(output_format: str) -> None:
             click.echo()
 
 
+@main.command("env")
+@click.option(
+    "--format",
+    "fmt",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format: table=human-readable, json=machine-readable JSON",
+)
+def env_cmd(fmt: str) -> None:
+    """Print current Python, package, and hardware environment.
+
+    Useful for verifying GPU detection before a run and for sharing
+    reproducibility context without running a full benchmark.
+
+        llm-bench env
+        llm-bench env --format json
+    """
+    from llm_inference_benchmark.manifest import collect_env_info
+
+    info = collect_env_info()
+
+    if fmt == "json":
+        click.echo(json.dumps(asdict(info), indent=2))
+        return
+
+    click.echo(f"python      : {info.python_version.splitlines()[0]}")
+    click.echo(f"platform    : {info.platform_info}")
+    click.echo(f"cpu         : {info.cpu_model} ({info.cpu_count} cores)")
+    click.echo(f"package     : llm-inference-benchmark {info.package_version}")
+    for label, ver in [
+        ("torch", info.torch_version),
+        ("transformers", info.transformers_version),
+        ("optimum", info.optimum_version),
+        ("vllm", info.vllm_version),
+        ("psutil", info.psutil_version),
+    ]:
+        if ver is not None:
+            click.echo(f"{label:<12}: {ver}")
+    if info.gpu:
+        parts: list[str] = []
+        if info.gpu.name:
+            parts.append(info.gpu.name)
+        if info.gpu.driver_version:
+            parts.append(f"driver {info.gpu.driver_version}")
+        if info.gpu.cuda_version:
+            parts.append(f"CUDA {info.gpu.cuda_version}")
+        if info.gpu.vram_total_mb is not None:
+            parts.append(f"{info.gpu.vram_total_mb} MB VRAM")
+        click.echo(f"gpu         : {' | '.join(parts) if parts else 'detected'}")
+    else:
+        click.echo("gpu         : not detected")
+
+
 @main.command("matrix")
 @click.option(
     "--config",
