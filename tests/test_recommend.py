@@ -590,7 +590,9 @@ def test_cli_recommend_format_json_no_markdown(tmp_path: Path) -> None:
 def test_cli_recommend_format_json_output_file(tmp_path: Path) -> None:
     p = _write_csv(tmp_path / "run.csv", _row())
     out = tmp_path / "rec.json"
-    result = CliRunner().invoke(main, ["recommend", str(p), "--format", "json", "--output", str(out)])
+    result = CliRunner().invoke(
+        main, ["recommend", str(p), "--format", "json", "--output", str(out)]
+    )
     assert result.exit_code == 0
     assert out.exists()
     parsed = json.loads(out.read_text())
@@ -599,7 +601,9 @@ def test_cli_recommend_format_json_output_file(tmp_path: Path) -> None:
 
 def test_cli_recommend_format_json_exits_1_when_no_winner(tmp_path: Path) -> None:
     p = _write_csv(tmp_path / "run.csv", _row(p95=999.0))
-    result = CliRunner().invoke(main, ["recommend", str(p), "--max-p95-ms", "100", "--format", "json"])
+    result = CliRunner().invoke(
+        main, ["recommend", str(p), "--max-p95-ms", "100", "--format", "json"]
+    )
     assert result.exit_code == 1
     parsed = json.loads(result.output)
     assert parsed["winner"] is None
