@@ -33,6 +33,40 @@ class GpuInfo:
 
 
 @dataclass(frozen=True)
+class EnvInfo:
+    """Standalone environment snapshot — no benchmark config required."""
+
+    python_version: str
+    platform_info: str
+    cpu_model: str
+    cpu_count: int | None
+    package_version: str
+    torch_version: str | None
+    transformers_version: str | None
+    optimum_version: str | None
+    vllm_version: str | None
+    psutil_version: str | None
+    gpu: GpuInfo | None
+
+
+def collect_env_info() -> EnvInfo:
+    """Collect environment/hardware info without requiring a benchmark config."""
+    return EnvInfo(
+        python_version=sys.version,
+        platform_info=platform.platform(),
+        cpu_model=_cpu_model(),
+        cpu_count=os.cpu_count(),
+        package_version=_pkg_version("llm-inference-benchmark") or "unknown",
+        torch_version=_pkg_version("torch"),
+        transformers_version=_pkg_version("transformers"),
+        optimum_version=_pkg_version("optimum"),
+        vllm_version=_pkg_version("vllm"),
+        psutil_version=_pkg_version("psutil"),
+        gpu=_collect_gpu_info(),
+    )
+
+
+@dataclass(frozen=True)
 class RunManifest:
     timestamp: str
     backend: str

@@ -8,6 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench env`: prints the current Python, package, and hardware environment without
+  requiring a benchmark config or a full run. Reports Python version, OS/platform, CPU model
+  and core count, `llm-inference-benchmark` version, and optional package versions
+  (`torch`, `transformers`, `optimum`, `vllm`, `psutil`) when installed. GPU section shows
+  device name, driver version, CUDA version, and total VRAM from `nvidia-smi`; reports
+  "not detected" on CPU-only machines. Supports `--format json` for machine-readable output
+  and CI integration.
 - `llm-bench recommend --format json`: machine-readable JSON output from the recommend command.
   Returns an object with `winner` (all RunRow fields; `null` when no run satisfies constraints),
   `is_pareto_optimal` (bool), `candidates_count` (int), and `excluded` (array of objects with
