@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-06-18
+
 ### Added
 - `llm-bench env`: prints the current Python, package, and hardware environment without
   requiring a benchmark config or a full run. Reports Python version, OS/platform, CPU model
@@ -15,6 +17,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   device name, driver version, CUDA version, and total VRAM from `nvidia-smi`; reports
   "not detected" on CPU-only machines. Supports `--format json` for machine-readable output
   and CI integration.
+- `llm-bench --seed N` CLI flag: overrides the `seed:` field in the YAML config without
+  editing the file. Follows the same pattern as `--requests`, `--warmup-requests`, and
+  `--concurrency`. The seed value appears in the human-readable run header when set
+  (`Seed: N`). Has no effect when the backend uses greedy decoding (`temperature: 0.0`).
 - `llm-bench recommend --format json`: machine-readable JSON output from the recommend command.
   Returns an object with `winner` (all RunRow fields; `null` when no run satisfies constraints),
   `is_pareto_optimal` (bool), `candidates_count` (int), and `excluded` (array of objects with
@@ -30,6 +36,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   Returns a JSON array of objects — one per CSV — with all fields present (`null` for absent
   optional metrics). Compatible with `--sort` and `--output`; useful for CI dashboards and
   scripting without screen-scraping Markdown. The default format remains `table` (Markdown).
+- `vllm` backend (`backend: vllm`): high-throughput GPU inference via the vLLM engine
+  (`vllm>=0.4`). Install with `uv sync --extra vllm`. Supports `max_new_tokens`,
+  `temperature`, `tensor_parallel_size`, `gpu_memory_utilization`, and `dtype` under
+  `vllm:` in the config.
 
 ### Changed
 - `llm-bench compare` now suppresses optional columns (Out tok/s, In/Out tok, Load, TTFT,
@@ -37,8 +47,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   column. Mandatory columns (Backend, Model, N, p50, p95, tok/s, CPU mem) are always shown.
   Mixed tables (some rows with data, some without) still show the column with N/A for the
   rows that lack data.
-
-### Added
 - `llm-bench diff --format json`: machine-readable JSON output from the diff command.
   Returns an object with `baseline`/`current` run metadata and a `metrics` list — one
   entry per tracked metric — each with `label`, `baseline`, `current`, `change_pct`
