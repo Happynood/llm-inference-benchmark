@@ -32,6 +32,7 @@ Constraint semantics:
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -251,6 +252,54 @@ def render_recommendation(result: RecommendationResult) -> str:
             lines.append(f"  {ex.row.backend}  {_display_model(ex.row.model)}  →  {ex.reason}")
 
     return "\n".join(lines)
+
+
+def _row_as_dict(row: RunRow) -> dict[str, object]:
+    return {
+        "backend": row.backend,
+        "model": row.model,
+        "request_count": row.request_count,
+        "p50_latency_ms": row.p50_latency_ms,
+        "p95_latency_ms": row.p95_latency_ms,
+        "tokens_per_second": row.tokens_per_second,
+        "decode_tokens_per_second": row.decode_tokens_per_second,
+        "mean_input_tokens": row.mean_input_tokens,
+        "mean_output_tokens": row.mean_output_tokens,
+        "model_load_ms": row.model_load_ms,
+        "p50_ttft_ms": row.p50_ttft_ms,
+        "p95_ttft_ms": row.p95_ttft_ms,
+        "peak_cpu_memory_mb": row.peak_cpu_memory_mb,
+        "peak_cuda_memory_mb": row.peak_cuda_memory_mb,
+        "peak_vram_memory_mb": row.peak_vram_memory_mb,
+        "sanity_pass_rate": row.sanity_pass_rate,
+        "task_quality_pass_rate": row.task_quality_pass_rate,
+        "perplexity": row.perplexity,
+        "judge_score": row.judge_score,
+        "p95_latency_ms_std": row.p95_latency_ms_std,
+        "tokens_per_second_std": row.tokens_per_second_std,
+    }
+
+
+def render_recommendation_json(result: RecommendationResult) -> str:
+    """Serialize a RecommendationResult to a JSON string.
+
+    The returned object has four keys:
+    - ``winner``: the winning RunRow as an object (all fields; None for absent values),
+      or ``null`` when no run satisfies all constraints.
+    - ``is_pareto_optimal``: true when the winner is Pareto-optimal among candidates.
+    - ``candidates_count``: number of runs that passed all constraints.
+    - ``excluded``: list of objects with ``backend``, ``model``, and ``reason`` keys.
+    """
+    data: dict[str, object] = {
+        "winner": _row_as_dict(result.winner) if result.winner is not None else None,
+        "is_pareto_optimal": result.is_pareto_optimal,
+        "candidates_count": len(result.candidates),
+        "excluded": [
+            {"backend": ex.row.backend, "model": ex.row.model, "reason": ex.reason}
+            for ex in result.excluded
+        ],
+    }
+    return json.dumps(data, indent=2)
 
 
 def build_recommendation(paths: list[str | Path], constraints: Constraints) -> tuple[str, bool]:

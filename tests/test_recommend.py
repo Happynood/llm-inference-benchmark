@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import json
 from pathlib import Path
 
 import pytest
@@ -18,6 +19,7 @@ from llm_inference_benchmark.recommend import (
     build_recommendation,
     recommend,
     render_recommendation,
+    render_recommendation_json,
 )
 
 # ---------------------------------------------------------------------------
@@ -489,3 +491,133 @@ def test_apply_constraints_ttft_below_threshold_passes() -> None:
     candidates, excluded = apply_constraints([row], Constraints(max_ttft_ms=100.0))
     assert len(candidates) == 1
     assert excluded == []
+
+
+# ---------------------------------------------------------------------------
+# render_recommendation_json
+# ---------------------------------------------------------------------------
+
+
+def test_render_recommendation_json_returns_valid_json() -> None:
+    result = recommend([_row()], Constraints())
+    text = render_recommendation_json(result)
+    parsed = json.loads(text)
+    assert isinstance(parsed, dict)
+
+
+def test_render_recommendation_json_winner_fields_present() -> None:
+    result = recommend([_row(backend="mock", model="m", p95=100.0, toks=50.0)], Constraints())
+    parsed = json.loads(render_recommendation_json(result))
+    winner = parsed["winner"]
+    assert winner is not None
+    assert winner["backend"] == "mock"
+    assert winner["model"] == "m"
+    assert winner["p95_latency_ms"] == 100.0
+    assert winner["tokens_per_second"] == 50.0
+    assert "peak_cpu_memory_mb" in winner
+    assert "peak_vram_memory_mb" in winner
+
+
+def test_render_recommendation_json_optional_fields_null_when_absent() -> None:
+    result = recommend([_row(vram=None, ppl=None, judge=None, ttft=None)], Constraints())
+    parsed = json.loads(render_recommendation_json(result))
+    winner = parsed["winner"]
+    assert winner["peak_vram_memory_mb"] is None
+    assert winner["perplexity"] is None
+    assert winner["judge_score"] is None
+    assert winner["p50_ttft_ms"] is None
+
+
+def test_render_recommendation_json_no_winner_when_all_excluded() -> None:
+    row = _row(p95=500.0)
+    result = recommend([row], Constraints(max_p95_ms=100.0))
+    parsed = json.loads(render_recommendation_json(result))
+    assert parsed["winner"] is None
+    assert parsed["is_pareto_optimal"] is False
+    assert parsed["candidates_count"] == 0
+    assert len(parsed["excluded"]) == 1
+    assert parsed["excluded"][0]["reason"] != ""
+
+
+def test_render_recommendation_json_excluded_list() -> None:
+    rows = [_row(model="fast", p95=100.0), _row(model="slow", p95=999.0)]
+    result = recommend(rows, Constraints(max_p95_ms=200.0))
+    parsed = json.loads(render_recommendation_json(result))
+    assert parsed["winner"]["model"] == "fast"
+    assert parsed["candidates_count"] == 1
+    assert len(parsed["excluded"]) == 1
+    excl = parsed["excluded"][0]
+    assert excl["model"] == "slow"
+    assert "backend" in excl
+    assert "reason" in excl
+
+
+def test_render_recommendation_json_is_pareto_optimal_true() -> None:
+    rows = [_row(model="a", p95=100.0, toks=80.0), _row(model="b", p95=200.0, toks=40.0)]
+    result = recommend(rows, Constraints())
+    parsed = json.loads(render_recommendation_json(result))
+    assert parsed["is_pareto_optimal"] is True
+
+
+def test_render_recommendation_json_candidates_count() -> None:
+    rows = [_row(model="a"), _row(model="b"), _row(model="c")]
+    result = recommend(rows, Constraints())
+    parsed = json.loads(render_recommendation_json(result))
+    assert parsed["candidates_count"] == 3
+
+
+# ---------------------------------------------------------------------------
+# CLI --format json
+# ---------------------------------------------------------------------------
+
+
+def test_cli_recommend_format_json_stdout(tmp_path: Path) -> None:
+    p = _write_csv(tmp_path / "run.csv", _row())
+    result = CliRunner().invoke(main, ["recommend", str(p), "--format", "json"])
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["winner"] is not None
+
+
+def test_cli_recommend_format_json_no_markdown(tmp_path: Path) -> None:
+    p = _write_csv(tmp_path / "run.csv", _row())
+    result = CliRunner().invoke(main, ["recommend", str(p), "--format", "json"])
+    assert result.exit_code == 0
+    assert "Recommendation" not in result.output
+    assert "─" not in result.output
+
+
+def test_cli_recommend_format_json_output_file(tmp_path: Path) -> None:
+    p = _write_csv(tmp_path / "run.csv", _row())
+    out = tmp_path / "rec.json"
+    result = CliRunner().invoke(
+        main, ["recommend", str(p), "--format", "json", "--output", str(out)]
+    )
+    assert result.exit_code == 0
+    assert out.exists()
+    parsed = json.loads(out.read_text())
+    assert "winner" in parsed
+
+
+def test_cli_recommend_format_json_exits_1_when_no_winner(tmp_path: Path) -> None:
+    p = _write_csv(tmp_path / "run.csv", _row(p95=999.0))
+    result = CliRunner().invoke(
+        main, ["recommend", str(p), "--max-p95-ms", "100", "--format", "json"]
+    )
+    assert result.exit_code == 1
+    parsed = json.loads(result.output)
+    assert parsed["winner"] is None
+    assert len(parsed["excluded"]) == 1
+
+
+def test_cli_recommend_format_json_with_constraint_excludes(tmp_path: Path) -> None:
+    p_fast = _write_csv(tmp_path / "fast.csv", _row(model="fast", p95=100.0, vram=1000.0))
+    p_slow = _write_csv(tmp_path / "slow.csv", _row(model="slow", p95=100.0, vram=5000.0))
+    result = CliRunner().invoke(
+        main, ["recommend", str(p_fast), str(p_slow), "--max-vram-mb", "2000", "--format", "json"]
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["winner"]["model"] == "fast"
+    assert len(parsed["excluded"]) == 1
+    assert parsed["excluded"][0]["model"] == "slow"

@@ -141,10 +141,24 @@ llm-bench recommend [OPTIONS] CSV_FILES...
 | `--min-judge FLOAT` | float | — | Minimum judge score `[0, 1]` |
 | `--max-ttft-ms FLOAT` | float | — | Maximum TTFT p50 in ms (requires `stream: true` run) |
 | `--max-load-ms FLOAT` | float | — | Maximum model load time in ms |
+| `--format` | choice | `table` | Output format: `table` = human-readable text, `json` = machine-readable JSON |
 | `--output PATH` | path | — | Write recommendation to file instead of stdout |
 
 Exits with code **0** when a winner is found, **1** when no run satisfies all constraints
 (all excluded runs are listed with their rejection reason).
+
+**`--format json` output**
+
+When `--format json` is used, the output is a JSON object with four keys:
+
+| Key | Type | Description |
+|-----|------|-------------|
+| `winner` | object \| null | The recommended run (all RunRow fields; `null` when no run satisfies constraints) |
+| `is_pareto_optimal` | bool | Whether the winner is Pareto-optimal among passing candidates |
+| `candidates_count` | int | Number of runs that passed all constraints |
+| `excluded` | array | Each entry has `backend`, `model`, and `reason` keys |
+
+The exit code is identical to the default format: 0 when a winner exists, 1 otherwise.
 
 **Examples**
 
@@ -160,6 +174,10 @@ llm-bench recommend results/*.csv --max-vram-mb 4096 --max-ttft-ms 100
 
 # Add load time constraint (requires runs from v0.18+)
 llm-bench recommend results/*.csv --max-load-ms 5000
+
+# Machine-readable output for CI or scripting
+llm-bench recommend results/*.csv --max-vram-mb 4096 --format json
+llm-bench recommend results/*.csv --max-p95-ms 500 --format json --output rec.json
 ```
 
 ---
