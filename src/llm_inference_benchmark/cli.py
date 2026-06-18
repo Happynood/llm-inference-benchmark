@@ -708,7 +708,17 @@ def env_cmd(fmt: str) -> None:
     default=False,
     help="Continue remaining runs after a failure; exit 1 if any run failed",
 )
-def matrix_cmd(matrix_path: str, dry_run: bool, continue_on_error: bool) -> None:
+@click.option(
+    "--format",
+    "output_format",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format: table=human-readable, json=machine-readable JSON",
+)
+def matrix_cmd(
+    matrix_path: str, dry_run: bool, continue_on_error: bool, output_format: str
+) -> None:
     """Execute all benchmark runs defined in a matrix config file.
 
     Each run writes a CSV and a manifest into the results directory:
@@ -719,9 +729,17 @@ def matrix_cmd(matrix_path: str, dry_run: bool, continue_on_error: bool) -> None
 
         llm-bench matrix --config configs/matrix-example.yaml --dry-run
 
+    Machine-readable dry-run listing:
+
+        llm-bench matrix --config configs/matrix-example.yaml --dry-run --format json
+
     Continue remaining runs even when one fails:
 
         llm-bench matrix --config configs/matrix-example.yaml --continue-on-error
+
+    Machine-readable execution summary:
+
+        llm-bench matrix --config configs/matrix-example.yaml --format json
 
     Compare outputs afterwards:
 
@@ -736,6 +754,29 @@ def matrix_cmd(matrix_path: str, dry_run: bool, continue_on_error: bool) -> None
     n = len(matrix.runs)
 
     if dry_run:
+        if output_format == "json":
+            click.echo(
+                json.dumps(
+                    {
+                        "matrix": matrix_path,
+                        "results_dir": str(results_dir),
+                        "total": n,
+                        "runs": [
+                            {
+                                "index": idx,
+                                "name": run.name,
+                                "config": run.config,
+                                "workload_profile": run.workload_profile,
+                                "overrides": run.overrides or {},
+                                "output": str(results_dir / f"{run.name}.csv"),
+                                "manifest": str(results_dir / f"{run.name}.manifest.json"),
+                            }
+                            for idx, run in enumerate(matrix.runs, 1)
+                        ],
+                    }
+                )
+            )
+            return
         click.echo(f"Matrix: {n} run(s) → {results_dir}/")
         for idx, run in enumerate(matrix.runs, 1):
             click.echo(f"  [{idx}/{n}] {run.name}")
@@ -748,13 +789,15 @@ def matrix_cmd(matrix_path: str, dry_run: bool, continue_on_error: bool) -> None
             click.echo(f"        output: {results_dir / run.name}.csv")
         return
 
+    _json = output_format == "json"
     results_dir.mkdir(parents=True, exist_ok=True)
-    click.echo(f"Matrix: {n} run(s) → {results_dir}/")
+    click.echo(f"Matrix: {n} run(s) → {results_dir}/", err=_json)
 
     failures: list[tuple[str, str]] = []
+    json_runs: list[dict[str, object]] = []
 
     for idx, run in enumerate(matrix.runs, 1):
-        click.echo(f"\n[{idx}/{n}] {run.name}")
+        click.echo(f"\n[{idx}/{n}] {run.name}", err=_json)
         try:
             cfg = load_config(run.config)
             if run.overrides:
@@ -768,7 +811,10 @@ def matrix_cmd(matrix_path: str, dry_run: bool, continue_on_error: bool) -> None
             backend = _build_backend(cfg)
             model_load_ms = (time.perf_counter() - _t0) * 1000.0
             prompts = load_prompts(cfg.resolve_prompts_file())
-            click.echo(f"  Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
+            click.echo(
+                f"  Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}",
+                err=_json,
+            )
             report = run_repeated(backend, cfg, prompts, model_load_ms=model_load_ms)
 
             csv_path = results_dir / f"{run.name}.csv"
@@ -790,21 +836,51 @@ def matrix_cmd(matrix_path: str, dry_run: bool, continue_on_error: bool) -> None
             manifest = collect_manifest(run.config, cfg)
             write_manifest(manifest, manifest_path)
 
-            click.echo(f"  → {csv_path}")
-            click.echo(f"  → {manifest_path}")
+            click.echo(f"  → {csv_path}", err=_json)
+            click.echo(f"  → {manifest_path}", err=_json)
+
+            if _json:
+                json_runs.append(
+                    {
+                        "index": idx,
+                        "name": run.name,
+                        "status": "ok",
+                        "output": str(csv_path),
+                        "manifest": str(manifest_path),
+                    }
+                )
 
             # Release backend resources (GPU memory, file handles) before the next run.
             del backend
             gc.collect()
 
         except Exception as exc:  # noqa: BLE001
-            if not continue_on_error:
+            if not _json and not continue_on_error:
                 raise
             msg = str(exc) or type(exc).__name__
             click.echo(f"  FAILED: {msg}", err=True)
             failures.append((run.name, msg))
+            if _json:
+                json_runs.append({"index": idx, "name": run.name, "status": "failed", "error": msg})
 
     n_ok = n - len(failures)
+    if _json:
+        click.echo(
+            json.dumps(
+                {
+                    "matrix": matrix_path,
+                    "results_dir": str(results_dir),
+                    "total": n,
+                    "succeeded": n_ok,
+                    "failed": len(failures),
+                    "runs": json_runs,
+                }
+            )
+        )
+        if failures:
+            sys.exit(1)
+        return
+
     if failures:
         click.echo(f"\nDone: {n_ok} completed, {len(failures)} failed.")
         click.echo("Failed runs:")
