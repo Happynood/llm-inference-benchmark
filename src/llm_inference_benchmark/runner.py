@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import random
 import statistics
 import time
 from pathlib import Path
@@ -33,6 +34,19 @@ def load_prompts(path: str | Path) -> list[str]:
     if not lines:
         raise ValueError(f"No prompts found in {path}")
     return lines
+
+
+def _resolve_prompt_sequence(prompts: list[str], n: int, seed: int | None) -> list[str]:
+    """Return the ordered list of prompts to use for n benchmark requests.
+
+    When seed is None the existing cycling behaviour is preserved.
+    When seed is set the sequence is drawn with replacement using random.Random(seed),
+    making both prompt selection and model-side sampling fully reproducible from the
+    same config.
+    """
+    if seed is None:
+        return [prompts[i % len(prompts)] for i in range(n)]
+    return random.Random(seed).choices(prompts, k=n)
 
 
 async def _run_concurrent(
@@ -95,6 +109,8 @@ def run_benchmark(
 
     warmup_p50 = statistics.median(warmup_latencies) if warmup_latencies else None
 
+    sequence = _resolve_prompt_sequence(prompts, config.requests, config.seed)
+
     results: list[RequestMetrics] = []
     texts: list[str] = []
     prompts_used: list[str] = []
@@ -105,11 +121,11 @@ def run_benchmark(
         reset_cuda_peak()
         if config.concurrency > 1:
             results, texts, prompts_used, wall_clock_elapsed_s, ttft_values = asyncio.run(
-                _run_concurrent(backend, config, prompts)
+                _run_concurrent(backend, config, sequence)
             )
         else:
             for i in range(config.requests):
-                prompt = prompts[i % len(prompts)]
+                prompt = sequence[i]
                 result = backend.generate(prompt)
                 results.append(
                     RequestMetrics(

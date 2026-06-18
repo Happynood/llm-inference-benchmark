@@ -5,7 +5,7 @@ import pytest
 
 from llm_inference_benchmark.backends.mock import MockBackend
 from llm_inference_benchmark.config import BenchmarkConfig
-from llm_inference_benchmark.runner import load_prompts, run_benchmark
+from llm_inference_benchmark.runner import _resolve_prompt_sequence, load_prompts, run_benchmark
 
 
 def test_load_prompts(tmp_prompts: Path) -> None:
@@ -221,3 +221,80 @@ def test_run_benchmark_ttft_none_when_backend_does_not_provide_it(tmp_prompts: P
     report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
     assert report.p50_ttft_ms is None
     assert report.p95_ttft_ms is None
+
+
+# ---------------------------------------------------------------------------
+# Seed-controlled prompt sampling (reproducible multi-run benchmarks)
+# ---------------------------------------------------------------------------
+
+
+def test_resolve_prompt_sequence_seed_none_cycles() -> None:
+    """seed=None preserves the existing cycling-by-index behaviour."""
+    prompts = ["a", "b", "c"]
+    seq = _resolve_prompt_sequence(prompts, 7, seed=None)
+    assert seq == ["a", "b", "c", "a", "b", "c", "a"]
+
+
+def test_resolve_prompt_sequence_same_seed_is_deterministic() -> None:
+    """Two calls with identical seed and prompts produce the same sequence."""
+    prompts = ["a", "b", "c", "d", "e"]
+    seq1 = _resolve_prompt_sequence(prompts, 10, seed=42)
+    seq2 = _resolve_prompt_sequence(prompts, 10, seed=42)
+    assert seq1 == seq2
+
+
+def test_resolve_prompt_sequence_different_seeds_differ() -> None:
+    """Different seeds produce different sequences for any pool larger than one."""
+    prompts = ["a", "b", "c", "d", "e"]
+    seq1 = _resolve_prompt_sequence(prompts, 10, seed=1)
+    seq2 = _resolve_prompt_sequence(prompts, 10, seed=2)
+    assert seq1 != seq2
+
+
+def test_resolve_prompt_sequence_seed_returns_correct_length() -> None:
+    prompts = ["x", "y", "z"]
+    assert len(_resolve_prompt_sequence(prompts, 8, seed=99)) == 8
+
+
+def test_run_benchmark_seed_controls_prompt_selection(tmp_prompts: Path) -> None:
+    """run_benchmark with two different seeds calls the backend with different prompts."""
+    received: dict[int, list[str]] = {1: [], 2: []}
+    prompts = load_prompts(tmp_prompts)
+
+    class _RecordingBackend(MockBackend):
+        def __init__(self, slot: int) -> None:
+            super().__init__(model="test", latency_ms=0)
+            self._slot = slot
+
+        def generate(self, prompt: str):  # type: ignore[override]
+            received[self._slot].append(prompt)
+            return super().generate(prompt)
+
+    cfg1 = BenchmarkConfig(requests=9, warmup_requests=0, prompts_file=str(tmp_prompts), seed=1)
+    run_benchmark(_RecordingBackend(1), cfg1, prompts)
+
+    cfg2 = BenchmarkConfig(requests=9, warmup_requests=0, prompts_file=str(tmp_prompts), seed=2)
+    run_benchmark(_RecordingBackend(2), cfg2, prompts)
+
+    assert received[1] != received[2]
+
+
+def test_run_benchmark_seed_is_reproducible(tmp_prompts: Path) -> None:
+    """Two runs with the same seed hit the backend with identical prompt sequences."""
+    received: dict[str, list[str]] = {"a": [], "b": []}
+    prompts = load_prompts(tmp_prompts)
+
+    class _RecordingBackend(MockBackend):
+        def __init__(self, slot: str) -> None:
+            super().__init__(model="test", latency_ms=0)
+            self._slot = slot
+
+        def generate(self, prompt: str):  # type: ignore[override]
+            received[self._slot].append(prompt)
+            return super().generate(prompt)
+
+    cfg = BenchmarkConfig(requests=9, warmup_requests=0, prompts_file=str(tmp_prompts), seed=77)
+    run_benchmark(_RecordingBackend("a"), cfg, prompts)
+    run_benchmark(_RecordingBackend("b"), cfg, prompts)
+
+    assert received["a"] == received["b"]
