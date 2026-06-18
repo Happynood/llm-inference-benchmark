@@ -12,9 +12,35 @@ Obtain a model separately (e.g. from Hugging Face) and set 'model:' to the local
 
 from __future__ import annotations
 
+import ctypes
+import glob
+import sys
 import time
+from pathlib import Path
 
 from llm_inference_benchmark.backends.base import Backend, GenerationResult
+
+
+def _preload_nvidia_cuda_libs() -> None:
+    """Pre-load CUDA shared libs bundled by nvidia-* pip packages into the global symbol table.
+
+    Pre-built llama-cpp-python CUDA wheels bundle their own CUDA shared libraries under
+    site-packages/nvidia/. On driver-only systems (no CUDA toolkit / nvcc), those paths are
+    not on LD_LIBRARY_PATH. Loading them with RTLD_GLOBAL makes their symbols visible to
+    llama_cpp's native extension, so GPU runs work without any LD_LIBRARY_PATH wrapper.
+    On systems without nvidia-* packages this is a silent no-op.
+    """
+    pattern = str(
+        Path(sys.prefix) / "lib" / "python*" / "site-packages" / "nvidia" / "*" / "lib" / "*.so*"
+    )
+    for path in sorted(glob.glob(pattern)):
+        try:
+            ctypes.CDLL(path, mode=ctypes.RTLD_GLOBAL)
+        except OSError:
+            pass
+
+
+_preload_nvidia_cuda_libs()
 
 try:
     from llama_cpp import Llama  # type: ignore[import-untyped]
