@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
@@ -10,9 +11,11 @@ from click.testing import CliRunner
 from llm_inference_benchmark.cli import main
 from llm_inference_benchmark.compare import RunRow
 from llm_inference_benchmark.pareto import (
+    build_pareto_json,
     build_pareto_table,
     dominates,
     pareto_classify,
+    render_pareto_json,
     render_pareto_table,
 )
 
@@ -411,3 +414,139 @@ def test_pareto_subcommand_output_file(tmp_path: Path) -> None:
 def test_pareto_subcommand_no_files_fails() -> None:
     result = CliRunner().invoke(main, ["pareto"])
     assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# render_pareto_json()
+# ---------------------------------------------------------------------------
+
+
+def test_render_pareto_json_is_valid_json() -> None:
+    classified = pareto_classify([_row(backend="a"), _row(backend="b", p95=20.0, toks=80.0)])
+    output = render_pareto_json(classified)
+    parsed = json.loads(output)
+    assert isinstance(parsed, list)
+    assert len(parsed) == 2
+
+
+def test_render_pareto_json_pareto_field_correct() -> None:
+    optimal = _row(backend="fast", p95=9.0, toks=110.0)
+    dominated = _row(backend="slow", p95=10.0, toks=100.0)
+    classified = [(optimal, True), (dominated, False)]
+    parsed = json.loads(render_pareto_json(classified))
+    by_backend = {obj["backend"]: obj for obj in parsed}
+    assert by_backend["fast"]["pareto"] is True
+    assert by_backend["slow"]["pareto"] is False
+
+
+def test_render_pareto_json_contains_required_fields() -> None:
+    classified = pareto_classify([_row()])
+    parsed = json.loads(render_pareto_json(classified))
+    obj = parsed[0]
+    required = (
+        "backend",
+        "model",
+        "request_count",
+        "p95_latency_ms",
+        "tokens_per_second",
+        "pareto",
+    )
+    for field in required:
+        assert field in obj, f"missing field: {field}"
+
+
+def test_render_pareto_json_optional_fields_are_none_when_absent() -> None:
+    classified = pareto_classify([_row(vram=None, sanity=None, ppl=None, judge=None)])
+    parsed = json.loads(render_pareto_json(classified))
+    obj = parsed[0]
+    assert obj["peak_vram_memory_mb"] is None
+    assert obj["sanity_pass_rate"] is None
+    assert obj["perplexity"] is None
+    assert obj["judge_score"] is None
+
+
+def test_render_pareto_json_optional_fields_present_when_set() -> None:
+    classified = pareto_classify([_row(vram=2048.0, sanity=0.9, ppl=8.5, judge=0.75)])
+    parsed = json.loads(render_pareto_json(classified))
+    obj = parsed[0]
+    assert obj["peak_vram_memory_mb"] == pytest.approx(2048.0)
+    assert obj["sanity_pass_rate"] == pytest.approx(0.9)
+    assert obj["perplexity"] == pytest.approx(8.5)
+    assert obj["judge_score"] == pytest.approx(0.75)
+
+
+# ---------------------------------------------------------------------------
+# build_pareto_json()
+# ---------------------------------------------------------------------------
+
+
+def test_build_pareto_json_from_fixtures() -> None:
+    output = build_pareto_json(
+        [
+            FIXTURES / "mock_run.csv",
+            FIXTURES / "transformers_run.csv",
+        ]
+    )
+    parsed = json.loads(output)
+    assert isinstance(parsed, list)
+    backends = {obj["backend"] for obj in parsed}
+    assert "mock" in backends
+    assert "transformers" in backends
+
+
+def test_build_pareto_json_mock_is_optimal() -> None:
+    parsed = json.loads(
+        build_pareto_json(
+            [
+                FIXTURES / "mock_run.csv",
+                FIXTURES / "transformers_run.csv",
+            ]
+        )
+    )
+    by_model = {obj["model"]: obj for obj in parsed}
+    assert by_model["mock-gpt2"]["pareto"] is True
+    assert by_model["sshleifer/tiny-gpt2"]["pareto"] is False
+
+
+def test_build_pareto_json_empty_raises() -> None:
+    with pytest.raises(ValueError, match="At least one CSV"):
+        build_pareto_json([])
+
+
+# ---------------------------------------------------------------------------
+# CLI --format json
+# ---------------------------------------------------------------------------
+
+
+def test_pareto_subcommand_format_json_stdout() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["pareto", str(FIXTURES / "mock_run.csv"), "--format", "json"],
+    )
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert isinstance(parsed, list)
+    assert parsed[0]["pareto"] is True
+
+
+def test_pareto_subcommand_format_json_output_file(tmp_path: Path) -> None:
+    out = tmp_path / "pareto.json"
+    result = CliRunner().invoke(
+        main,
+        ["pareto", str(FIXTURES / "mock_run.csv"), "--format", "json", "--output", str(out)],
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    parsed = json.loads(out.read_text())
+    assert isinstance(parsed, list)
+    assert "pareto" in parsed[0]
+
+
+def test_pareto_subcommand_default_format_is_table() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["pareto", str(FIXTURES / "mock_run.csv")],
+    )
+    assert result.exit_code == 0, result.output
+    assert "Pareto" in result.output
+    assert result.output.strip().startswith("|")

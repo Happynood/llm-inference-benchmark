@@ -18,6 +18,7 @@ penalising either row.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from llm_inference_benchmark.compare import RunRow, load_csv
@@ -150,9 +151,52 @@ def render_pareto_table(classified: list[tuple[RunRow, bool]]) -> str:
     return "\n".join([header_line, sep_line, *data_lines])
 
 
+def render_pareto_json(classified: list[tuple[RunRow, bool]]) -> str:
+    """Serialize classified rows to a JSON array string.
+
+    Each object contains all RunRow fields plus ``"pareto": true/false``.
+    """
+    data = [
+        {
+            "backend": r.backend,
+            "model": r.model,
+            "request_count": r.request_count,
+            "p50_latency_ms": r.p50_latency_ms,
+            "p95_latency_ms": r.p95_latency_ms,
+            "tokens_per_second": r.tokens_per_second,
+            "decode_tokens_per_second": r.decode_tokens_per_second,
+            "mean_input_tokens": r.mean_input_tokens,
+            "mean_output_tokens": r.mean_output_tokens,
+            "model_load_ms": r.model_load_ms,
+            "p50_ttft_ms": r.p50_ttft_ms,
+            "p95_ttft_ms": r.p95_ttft_ms,
+            "peak_cpu_memory_mb": r.peak_cpu_memory_mb,
+            "peak_cuda_memory_mb": r.peak_cuda_memory_mb,
+            "peak_vram_memory_mb": r.peak_vram_memory_mb,
+            "sanity_pass_rate": r.sanity_pass_rate,
+            "task_quality_pass_rate": r.task_quality_pass_rate,
+            "perplexity": r.perplexity,
+            "judge_score": r.judge_score,
+            "p95_latency_ms_std": r.p95_latency_ms_std,
+            "tokens_per_second_std": r.tokens_per_second_std,
+            "pareto": is_opt,
+        }
+        for r, is_opt in classified
+    ]
+    return json.dumps(data, indent=2)
+
+
 def build_pareto_table(paths: list[str | Path]) -> str:
     """Load CSVs, classify, and return a Markdown Pareto table."""
     if not paths:
         raise ValueError("At least one CSV path is required")
     rows = [load_csv(p) for p in paths]
     return render_pareto_table(pareto_classify(rows))
+
+
+def build_pareto_json(paths: list[str | Path]) -> str:
+    """Load CSVs, classify, and return a JSON array string."""
+    if not paths:
+        raise ValueError("At least one CSV path is required")
+    rows = [load_csv(p) for p in paths]
+    return render_pareto_json(pareto_classify(rows))

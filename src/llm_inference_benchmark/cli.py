@@ -192,9 +192,17 @@ def compare_cmd(
     "output_path",
     default=None,
     type=click.Path(),
-    help="Write Markdown to file instead of stdout",
+    help="Write output to file instead of stdout",
 )
-def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None) -> None:
+@click.option(
+    "--format",
+    "output_format",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format: table=Markdown, json=machine-readable JSON array",
+)
+def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None, output_format: str) -> None:
     """Identify Pareto-optimal benchmark configurations from CSV files.
 
     A configuration is Pareto-optimal when no other configuration is at least
@@ -203,15 +211,20 @@ def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None) -> None:
     sanity pass rate (when available).
 
         llm-bench pareto results/q4km.csv results/q8.csv
+        llm-bench pareto results/*.csv --format json
     """
-    from llm_inference_benchmark.pareto import build_pareto_table
+    from llm_inference_benchmark.pareto import build_pareto_json, build_pareto_table
 
-    table = build_pareto_table(list(csv_files))
-    if output_path:
-        Path(output_path).write_text(table + "\n")
-        click.echo(f"Pareto table written to {output_path}")
+    if output_format == "json":
+        text = build_pareto_json(list(csv_files))
     else:
-        click.echo(table)
+        text = build_pareto_table(list(csv_files))
+
+    if output_path:
+        Path(output_path).write_text(text + "\n")
+        click.echo(f"Pareto output written to {output_path}")
+    else:
+        click.echo(text)
 
 
 @main.command("recommend")
