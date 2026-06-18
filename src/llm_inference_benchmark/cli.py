@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import gc
+import json
 import sys
 import time
 from dataclasses import asdict
@@ -64,6 +65,14 @@ from llm_inference_benchmark.runner import load_prompts, run_repeated
     metavar="N",
     help="Override config concurrency",
 )
+@click.option(
+    "--format",
+    "output_format",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format: table=human-readable, json=machine-readable JSON",
+)
 def main(
     ctx: click.Context,
     config_path: str | None,
@@ -72,6 +81,7 @@ def main(
     requests_override: int | None,
     warmup_requests_override: int | None,
     concurrency_override: int | None,
+    output_format: str,
 ) -> None:
     """LLM inference benchmark toolkit.
 
@@ -108,16 +118,24 @@ def main(
     model_load_ms = (time.perf_counter() - _t0) * 1000.0
     prompts = load_prompts(cfg.resolve_prompts_file())
 
-    click.echo(f"Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
+    if output_format != "json":
+        click.echo(f"Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}")
     report = run_repeated(backend, cfg, prompts, model_load_ms=model_load_ms)
 
-    if output_path:
-        row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
-        with open(output_path, "w", newline="") as f:
-            writer = csv.DictWriter(f, fieldnames=list(row.keys()))
-            writer.writeheader()
-            writer.writerow(row)
-        click.echo(f"Results written to {output_path}")
+    if output_format == "json":
+        text = json.dumps(asdict(report))
+        if output_path:
+            Path(output_path).write_text(text + "\n")
+        else:
+            click.echo(text)
+    else:
+        if output_path:
+            row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
+            with open(output_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+                writer.writeheader()
+                writer.writerow(row)
+            click.echo(f"Results written to {output_path}")
 
     if manifest_path:
         from llm_inference_benchmark.manifest import collect_manifest, write_manifest
@@ -126,8 +144,9 @@ def main(
         write_manifest(manifest, manifest_path)
         click.echo(f"Manifest written to {manifest_path}")
 
-    click.echo("\n=== Benchmark Results ===")
-    _print_report(report)
+    if output_format != "json":
+        click.echo("\n=== Benchmark Results ===")
+        _print_report(report)
 
 
 @main.command("compare")

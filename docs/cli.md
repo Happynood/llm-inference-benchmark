@@ -26,7 +26,8 @@ llm-bench [OPTIONS]
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | `--config PATH` | path (required) | — | YAML benchmark config file |
-| `--output PATH` | path | — | Write results CSV to this path (omit for stdout summary only) |
+| `--format` | choice | `table` | Output format: `table` = human-readable text, `json` = machine-readable JSON object |
+| `--output PATH` | path | — | Write results to this path (`--format table` → CSV, `--format json` → JSON file) |
 | `--manifest PATH` | path | — | Write JSON environment fingerprint to this path |
 | `--requests N` | int ≥ 1 | — | Override `requests` from the config |
 | `--warmup-requests N` | int ≥ 0 | — | Override `warmup_requests` from the config |
@@ -44,6 +45,12 @@ llm-bench --config configs/example.yaml --output results/run-a.csv
 # Save CSV + environment manifest
 llm-bench --config configs/example.yaml --output results/run-a.csv --manifest results/run-a.manifest.json
 
+# Emit machine-readable JSON to stdout
+llm-bench --config configs/example.yaml --format json
+
+# Write JSON result to file (for scripting or CI pipelines)
+llm-bench --config configs/example.yaml --format json --output results/run-a.json
+
 # Quick one-off: override request count and concurrency without editing YAML
 llm-bench --config configs/example.yaml --requests 50 --concurrency 4
 
@@ -55,6 +62,29 @@ The YAML config file controls which backend is used, the model, request count, a
 backend-specific parameters. CLI flags (`--requests`, `--warmup-requests`, `--concurrency`)
 take precedence over the YAML values when provided. See [metrics.md](metrics.md) for CSV
 column definitions.
+
+**`--format json` output**
+
+When `--format json` is used, the output is a single JSON object containing all
+`MetricsReport` fields. Optional metrics that were not measured appear as `null` (not as
+empty strings). Numeric fields are numbers; the `timestamp` field is an ISO-8601 string.
+
+```json
+{
+  "backend": "mock",
+  "model": "mock-model",
+  "p50_latency_ms": 10.5,
+  "p95_latency_ms": 12.1,
+  "tokens_per_second": 950.0,
+  "peak_cuda_memory_mb": null,
+  "perplexity": null,
+  "timestamp": "2026-01-01T00:00:00+00:00",
+  ...
+}
+```
+
+No progress or results-table text is printed to stdout in JSON mode. When `--output` is
+given, the JSON is written to the file and nothing is printed to stdout.
 
 ---
 
