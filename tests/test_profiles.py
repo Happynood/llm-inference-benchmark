@@ -109,6 +109,65 @@ def test_cli_profiles_shows_descriptions() -> None:
     assert "latency" in result.output.lower() or "throughput" in result.output.lower()
 
 
+def test_cli_profiles_json_exits_zero() -> None:
+    result = CliRunner().invoke(main, ["profiles", "--format", "json"])
+    assert result.exit_code == 0
+
+
+def test_cli_profiles_json_is_valid_json() -> None:
+    import json
+
+    result = CliRunner().invoke(main, ["profiles", "--format", "json"])
+    data = json.loads(result.output)
+    assert isinstance(data, list)
+
+
+def test_cli_profiles_json_is_non_empty() -> None:
+    import json
+
+    result = CliRunner().invoke(main, ["profiles", "--format", "json"])
+    data = json.loads(result.output)
+    assert len(data) > 0
+
+
+def test_cli_profiles_json_has_required_fields() -> None:
+    import json
+
+    result = CliRunner().invoke(main, ["profiles", "--format", "json"])
+    data = json.loads(result.output)
+    for item in data:
+        assert "name" in item
+        assert "input_length" in item
+        assert "output_length" in item
+        assert "description" in item
+
+
+def test_cli_profiles_json_sorted_by_name() -> None:
+    import json
+
+    result = CliRunner().invoke(main, ["profiles", "--format", "json"])
+    data = json.loads(result.output)
+    names = [item["name"] for item in data]
+    assert names == sorted(names)
+
+
+def test_cli_profiles_json_contains_all_profiles() -> None:
+    import json
+
+    result = CliRunner().invoke(main, ["profiles", "--format", "json"])
+    data = json.loads(result.output)
+    names = {item["name"] for item in data}
+    assert names == PROFILE_NAMES
+
+
+def test_cli_profiles_default_table_format_unchanged() -> None:
+    result = CliRunner().invoke(main, ["profiles"])
+    assert result.exit_code == 0
+    for name in ["short_chat", "summarization", "code_completion", "long_context_smoke"]:
+        assert name in result.output
+    assert "Input" in result.output
+
+
 # ---------------------------------------------------------------------------
 # BenchmarkConfig with workload_profile
 # ---------------------------------------------------------------------------

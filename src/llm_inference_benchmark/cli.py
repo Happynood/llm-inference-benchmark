@@ -495,21 +495,44 @@ def diff_cmd(
 
 
 @main.command("profiles")
-def profiles_cmd() -> None:
+@click.option(
+    "--format",
+    "output_format",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format: table=human-readable, json=machine-readable JSON array",
+)
+def profiles_cmd(output_format: str) -> None:
     """List available workload profiles and their descriptions.
 
     Profiles can be referenced by name in a benchmark config YAML
     (workload_profile: short_chat) or in a matrix config run entry.
 
         llm-bench profiles
+        llm-bench profiles --format json
     """
     from llm_inference_benchmark.profiles import list_profiles
 
-    for profile in list_profiles():
-        click.echo(profile.name)
-        click.echo(f"  Input : {profile.input_length}  Output: {profile.output_length}")
-        click.echo(f"  {profile.description}")
-        click.echo()
+    profiles = list_profiles()
+
+    if output_format == "json":
+        data = [
+            {
+                "name": p.name,
+                "input_length": p.input_length,
+                "output_length": p.output_length,
+                "description": p.description,
+            }
+            for p in profiles
+        ]
+        click.echo(json.dumps(data))
+    else:
+        for profile in profiles:
+            click.echo(profile.name)
+            click.echo(f"  Input : {profile.input_length}  Output: {profile.output_length}")
+            click.echo(f"  {profile.description}")
+            click.echo()
 
 
 @main.command("matrix")
