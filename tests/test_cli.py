@@ -348,9 +348,7 @@ def test_validate_config_json_seed_present_when_set(tmp_path: Path, tmp_prompts:
         f"prompts_file: {tmp_prompts}\nseed: 7\n"
         f"mock:\n  latency_ms: 0\n  tokens_per_response: 5\n"
     )
-    result = CliRunner().invoke(
-        main, ["validate-config", "--config", str(cfg), "--format", "json"]
-    )
+    result = CliRunner().invoke(main, ["validate-config", "--config", str(cfg), "--format", "json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["seed"] == 7
@@ -365,9 +363,7 @@ def test_validate_config_json_openai_backend(tmp_path: Path, tmp_prompts: Path) 
         f"prompts_file: {tmp_prompts}\n"
         f"openai:\n  base_url: http://localhost:1234/v1\n  max_tokens: 64\n  timeout_s: 30\n"
     )
-    result = CliRunner().invoke(
-        main, ["validate-config", "--config", str(cfg), "--format", "json"]
-    )
+    result = CliRunner().invoke(main, ["validate-config", "--config", str(cfg), "--format", "json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["backend"] == "openai"
@@ -384,9 +380,7 @@ def test_validate_config_json_llama_cpp_backend(tmp_path: Path, tmp_prompts: Pat
         f"prompts_file: {tmp_prompts}\n"
         f"llama_cpp:\n  n_ctx: 512\n  n_gpu_layers: 0\n  max_tokens: 64\n"
     )
-    result = CliRunner().invoke(
-        main, ["validate-config", "--config", str(cfg), "--format", "json"]
-    )
+    result = CliRunner().invoke(main, ["validate-config", "--config", str(cfg), "--format", "json"])
     assert result.exit_code == 0, result.output
     data = json.loads(result.output)
     assert data["backend"] == "llama-cpp"
