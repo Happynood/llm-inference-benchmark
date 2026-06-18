@@ -382,6 +382,11 @@ def validate_config_cmd(config_path: str) -> None:
         click.echo(f"  openai.timeout_s : {cfg.openai.timeout_s}")
         if cfg.openai.api_key_env:
             click.echo(f"  openai.api_key_env: {cfg.openai.api_key_env}")
+    elif cfg.backend == "onnx":
+        click.echo(f"  onnx.max_new_tokens: {cfg.onnx.max_new_tokens}")
+        click.echo(f"  onnx.device        : {cfg.onnx.device}")
+        click.echo(f"  onnx.do_sample     : {cfg.onnx.do_sample}")
+        click.echo(f"  onnx.export        : {cfg.onnx.export}")
 
     click.echo("OK")
 
@@ -676,6 +681,17 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             timeout_s=cfg.openai.timeout_s,
             api_key_env=cfg.openai.api_key_env,
             stream=cfg.openai.stream,
+            seed=cfg.seed,
+        )
+    if cfg.backend == "onnx":
+        from llm_inference_benchmark.backends.onnx import OnnxBackend  # lazy: optional dep
+
+        return OnnxBackend(
+            model_id=cfg.model,
+            max_new_tokens=cfg.onnx.max_new_tokens,
+            device=cfg.onnx.device,
+            do_sample=cfg.onnx.do_sample,
+            export=cfg.onnx.export,
             seed=cfg.seed,
         )
     raise ValueError(f"Unknown backend: {cfg.backend!r}")

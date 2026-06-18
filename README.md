@@ -68,6 +68,7 @@ For full installation options (transformers, llama.cpp, GPU), see **[docs/quicks
 | `transformers` | `--extra transformers` | CUDA | HuggingFace `AutoModelForCausalLM` |
 | `llama-cpp` | `--extra llama-cpp` | CUDA (pre-built wheel) | GGUF quantized inference |
 | `openai` | — | server-side | Any `/v1/chat/completions`-compatible server |
+| `onnx` | `--extra onnx` | CUDA (via ORT provider) | ONNX Runtime via Optimum; supports INT8/FP16 export |
 
 ---
 
@@ -137,7 +138,7 @@ _build_backend() → Backend (ABC)
                        ├── HFBackend              ← transformers + PyTorch
                        ├── LlamaCppBackend        ← GGUF, n_gpu_layers
                        ├── OpenAIEndpointBackend  ← HTTP /v1/chat/completions
-                       └── ONNXBackend            ← roadmap
+                       └── OnnxBackend            ← optimum + onnxruntime
       │
       ▼
 run_benchmark(backend, config, prompts)
@@ -274,7 +275,7 @@ docker run --rm \
 ## Roadmap
 
 **Stable (v1.0.0+)**
-- [x] Mock, transformers, llama.cpp, OpenAI endpoint backends
+- [x] Mock, transformers, llama.cpp, OpenAI endpoint, ONNX Runtime backends
 - [x] p50/p95 latency, TTFT, tok/s, VRAM, lifecycle, variance metrics
 - [x] Sanity checks, task quality, perplexity, LLM-as-judge
 - [x] Pareto analysis, constraint-based recommender
@@ -283,7 +284,6 @@ docker run --rm \
 - [x] Docker image (ghcr.io), GitHub Actions CI
 
 **Planned**
-- [ ] `onnxruntime` backend — ONNX export + quantization
 - [ ] `vllm` backend — high-throughput GPU serving
 - [ ] Real parameter sweep evidence: RTX 3050, n\_gpu\_layers × max\_tokens on Llama 3.2 3B
 

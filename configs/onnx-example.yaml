@@ -1,0 +1,27 @@
+# ONNX Runtime backend example config
+#
+# Requires:  uv sync --extra onnx
+#
+# 'model' must point to a directory containing ONNX model files.
+# Options:
+#   1. Set onnx.export: true to auto-export a HF CausalLM model on first run.
+#   2. Use a pre-exported model directory or HF Hub ID with ONNX files.
+#
+# Example models with pre-built ONNX files:
+#   optimum-internal-testing/tiny-random-GPT2Model  (testing)
+#   microsoft/Phi-3-mini-4k-instruct-onnx            (production, large)
+#
+# Run:
+#   uv run llm-bench --config configs/onnx-example.yaml --output results/onnx.csv
+
+backend: onnx
+model: optimum-internal-testing/tiny-random-GPT2Model
+requests: 20
+warmup_requests: 2
+prompts_file: data/prompts/smoke.txt
+
+onnx:
+  max_new_tokens: 50
+  device: cpu          # or: cuda, cuda:0
+  do_sample: false     # greedy decoding
+  export: true         # auto-export from HF CausalLM on first run
