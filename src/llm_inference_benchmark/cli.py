@@ -364,18 +364,89 @@ def recommend_cmd(
     type=click.Path(exists=True),
     help="YAML benchmark config file to validate",
 )
-def validate_config_cmd(config_path: str) -> None:
+@click.option(
+    "--format",
+    "output_format",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format: table=human-readable, json=machine-readable JSON",
+)
+def validate_config_cmd(config_path: str, output_format: str) -> None:
     """Validate a benchmark config file and print a summary of resolved settings.
 
     Reads the YAML, runs full pydantic validation, resolves the effective
     prompts file, and prints a summary.  Exits 0 on success, 1 on error.
 
         llm-bench validate-config --config configs/example.yaml
+        llm-bench validate-config --config configs/example.yaml --format json
     """
     try:
         cfg = load_config(config_path)
     except Exception as exc:  # noqa: BLE001
         raise click.ClickException(str(exc)) from exc
+
+    if output_format == "json":
+        if cfg.backend == "mock":
+            backend_cfg: dict[str, object] = {
+                "latency_ms": cfg.mock.latency_ms,
+                "tokens_per_response": cfg.mock.tokens_per_response,
+            }
+        elif cfg.backend == "transformers":
+            backend_cfg = {
+                "max_new_tokens": cfg.hf.max_new_tokens,
+                "device": cfg.hf.device,
+                "torch_dtype": cfg.hf.torch_dtype,
+                "do_sample": cfg.hf.do_sample,
+            }
+        elif cfg.backend == "llama-cpp":
+            backend_cfg = {
+                "n_ctx": cfg.llama_cpp.n_ctx,
+                "n_gpu_layers": cfg.llama_cpp.n_gpu_layers,
+                "max_tokens": cfg.llama_cpp.max_tokens,
+                "temperature": cfg.llama_cpp.temperature,
+                "n_threads": cfg.llama_cpp.n_threads,
+                "verbose": cfg.llama_cpp.verbose,
+                "stream": cfg.llama_cpp.stream,
+            }
+        elif cfg.backend == "openai":
+            backend_cfg = {
+                "base_url": cfg.openai.base_url,
+                "api_key_env": cfg.openai.api_key_env,
+                "max_tokens": cfg.openai.max_tokens,
+                "temperature": cfg.openai.temperature,
+                "timeout_s": cfg.openai.timeout_s,
+                "stream": cfg.openai.stream,
+            }
+        elif cfg.backend == "onnx":
+            backend_cfg = {
+                "max_new_tokens": cfg.onnx.max_new_tokens,
+                "device": cfg.onnx.device,
+                "do_sample": cfg.onnx.do_sample,
+                "export": cfg.onnx.export,
+            }
+        else:
+            backend_cfg = {}
+
+        data: dict[str, object] = {
+            "config": config_path,
+            "backend": cfg.backend,
+            "model": cfg.model,
+            "requests": cfg.requests,
+            "concurrency": cfg.concurrency,
+            "warmup_requests": cfg.warmup_requests,
+            "repeats": cfg.repeats,
+            "prompts_file": cfg.resolve_prompts_file(),
+            "workload_profile": cfg.workload_profile,
+            "quality_file": cfg.quality_file,
+            "seed": cfg.seed,
+            "measure_perplexity": cfg.measure_perplexity,
+            "measure_judge": cfg.measure_judge,
+            "backend_config": backend_cfg,
+            "valid": True,
+        }
+        click.echo(json.dumps(data))
+        return
 
     click.echo(f"Config: {config_path}")
     click.echo(f"  backend          : {cfg.backend}")

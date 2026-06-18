@@ -268,6 +268,133 @@ def test_validate_config_concurrency_gt1_passes(tmp_path: Path, tmp_prompts: Pat
 
 
 # ---------------------------------------------------------------------------
+# validate-config --format json
+# ---------------------------------------------------------------------------
+
+
+def test_validate_config_json_exits_zero(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main, ["validate-config", "--config", str(tmp_config), "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_validate_config_json_emits_valid_json(tmp_config: Path) -> None:
+    import json
+
+    result = CliRunner().invoke(
+        main, ["validate-config", "--config", str(tmp_config), "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["backend"] == "mock"
+    assert data["model"] == "test-model"
+    assert data["valid"] is True
+
+
+def test_validate_config_json_contains_core_fields(tmp_config: Path) -> None:
+    import json
+
+    result = CliRunner().invoke(
+        main, ["validate-config", "--config", str(tmp_config), "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    for field in ("requests", "concurrency", "warmup_requests", "repeats", "prompts_file"):
+        assert field in data, f"missing field: {field}"
+
+
+def test_validate_config_json_optional_fields_null_when_unset(tmp_config: Path) -> None:
+    import json
+
+    result = CliRunner().invoke(
+        main, ["validate-config", "--config", str(tmp_config), "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["workload_profile"] is None
+    assert data["quality_file"] is None
+    assert data["seed"] is None
+
+
+def test_validate_config_json_mock_backend_config(tmp_config: Path) -> None:
+    import json
+
+    result = CliRunner().invoke(
+        main, ["validate-config", "--config", str(tmp_config), "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert "backend_config" in data
+    assert "latency_ms" in data["backend_config"]
+    assert "tokens_per_response" in data["backend_config"]
+
+
+def test_validate_config_json_no_table_text(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main, ["validate-config", "--config", str(tmp_config), "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "OK" not in result.output
+    assert "Config:" not in result.output
+
+
+def test_validate_config_json_seed_present_when_set(tmp_path: Path, tmp_prompts: Path) -> None:
+    import json
+
+    cfg = tmp_path / "seeded.yaml"
+    cfg.write_text(
+        f"backend: mock\nmodel: x\nrequests: 1\nwarmup_requests: 0\n"
+        f"prompts_file: {tmp_prompts}\nseed: 7\n"
+        f"mock:\n  latency_ms: 0\n  tokens_per_response: 5\n"
+    )
+    result = CliRunner().invoke(
+        main, ["validate-config", "--config", str(cfg), "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["seed"] == 7
+
+
+def test_validate_config_json_openai_backend(tmp_path: Path, tmp_prompts: Path) -> None:
+    import json
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"backend: openai\nmodel: my-model\nrequests: 2\nwarmup_requests: 0\n"
+        f"prompts_file: {tmp_prompts}\n"
+        f"openai:\n  base_url: http://localhost:1234/v1\n  max_tokens: 64\n  timeout_s: 30\n"
+    )
+    result = CliRunner().invoke(
+        main, ["validate-config", "--config", str(cfg), "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["backend"] == "openai"
+    assert data["backend_config"]["base_url"] == "http://localhost:1234/v1"
+    assert data["valid"] is True
+
+
+def test_validate_config_json_llama_cpp_backend(tmp_path: Path, tmp_prompts: Path) -> None:
+    import json
+
+    cfg = tmp_path / "config.yaml"
+    cfg.write_text(
+        f"backend: llama-cpp\nmodel: /path/to/model.gguf\nrequests: 2\nwarmup_requests: 0\n"
+        f"prompts_file: {tmp_prompts}\n"
+        f"llama_cpp:\n  n_ctx: 512\n  n_gpu_layers: 0\n  max_tokens: 64\n"
+    )
+    result = CliRunner().invoke(
+        main, ["validate-config", "--config", str(cfg), "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["backend"] == "llama-cpp"
+    assert data["backend_config"]["n_ctx"] == 512
+    assert data["valid"] is True
+
+
+# ---------------------------------------------------------------------------
 # CLI run-time overrides (--requests / --warmup-requests / --concurrency)
 # ---------------------------------------------------------------------------
 
