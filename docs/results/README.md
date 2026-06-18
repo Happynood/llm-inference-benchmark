@@ -35,6 +35,7 @@ and real hardware evidence.
 | [RTX 3050 — Llama 3.2 3B CPU vs GPU](llama-cpp-rtx3050-llama32-3b.md) | i5-11400H + RTX 3050 4 GB | llama-cpp | Llama-3.2-3B-Instruct-Q4\_K\_M | 2026-06-14 | GPU 2.95× faster; 53.7 tok/s vs 18.0 tok/s CPU; all 28 layers on CUDA0 |
 | [RTX 3050 — n\_gpu\_layers sweep (0 / 20 / 99)](llama-cpp-rtx3050-vram-sweep.md) | i5-11400H + RTX 3050 4 GB | llama-cpp | Llama-3.2-3B-Instruct-Q4\_K\_M | 2026-06-14 | VRAM scales ~60 MiB/layer after 655 MiB baseline; full offload 2.92× CPU; partial offload viable |
 | [RTX 3050 — Q4\_K\_M vs Q8\_0 quantization comparison](llama-cpp-rtx3050-quant-compare.md) | i5-11400H + RTX 3050 4 GB | llama-cpp | Llama-3.2-3B-Instruct (both quants) | 2026-06-14 | Q4\_K\_M 1.31× faster, 1.57× less VRAM, Pareto-optimal; v0.16: Q4\_K\_M 100% task quality vs Q8\_0 80% (prompt-3 truncation at max\_tokens=50) |
+| [RTX 3050 — Qwen2.5-Coder-1.5B Q5\_K\_M full GPU](llama-cpp-rtx3050-qwen25-coder-1.5b.md) | i5-11400H + RTX 3050 4 GB | llama-cpp | Qwen2.5-Coder-1.5B-Instruct-Q5\_K\_M | 2026-06-18 | 66.8 tok/s; 1503 MiB VRAM (36.7%); real-time code completion on 4 GB budget |
 
 ## Planned runs
 

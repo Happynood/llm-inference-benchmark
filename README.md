@@ -69,6 +69,7 @@ For full installation options (transformers, llama.cpp, GPU), see **[docs/quicks
 | `llama-cpp` | `--extra llama-cpp` | CUDA (pre-built wheel) | GGUF quantized inference |
 | `openai` | — | server-side | Any `/v1/chat/completions`-compatible server |
 | `onnx` | `--extra onnx` | CUDA (via ORT provider) | ONNX Runtime via Optimum; supports INT8/FP16 export |
+| `vllm` | `--extra vllm` | CUDA | High-throughput serving via vLLM engine (requires `vllm>=0.4`) |
 
 ---
 
@@ -82,6 +83,7 @@ llm-bench recommend FILE [FILE...] [CONSTRAINTS]       # best config under const
 llm-bench matrix    --config MATRIX_YAML               # multi-run sweep
 llm-bench profiles                                     # list built-in workload profiles
 llm-bench validate-config --config YAML                # validate config without running
+llm-bench env [--format json]                          # print environment/hardware info
 llm-bench --version
 ```
 
@@ -91,7 +93,7 @@ Full reference: **[docs/cli.md](docs/cli.md)**
 
 ```bash
 # Override config values without editing YAML
-uv run llm-bench --config configs/example.yaml --requests 50 --concurrency 4 --warmup-requests 2
+uv run llm-bench --config configs/example.yaml --requests 50 --concurrency 4 --warmup-requests 2 --seed 42
 ```
 
 ### Constraint-based recommendation
@@ -138,10 +140,11 @@ _build_backend() → Backend (ABC)
                        ├── HFBackend              ← transformers + PyTorch
                        ├── LlamaCppBackend        ← GGUF, n_gpu_layers
                        ├── OpenAIEndpointBackend  ← HTTP /v1/chat/completions
-                       └── OnnxBackend            ← optimum + onnxruntime
+                       ├── OnnxBackend            ← optimum + onnxruntime
+                       └── VllmBackend            ← vLLM high-throughput engine
       │
       ▼
-run_benchmark(backend, config, prompts)
+run_repeated(backend, config, prompts)
       ├── warmup loop   (excluded from metrics)
       └── benchmark loop → [RequestMetrics]
                                   │
@@ -155,6 +158,8 @@ run_benchmark(backend, config, prompts)
                             ▼           ▼
                          pareto     recommend
                       (Pareto table) (best config)
+
+llm-bench env          → EnvInfo (Python, CPU, GPU, installed backends)
 ```
 
 ---
@@ -202,7 +207,8 @@ Full offload is **3.1× faster** than CPU-only. Partial offload (20/28) captures
 ## Features
 
 - **YAML config** — backend, model, requests, warmup, prompts file or workload profile
-- **CLI overrides** — `--requests`, `--warmup-requests`, `--concurrency` at run time
+- **CLI overrides** — `--requests`, `--warmup-requests`, `--concurrency`, `--seed` at run time
+- **Environment introspection** — `llm-bench env` reports Python, CPU, GPU, driver, and installed backend versions; `--format json` for CI/scripting
 - **Workload profiles** — `short_chat`, `summarization`, `code_completion`, `long_context_smoke`
 - **Run matrix** — cartesian-product sweep from one YAML; one CSV + manifest per combination
 - **Metrics** — p50/p95 latency, TTFT p50/p95 (streaming), tok/s, total tokens, decode throughput
@@ -285,7 +291,7 @@ docker run --rm \
 
 **Planned**
 - [x] `vllm` backend — high-throughput GPU serving
-- [ ] Real parameter sweep evidence: RTX 3050, n\_gpu\_layers × max\_tokens on Llama 3.2 3B
+- [x] Real parameter sweep evidence: RTX 3050, n\_gpu\_layers sweep on Llama 3.2 3B
 
 ---
 
