@@ -29,12 +29,18 @@ def validate_override_path(path: str) -> None:
         HFBackendConfig,
         LlamaCppBackendConfig,
         MockBackendConfig,
+        OnnxBackendConfig,
+        OpenAIEndpointConfig,
+        VLLMBackendConfig,
     )
 
     _sub_models: dict[str, type] = {
         "llama_cpp": LlamaCppBackendConfig,
         "hf": HFBackendConfig,
         "mock": MockBackendConfig,
+        "openai": OpenAIEndpointConfig,
+        "onnx": OnnxBackendConfig,
+        "vllm": VLLMBackendConfig,
     }
 
     parts = path.split(".")
