@@ -488,9 +488,7 @@ def test_set_override_top_level_field(tmp_config: Path) -> None:
 
 
 def test_set_override_nested_field(tmp_config: Path) -> None:
-    result = CliRunner().invoke(
-        main, ["--config", str(tmp_config), "--set", "mock.latency_ms=0"]
-    )
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--set", "mock.latency_ms=0"])
     assert result.exit_code == 0, result.output
     assert "p50_latency_ms: 0" in result.output
 
@@ -536,9 +534,7 @@ def test_set_override_wrong_type_fails(tmp_config: Path) -> None:
 
 
 def test_set_override_bool_value(tmp_config: Path) -> None:
-    result = CliRunner().invoke(
-        main, ["--config", str(tmp_config), "--set", "mock.latency_ms=0"]
-    )
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--set", "mock.latency_ms=0"])
     assert result.exit_code == 0, result.output
 
 
