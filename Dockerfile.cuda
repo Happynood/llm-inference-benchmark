@@ -1,0 +1,54 @@
+# BUILD_CUDA=1 (default): compiles llama-cpp-python with CUDA support — requires a GPU build host.
+# BUILD_CUDA=0: compiles llama-cpp-python for CPU only (no nvcc); slower but GPU-free.
+# SKIP_LLAMA_CPP=1: skips llama-cpp-python entirely; used in CI to validate image structure
+#                   without any C++ compilation (400+ nvcc units or slow CPU compile).
+# BASE_IMAGE: override in CI (e.g. ubuntu:22.04) to avoid pulling the 3 GB CUDA image.
+ARG BUILD_CUDA=1
+ARG SKIP_LLAMA_CPP=0
+ARG BASE_IMAGE=nvidia/cuda:12.4.1-devel-ubuntu22.04
+
+FROM ${BASE_IMAGE}
+
+ARG BUILD_CUDA
+ARG SKIP_LLAMA_CPP
+
+ENV DEBIAN_FRONTEND=noninteractive
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    curl \
+    git \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+
+COPY pyproject.toml uv.lock ./
+
+RUN if [ "$SKIP_LLAMA_CPP" = "1" ]; then \
+      uv sync --no-dev --frozen --no-install-project; \
+    elif [ "$BUILD_CUDA" = "1" ]; then \
+      CMAKE_ARGS="-DGGML_CUDA=ON" FORCE_CMAKE=1 \
+        uv sync --extra llama-cpp --no-dev --frozen --no-install-project; \
+    else \
+      uv sync --extra llama-cpp --no-dev --frozen --no-install-project; \
+    fi
+
+COPY src/ ./src/
+COPY README.md ./
+
+RUN if [ "$SKIP_LLAMA_CPP" = "1" ]; then \
+      uv sync --no-dev --frozen; \
+    elif [ "$BUILD_CUDA" = "1" ]; then \
+      CMAKE_ARGS="-DGGML_CUDA=ON" FORCE_CMAKE=1 \
+        uv sync --extra llama-cpp --no-dev --frozen; \
+    else \
+      uv sync --extra llama-cpp --no-dev --frozen; \
+    fi
+
+ENTRYPOINT ["/app/.venv/bin/llm-bench"]
+CMD ["--help"]

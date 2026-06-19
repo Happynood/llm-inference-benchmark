@@ -247,6 +247,43 @@ docker run --rm \
   --config /app/configs/transformers-cpu.yaml --output /app/results/bench-hf.csv
 ```
 
+### Running with Docker + GPU (llama.cpp / CUDA)
+
+`Dockerfile.cuda` builds `llama-cpp-python` with `GGML_CUDA=ON` so all GPU layers run on the
+device. Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+on the host.
+
+```bash
+# Build once (no GPU needed for the build step)
+docker build -f Dockerfile.cuda -t llm-bench-cuda .
+
+# Verify — prints CLI help
+docker run --rm llm-bench-cuda --help
+
+# Run a llama.cpp benchmark with full GPU offload
+# Place your GGUF model under ~/models/ on the host
+docker run --rm --gpus all \
+  -v "$(pwd)/configs:/app/configs" \
+  -v "$(pwd)/results:/app/results" \
+  -v "$HOME/models:/models:ro" \
+  llm-bench-cuda \
+  --config /app/configs/example.yaml \
+  --backend llama-cpp \
+  --model /models/Llama-3.2-3B-Instruct-Q4_K_M.gguf \
+  --n-gpu-layers 28 \
+  --output /app/results/bench-cuda.csv
+```
+
+Or use the compose file:
+
+```bash
+docker compose run --rm llm-bench-cuda \
+  --config /app/configs/example.yaml --output /app/results/bench-cuda.csv
+```
+
+> **Tip:** set `n_gpu_layers: 28` (or `-1` for all layers) in your YAML config instead of
+> passing `--n-gpu-layers` each time.
+
 ---
 
 ## Tech Stack
