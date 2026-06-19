@@ -31,6 +31,9 @@ def _row(
     sanity: float | None = None,
     ppl: float | None = None,
     judge: float | None = None,
+    quality: float | None = None,
+    ttft: float | None = None,
+    load: float | None = None,
 ) -> RunRow:
     return RunRow(
         backend=backend,
@@ -43,8 +46,11 @@ def _row(
         peak_cuda_memory_mb=None,
         peak_vram_memory_mb=vram,
         sanity_pass_rate=sanity,
+        task_quality_pass_rate=quality,
         perplexity=ppl,
         judge_score=judge,
+        p50_ttft_ms=ttft,
+        model_load_ms=load,
     )
 
 
@@ -166,6 +172,44 @@ def test_dominates_judge_none_in_one_excludes_judge() -> None:
     a = _row(p95=10.0, toks=100.0, judge=None)
     b = _row(p95=10.0, toks=100.0, judge=0.9)
     assert not dominates(a, b)
+    assert not dominates(b, a)
+
+
+def test_dominates_includes_task_quality_when_both_present() -> None:
+    """Higher task quality pass rate is better."""
+    a = _row(p95=10.0, toks=100.0, quality=0.9)
+    b = _row(p95=10.0, toks=100.0, quality=0.5)
+    assert dominates(a, b)
+    assert not dominates(b, a)
+
+
+def test_dominates_task_quality_none_in_one_excludes_it() -> None:
+    a = _row(p95=10.0, toks=100.0, quality=None)
+    b = _row(p95=10.0, toks=100.0, quality=0.9)
+    assert not dominates(a, b)
+    assert not dominates(b, a)
+
+
+def test_dominates_includes_ttft_when_both_present() -> None:
+    """Lower TTFT p50 (faster first token) is better."""
+    a = _row(p95=10.0, toks=100.0, ttft=30.0)
+    b = _row(p95=10.0, toks=100.0, ttft=80.0)
+    assert dominates(a, b)
+    assert not dominates(b, a)
+
+
+def test_dominates_ttft_none_in_one_excludes_it() -> None:
+    a = _row(p95=10.0, toks=100.0, ttft=None)
+    b = _row(p95=10.0, toks=100.0, ttft=30.0)
+    assert not dominates(a, b)
+    assert not dominates(b, a)
+
+
+def test_dominates_includes_model_load_when_both_present() -> None:
+    """Lower model load time is better."""
+    a = _row(p95=10.0, toks=100.0, load=500.0)
+    b = _row(p95=10.0, toks=100.0, load=1200.0)
+    assert dominates(a, b)
     assert not dominates(b, a)
 
 
