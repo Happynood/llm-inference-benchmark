@@ -95,6 +95,18 @@ def test_load_csv_whitespace_vram_raises(tmp_path: Path) -> None:
         load_csv(p)
 
 
+def test_load_csv_non_numeric_float_field_raises(tmp_path: Path) -> None:
+    """A non-numeric value in an optional float column raises ValueError (not whitespace)."""
+    p = tmp_path / "bad_float.csv"
+    header = (
+        "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,"
+        "total_tokens,backend,model,peak_cpu_memory_mb,peak_cuda_memory_mb,timestamp\n"
+    )
+    p.write_text(header + "10,5.0,5.1,9000,500,mock,m,45.0,not-a-number,2026-01-01\n")
+    with pytest.raises(ValueError, match="invalid peak_cuda_memory_mb"):
+        load_csv(p)
+
+
 def test_build_comparison_table_empty_paths_raises() -> None:
     with pytest.raises(ValueError, match="At least one CSV path"):
         build_comparison_table([])

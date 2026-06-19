@@ -708,3 +708,11 @@ def test_matrix_json_mode_failure_captured_in_output(tmp_path: Path) -> None:
     assert statuses["will-fail"] == "failed"
     assert statuses["will-pass"] == "ok"
     assert "error" in next(r for r in data["runs"] if r["name"] == "will-fail")
+
+
+def test_matrix_config_non_dict_input_raises_validation_error() -> None:
+    """_expand_sweep returns non-dict data unchanged; Pydantic then raises ValidationError."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError):
+        MatrixConfig.model_validate("not-a-dict")
