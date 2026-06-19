@@ -454,3 +454,257 @@ def test_matrix_without_continue_on_error_stops_on_first_failure(tmp_path: Path)
     result = CliRunner().invoke(main, ["matrix", "--config", str(matrix)])
     assert result.exit_code != 0
     assert not (results_dir / "should-not-run.csv").exists()
+
+
+# ---------------------------------------------------------------------------
+# --format json  (dry-run)
+# ---------------------------------------------------------------------------
+
+
+def test_matrix_dry_run_json_exits_zero(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(matrix, str(tmp_path / "results"), [{"name": "run-a", "config": str(cfg)}])
+
+    result = CliRunner().invoke(
+        main, ["matrix", "--config", str(matrix), "--dry-run", "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+
+
+def test_matrix_dry_run_json_emits_valid_json(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(tmp_path / "results"),
+        [{"name": "run-a", "config": str(cfg)}, {"name": "run-b", "config": str(cfg)}],
+    )
+
+    result = CliRunner().invoke(
+        main, ["matrix", "--config", str(matrix), "--dry-run", "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["total"] == 2
+    assert len(data["runs"]) == 2
+
+
+def test_matrix_dry_run_json_run_names(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(tmp_path / "results"),
+        [{"name": "alpha", "config": str(cfg)}, {"name": "beta", "config": str(cfg)}],
+    )
+
+    result = CliRunner().invoke(
+        main, ["matrix", "--config", str(matrix), "--dry-run", "--format", "json"]
+    )
+    data = json.loads(result.output)
+    names = [r["name"] for r in data["runs"]]
+    assert names == ["alpha", "beta"]
+
+
+def test_matrix_dry_run_json_run_fields(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(matrix, str(results_dir), [{"name": "run-a", "config": str(cfg)}])
+
+    result = CliRunner().invoke(
+        main, ["matrix", "--config", str(matrix), "--dry-run", "--format", "json"]
+    )
+    data = json.loads(result.output)
+    run = data["runs"][0]
+    assert run["index"] == 1
+    assert run["name"] == "run-a"
+    assert run["config"] == str(cfg)
+    assert run["output"].endswith("run-a.csv")
+    assert run["manifest"].endswith("run-a.manifest.json")
+
+
+def test_matrix_dry_run_json_no_table_text(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(matrix, str(tmp_path / "results"), [{"name": "run-a", "config": str(cfg)}])
+
+    result = CliRunner().invoke(
+        main, ["matrix", "--config", str(matrix), "--dry-run", "--format", "json"]
+    )
+    assert "run(s)" not in result.output
+    assert "config:" not in result.output
+
+
+def test_matrix_dry_run_json_creates_no_files(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(matrix, str(results_dir), [{"name": "run-a", "config": str(cfg)}])
+
+    CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--dry-run", "--format", "json"])
+    assert not results_dir.exists()
+
+
+# ---------------------------------------------------------------------------
+# --format json  (execution)
+# ---------------------------------------------------------------------------
+
+
+def test_matrix_json_mode_exits_zero_on_success(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\nWorld\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(results_dir),
+        [{"name": "run-a", "config": str(cfg)}, {"name": "run-b", "config": str(cfg)}],
+    )
+
+    result = CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--format", "json"])
+    assert result.exit_code == 0, result.output
+
+
+def _parse_json_output(output: str) -> dict:
+    """Extract the JSON object from the last line of mixed stdout/stderr output."""
+    return json.loads(output.strip().rsplit("\n", 1)[-1])
+
+
+def test_matrix_json_mode_emits_valid_json(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\nWorld\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(results_dir),
+        [{"name": "run-a", "config": str(cfg)}, {"name": "run-b", "config": str(cfg)}],
+    )
+
+    result = CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--format", "json"])
+    assert result.exit_code == 0, result.output
+    data = _parse_json_output(result.output)
+    assert data["total"] == 2
+    assert data["succeeded"] == 2
+    assert data["failed"] == 0
+    assert len(data["runs"]) == 2
+
+
+def test_matrix_json_mode_run_status_ok(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(matrix, str(results_dir), [{"name": "run-a", "config": str(cfg)}])
+
+    result = CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--format", "json"])
+    data = _parse_json_output(result.output)
+    run = data["runs"][0]
+    assert run["status"] == "ok"
+    assert run["output"].endswith("run-a.csv")
+    assert run["manifest"].endswith("run-a.manifest.json")
+
+
+def test_matrix_json_mode_writes_files(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(matrix, str(results_dir), [{"name": "run-a", "config": str(cfg)}])
+
+    CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--format", "json"])
+    assert (results_dir / "run-a.csv").exists()
+    assert (results_dir / "run-a.manifest.json").exists()
+
+
+def test_matrix_json_mode_no_human_text_in_json_line(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(matrix, str(results_dir), [{"name": "run-a", "config": str(cfg)}])
+
+    result = CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--format", "json"])
+    json_line = result.output.strip().rsplit("\n", 1)[-1]
+    assert json_line.startswith("{")
+    assert "Backend:" not in json_line
+    assert "Matrix:" not in json_line
+
+
+def test_matrix_json_mode_failed_run_exits_nonzero(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    good_cfg = tmp_path / "good.yaml"
+    _write_mock_config(good_cfg, prompts)
+    bad_cfg = tmp_path / "nonexistent.yaml"
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(results_dir),
+        [
+            {"name": "will-fail", "config": str(bad_cfg)},
+            {"name": "will-pass", "config": str(good_cfg)},
+        ],
+    )
+
+    result = CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--format", "json"])
+    assert result.exit_code != 0
+
+
+def test_matrix_json_mode_failure_captured_in_output(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    good_cfg = tmp_path / "good.yaml"
+    _write_mock_config(good_cfg, prompts)
+    bad_cfg = tmp_path / "nonexistent.yaml"
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(results_dir),
+        [
+            {"name": "will-fail", "config": str(bad_cfg)},
+            {"name": "will-pass", "config": str(good_cfg)},
+        ],
+    )
+
+    result = CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--format", "json"])
+    data = _parse_json_output(result.output)
+    assert data["total"] == 2
+    assert data["failed"] == 1
+    assert data["succeeded"] == 1
+    statuses = {r["name"]: r["status"] for r in data["runs"]}
+    assert statuses["will-fail"] == "failed"
+    assert statuses["will-pass"] == "ok"
+    assert "error" in next(r for r in data["runs"] if r["name"] == "will-fail")
