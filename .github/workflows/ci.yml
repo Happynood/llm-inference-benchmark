@@ -56,7 +56,7 @@ jobs:
           push: false
           tags: llm-bench-cuda:ci
           build-args: |
-            BUILD_CUDA=0
+            SKIP_LLAMA_CPP=1
             BASE_IMAGE=ubuntu:22.04
           cache-from: type=gha
           cache-to: type=gha,mode=max
