@@ -170,8 +170,11 @@ def main(
     "sort_by",
     default="p95",
     show_default=True,
-    type=click.Choice(["backend", "model", "p95", "toks", "load"], case_sensitive=False),
-    help="Sort column: toks=highest throughput first; load=fastest load first (N/A last)",
+    type=click.Choice(["backend", "model", "p95", "toks", "load", "ttft"], case_sensitive=False),
+    help=(
+        "Sort column: toks=highest throughput first; load=fastest load first (N/A last); "
+        "ttft=lowest TTFT p50 first (N/A last)"
+    ),
 )
 @click.option(
     "--format",

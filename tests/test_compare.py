@@ -205,6 +205,26 @@ def test_sort_by_load_all_none_preserves_relative_order() -> None:
     assert [r.backend for r in result] == ["a", "b"]
 
 
+def test_sort_by_ttft_ascending_none_last() -> None:
+    rows = [
+        RunRow("a", "m", 10, 5.0, 6.0, 100.0, 50.0, None, None, p50_ttft_ms=80.0),
+        RunRow("b", "m", 10, 5.0, 6.0, 100.0, 50.0, None, None, p50_ttft_ms=None),
+        RunRow("c", "m", 10, 5.0, 6.0, 100.0, 50.0, None, None, p50_ttft_ms=30.0),
+    ]
+    result = sort_rows(rows, sort_by="ttft")
+    assert [r.backend for r in result] == ["c", "a", "b"]
+    assert [r.p50_ttft_ms for r in result] == [30.0, 80.0, None]
+
+
+def test_sort_by_ttft_all_none_preserves_relative_order() -> None:
+    rows = [
+        RunRow("a", "m", 10, 5.0, 6.0, 100.0, 50.0, None, None, p50_ttft_ms=None),
+        RunRow("b", "m", 10, 5.0, 6.0, 100.0, 50.0, None, None, p50_ttft_ms=None),
+    ]
+    result = sort_rows(rows, sort_by="ttft")
+    assert [r.backend for r in result] == ["a", "b"]
+
+
 # ---------------------------------------------------------------------------
 # render_table
 # ---------------------------------------------------------------------------
@@ -398,6 +418,14 @@ def test_compare_subcommand_sort_backend() -> None:
     assert result.exit_code == 0, result.output
     # "mock" < "transformers" alphabetically → mock row appears first in output
     assert result.output.index("mock-gpt2") < result.output.index("transformers")
+
+
+def test_compare_subcommand_sort_ttft_exits_zero() -> None:
+    result = CliRunner().invoke(
+        main, ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--sort", "ttft"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "Backend" in result.output
 
 
 def test_compare_subcommand_no_files_fails() -> None:
