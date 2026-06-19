@@ -1,9 +1,11 @@
 # BUILD_CUDA=1 (default): compiles llama-cpp-python with CUDA support — requires local GPU build.
 # BUILD_CUDA=0: installs a CPU-only pre-built wheel; used by CI to validate image structure
 #               without exhausting runner disk/memory on 400+ nvcc compilation units.
+# BASE_IMAGE: override in CI (e.g. ubuntu:22.04) to avoid pulling the 3 GB CUDA image.
 ARG BUILD_CUDA=1
+ARG BASE_IMAGE=nvidia/cuda:12.4.1-devel-ubuntu22.04
 
-FROM nvidia/cuda:12.4.1-devel-ubuntu22.04
+FROM ${BASE_IMAGE}
 
 ARG BUILD_CUDA
 
