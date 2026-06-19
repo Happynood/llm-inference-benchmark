@@ -195,3 +195,10 @@ def test_compute_metrics_empty_ttft_list_returns_none() -> None:
     report = compute_metrics(results, backend="mock", model="t", ttft_values=[])
     assert report.p50_ttft_ms is None
     assert report.p95_ttft_ms is None
+
+
+def test_percentile_sorted_empty_list_returns_zero() -> None:
+    from llm_inference_benchmark.metrics import _percentile_sorted
+
+    assert _percentile_sorted([], 50) == 0.0
+    assert _percentile_sorted([], 95) == 0.0

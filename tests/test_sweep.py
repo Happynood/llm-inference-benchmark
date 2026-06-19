@@ -452,3 +452,10 @@ def test_explicit_runs_no_overrides_field_in_yaml() -> None:
         fname = f.name
     mc = load_matrix(fname)
     assert mc.runs[0].overrides == {}
+
+
+def test_expand_sweep_duplicate_names_raises() -> None:
+    """Values with ambiguous string representations that collapse to the same name fragment
+    should raise ValueError rather than silently overwriting a run."""
+    with pytest.raises(ValueError, match="duplicate run name"):
+        expand_sweep("c.yaml", {"mock.latency_ms": ["a/b", "a-b"]})
