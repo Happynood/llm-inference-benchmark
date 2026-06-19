@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-06-19
+
+### Added
+- `llm-bench matrix --format json`: machine-readable JSON output for the matrix command.
+  `--dry-run --format json` emits a single JSON object listing all planned runs with their
+  index, name, config, overrides, workload profile, and expected output/manifest paths —
+  no files are created. `--format json` (actual run) routes all progress messages to stderr
+  so stdout remains a single parseable JSON object; always collects outcomes from all runs
+  (continues past failures); emits a summary with `total`/`succeeded`/`failed` counts and
+  per-run `status`, `output`, and `error` fields; exits 1 when any run failed. Makes
+  `matrix` consistent with every other subcommand that supports `--format json`.
+
+### Changed
+- `llama-cpp` backend now pre-loads CUDA shared libraries bundled by `nvidia-*` pip packages
+  at Python import time using `ctypes.CDLL(..., mode=RTLD_GLOBAL)`. This makes GPU runs
+  work on driver-only systems (no CUDA toolkit / nvcc) without requiring `LD_LIBRARY_PATH`
+  to be set manually. The preload is a silent no-op on CPU-only machines and on systems
+  without `nvidia-*` packages installed.
+
 ## [1.2.0] — 2026-06-18
 
 ### Added
