@@ -155,6 +155,9 @@ def sort_rows(rows: list[RunRow], sort_by: str = "p95") -> list[RunRow]:
     if sort_by == "load":
         _inf = float("inf")
         return sorted(rows, key=lambda r: r.model_load_ms if r.model_load_ms is not None else _inf)
+    if sort_by == "ttft":
+        _inf = float("inf")
+        return sorted(rows, key=lambda r: r.p50_ttft_ms if r.p50_ttft_ms is not None else _inf)
     return sorted(rows, key=lambda r: r.p95_latency_ms)  # default: p95 ascending
 
 
