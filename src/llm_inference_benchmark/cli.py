@@ -7,14 +7,49 @@ import sys
 import time
 from dataclasses import asdict
 from pathlib import Path
+from typing import Any
 
 import click
+import yaml
 
 from llm_inference_benchmark import __version__
 from llm_inference_benchmark.backends.base import Backend
 from llm_inference_benchmark.backends.mock import MockBackend
 from llm_inference_benchmark.config import BenchmarkConfig, load_config
 from llm_inference_benchmark.runner import load_prompts, run_repeated
+
+
+def _apply_set_overrides(cfg: BenchmarkConfig, set_overrides: tuple[str, ...]) -> BenchmarkConfig:
+    """Parse and apply --set KEY=VALUE overrides to *cfg*, returning updated config.
+
+    Values are parsed as YAML scalars so that ``200`` becomes int, ``true`` becomes bool,
+    etc.  Unknown paths and type mismatches are raised as ``click.UsageError``.
+    """
+    from pydantic import ValidationError
+
+    from llm_inference_benchmark.sweep import apply_overrides, validate_override_path
+
+    parsed: dict[str, Any] = {}
+    for kv in set_overrides:
+        if "=" not in kv:
+            raise click.UsageError(f"--set expects KEY=VALUE format, got {kv!r}")
+        key, _, val_str = kv.partition("=")
+        try:
+            validate_override_path(key)
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
+        parsed[key] = yaml.safe_load(val_str)
+
+    updated = apply_overrides(cfg, parsed)
+    try:
+        import warnings
+
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            dump = updated.model_dump()
+        return BenchmarkConfig.model_validate(dump)
+    except ValidationError as exc:
+        raise click.UsageError(f"Invalid --set value: {exc}") from exc
 
 
 @click.group(invoke_without_command=True)
@@ -74,6 +109,16 @@ from llm_inference_benchmark.runner import load_prompts, run_repeated
     help="Override config seed for reproducible prompt sampling",
 )
 @click.option(
+    "--set",
+    "set_overrides",
+    multiple=True,
+    metavar="KEY=VALUE",
+    help=(
+        "Override any config field via dot-path, e.g. --set llama_cpp.max_tokens=200. "
+        "Values are parsed as YAML scalars (int, float, bool, str). Repeatable."
+    ),
+)
+@click.option(
     "--format",
     "output_format",
     default="table",
@@ -90,6 +135,7 @@ def main(
     warmup_requests_override: int | None,
     concurrency_override: int | None,
     seed_override: int | None,
+    set_overrides: tuple[str, ...],
     output_format: str,
 ) -> None:
     """LLM inference benchmark toolkit.
@@ -102,6 +148,11 @@ def main(
 
         llm-bench --config configs/example.yaml --requests 50 --concurrency 4 --seed 42
 
+    Use --set to override any backend-specific field via dot-path:
+
+        llm-bench --config configs/example.yaml --set llama_cpp.max_tokens=200
+        llm-bench --config configs/example.yaml --set hf.max_new_tokens=256 --set hf.device=cuda
+
     Use the compare subcommand to generate a Markdown table from saved CSVs:
 
         llm-bench compare results_a.csv results_b.csv
@@ -113,6 +164,8 @@ def main(
         raise click.UsageError("--config is required when running a benchmark")
 
     cfg = load_config(config_path)
+    if set_overrides:
+        cfg = _apply_set_overrides(cfg, set_overrides)
     overrides: dict[str, int] = {}
     if requests_override is not None:
         overrides["requests"] = requests_override
@@ -382,6 +435,16 @@ def recommend_cmd(
     help="YAML benchmark config file to validate",
 )
 @click.option(
+    "--set",
+    "set_overrides",
+    multiple=True,
+    metavar="KEY=VALUE",
+    help=(
+        "Override any config field via dot-path before validation, "
+        "e.g. --set llama_cpp.max_tokens=200. Repeatable."
+    ),
+)
+@click.option(
     "--format",
     "output_format",
     default="table",
@@ -389,7 +452,9 @@ def recommend_cmd(
     type=click.Choice(["table", "json"], case_sensitive=False),
     help="Output format: table=human-readable, json=machine-readable JSON",
 )
-def validate_config_cmd(config_path: str, output_format: str) -> None:
+def validate_config_cmd(
+    config_path: str, set_overrides: tuple[str, ...], output_format: str
+) -> None:
     """Validate a benchmark config file and print a summary of resolved settings.
 
     Reads the YAML, runs full pydantic validation, resolves the effective
@@ -397,11 +462,14 @@ def validate_config_cmd(config_path: str, output_format: str) -> None:
 
         llm-bench validate-config --config configs/example.yaml
         llm-bench validate-config --config configs/example.yaml --format json
+        llm-bench validate-config --config configs/example.yaml --set llama_cpp.max_tokens=200
     """
     try:
         cfg = load_config(config_path)
     except Exception as exc:  # noqa: BLE001
         raise click.ClickException(str(exc)) from exc
+    if set_overrides:
+        cfg = _apply_set_overrides(cfg, set_overrides)
 
     if output_format == "json":
         if cfg.backend == "mock":
