@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+- `--set KEY=VALUE` flag on the main `llm-bench` run command and on `llm-bench validate-config`:
+  overrides any config field via dot-path without editing the YAML. Values are parsed as YAML
+  scalars (so `200` becomes `int`, `3.14` becomes `float`, `true` becomes `bool`, `cuda`
+  stays `str`). The flag is repeatable:
+  ```
+  llm-bench --config my.yaml --set llama_cpp.max_tokens=200 --set llama_cpp.n_gpu_layers=20
+  llm-bench validate-config --config my.yaml --set hf.max_new_tokens=256
+  ```
+  Unknown paths and type mismatches produce a clear `UsageError` with the list of valid
+  fields. Named flags (`--requests`, `--seed`, etc.) take precedence over `--set` when both
+  target the same field. Reuses `apply_overrides` from the existing `sweep`/`matrix`
+  subsystem.
+
 ## [1.3.0] — 2026-06-19
 
 ### Added

@@ -474,3 +474,102 @@ def test_seed_override_combined_with_requests(tmp_config: Path) -> None:
     assert result.exit_code == 0, result.output
     assert "Seed: 7" in result.output
     assert "request_count: 2" in result.output
+
+
+# ---------------------------------------------------------------------------
+# --set KEY=VALUE overrides
+# ---------------------------------------------------------------------------
+
+
+def test_set_override_top_level_field(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--set", "requests=3"])
+    assert result.exit_code == 0, result.output
+    assert "request_count: 3" in result.output
+
+
+def test_set_override_nested_field(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main, ["--config", str(tmp_config), "--set", "mock.latency_ms=0"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "p50_latency_ms: 0" in result.output
+
+
+def test_set_override_multiple(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main,
+        ["--config", str(tmp_config), "--set", "requests=2", "--set", "mock.latency_ms=0"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "request_count: 2" in result.output
+
+
+def test_set_override_named_wins_over_set(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main,
+        ["--config", str(tmp_config), "--set", "requests=10", "--requests", "2"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "request_count: 2" in result.output
+
+
+def test_set_override_missing_equals_fails(tmp_config: Path) -> None:
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--set", "noequals"])
+    assert result.exit_code != 0
+    assert "KEY=VALUE" in result.output
+
+
+def test_set_override_unknown_path_fails(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main, ["--config", str(tmp_config), "--set", "doesnotexist.field=1"]
+    )
+    assert result.exit_code != 0
+    assert "Unknown override path" in result.output
+
+
+def test_set_override_wrong_type_fails(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main, ["--config", str(tmp_config), "--set", "mock.latency_ms=notanumber"]
+    )
+    assert result.exit_code != 0
+    assert "Invalid --set value" in result.output
+
+
+def test_set_override_bool_value(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main, ["--config", str(tmp_config), "--set", "mock.latency_ms=0"]
+    )
+    assert result.exit_code == 0, result.output
+
+
+# ---------------------------------------------------------------------------
+# validate-config --set
+# ---------------------------------------------------------------------------
+
+
+def test_validate_config_set_override_reflects_value(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main,
+        ["validate-config", "--config", str(tmp_config), "--set", "mock.latency_ms=999"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "999" in result.output
+    assert "OK" in result.output
+
+
+def test_validate_config_set_override_nested_field(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main,
+        ["validate-config", "--config", str(tmp_config), "--set", "mock.tokens_per_response=77"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "77" in result.output
+
+
+def test_validate_config_set_unknown_path_fails(tmp_config: Path) -> None:
+    result = CliRunner().invoke(
+        main,
+        ["validate-config", "--config", str(tmp_config), "--set", "bad.path=1"],
+    )
+    assert result.exit_code != 0
+    assert "Unknown override path" in result.output
