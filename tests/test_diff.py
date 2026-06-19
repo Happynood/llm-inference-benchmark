@@ -112,6 +112,11 @@ def test_fmt_change_contains_sign() -> None:
     assert "-" in _fmt_change(100.0, 80.0, lower_is_better=True)
 
 
+def test_fmt_change_zero_baseline_returns_dash() -> None:
+    assert _fmt_change(0.0, 50.0, lower_is_better=True) == "—"
+    assert _fmt_change(0.0, 0.0, lower_is_better=False) == "—"
+
+
 # ---------------------------------------------------------------------------
 # build_diff_table — structure and required metrics
 # ---------------------------------------------------------------------------
@@ -428,6 +433,25 @@ def test_find_regressions_optional_metric_absent_both_skipped(tmp_path: Path) ->
     assert "VRAM (MB)" not in regressions
 
 
+def test_find_regressions_one_side_none_not_flagged(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_ttft_ms="40.0", p95_ttft_ms="80.0")
+    _write_csv(b)  # current has no TTFT — one side None, should not be a regression
+    regressions = find_regressions(a, b)
+    assert "TTFT p50 (ms)" not in regressions
+    assert "TTFT p95 (ms)" not in regressions
+
+
+def test_find_regressions_zero_baseline_not_flagged(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, tokens_per_second="0.0")  # zero baseline → pct is None → not computable
+    _write_csv(b, tokens_per_second="50.0")
+    regressions = find_regressions(a, b)
+    assert "tok/s" not in regressions
+
+
 def test_find_regressions_optional_metric_present(tmp_path: Path) -> None:
     a = tmp_path / "a.csv"
     b = tmp_path / "b.csv"
@@ -651,6 +675,17 @@ def test_build_diff_json_throughput_regression(tmp_path: Path) -> None:
     result = json.loads(build_diff_json(a, b))
     toks = next(m for m in result["metrics"] if m["label"] == "tok/s")
     assert toks["direction"] == "regression"
+
+
+def test_build_diff_json_direction_na_for_zero_baseline(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, tokens_per_second="0.0")  # zero baseline → pct uncomputable
+    _write_csv(b, tokens_per_second="50.0")
+    result = json.loads(build_diff_json(a, b))
+    toks = next(m for m in result["metrics"] if m["label"] == "tok/s")
+    assert toks["direction"] == "n/a"
+    assert toks["change_pct"] is None
 
 
 # ---------------------------------------------------------------------------

@@ -148,6 +148,32 @@ def test_apply_constraints_min_sanity_filters() -> None:
     assert "sanity too low" in excluded[0].reason
 
 
+def test_apply_constraints_min_quality_filters() -> None:
+    rows = [
+        RunRow("mock", "good", 10, 95.0, 100.0, 50.0, 200.0, None, task_quality_pass_rate=0.9),
+        RunRow("mock", "bad", 10, 95.0, 100.0, 50.0, 200.0, None, task_quality_pass_rate=0.5),
+    ]
+    candidates, excluded = apply_constraints(rows, Constraints(min_quality=0.8))
+    assert len(candidates) == 1
+    assert candidates[0].model == "good"
+    assert "task quality too low" in excluded[0].reason
+    assert "0.50" in excluded[0].reason
+
+
+def test_apply_constraints_missing_quality_excluded_when_constrained() -> None:
+    row = RunRow("mock", "m", 10, 95.0, 100.0, 50.0, 200.0, None, task_quality_pass_rate=None)
+    candidates, excluded = apply_constraints([row], Constraints(min_quality=0.8))
+    assert candidates == []
+    assert "task quality unknown" in excluded[0].reason
+
+
+def test_apply_constraints_missing_quality_ok_when_unconstrained() -> None:
+    row = RunRow("mock", "m", 10, 95.0, 100.0, 50.0, 200.0, None, task_quality_pass_rate=None)
+    candidates, excluded = apply_constraints([row], Constraints())
+    assert len(candidates) == 1
+    assert excluded == []
+
+
 def test_apply_constraints_missing_vram_excluded_when_constrained() -> None:
     row = _row(vram=None)
     candidates, excluded = apply_constraints([row], Constraints(max_vram_mb=4000.0))
@@ -456,6 +482,47 @@ def test_cli_recommend_min_judge_constraint(tmp_path: Path) -> None:
     result = CliRunner().invoke(main, ["recommend", str(p), "--min-judge", "0.5"])
     assert result.exit_code != 0
     assert "judge score too low" in result.output
+
+
+def test_cli_recommend_min_quality_constraint(tmp_path: Path) -> None:
+    row = RunRow("mock", "m", 10, 95.0, 100.0, 50.0, 200.0, None, task_quality_pass_rate=0.5)
+
+    def _s(v: float | None) -> str:
+        return "" if v is None else str(v)
+
+    fields = list(_CSV_FIELDNAMES) + ["task_quality_pass_rate"]
+    p = tmp_path / "run.csv"
+    with open(p, "w", newline="") as f:
+        import csv as csv_mod
+
+        writer = csv_mod.DictWriter(f, fieldnames=fields)
+        writer.writeheader()
+        writer.writerow(
+            {
+                "request_count": row.request_count,
+                "p50_latency_ms": row.p50_latency_ms,
+                "p95_latency_ms": row.p95_latency_ms,
+                "tokens_per_second": row.tokens_per_second,
+                "total_tokens": 0,
+                "backend": row.backend,
+                "model": row.model,
+                "peak_cpu_memory_mb": row.peak_cpu_memory_mb,
+                "peak_cuda_memory_mb": "",
+                "peak_vram_memory_mb": "",
+                "empty_output_count": 0,
+                "min_output_chars": 50,
+                "mean_output_chars": 50.0,
+                "repeated_output_count": 0,
+                "sanity_pass_rate": "1.0",
+                "perplexity": "",
+                "judge_score": "",
+                "timestamp": "2026-01-01T00:00:00+00:00",
+                "task_quality_pass_rate": _s(row.task_quality_pass_rate),
+            }
+        )
+    result = CliRunner().invoke(main, ["recommend", str(p), "--min-quality", "0.8"])
+    assert result.exit_code != 0
+    assert "task quality too low" in result.output
 
 
 # ---------------------------------------------------------------------------
