@@ -327,8 +327,8 @@ def compare_cmd(
     "output_format",
     default="table",
     show_default=True,
-    type=click.Choice(["table", "json"], case_sensitive=False),
-    help="Output format: table=Markdown, json=machine-readable JSON array",
+    type=click.Choice(["table", "json", "csv"], case_sensitive=False),
+    help="Output format: table=Markdown, json=machine-readable JSON array, csv=spreadsheet/pandas",
 )
 def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None, output_format: str) -> None:
     """Identify Pareto-optimal benchmark configurations from CSV files.
@@ -341,10 +341,16 @@ def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None, output_forma
         llm-bench pareto results/q4km.csv results/q8.csv
         llm-bench pareto results/*.csv --format json
     """
-    from llm_inference_benchmark.pareto import build_pareto_json, build_pareto_table
+    from llm_inference_benchmark.pareto import (
+        build_pareto_csv,
+        build_pareto_json,
+        build_pareto_table,
+    )
 
     if output_format == "json":
         text = build_pareto_json(list(csv_files))
+    elif output_format == "csv":
+        text = build_pareto_csv(list(csv_files))
     else:
         text = build_pareto_table(list(csv_files))
 

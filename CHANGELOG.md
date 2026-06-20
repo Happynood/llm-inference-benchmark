@@ -8,6 +8,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench pareto --format csv`: export the Pareto classification table as a CSV file.
+  Includes all `compare --format csv` columns plus a `pareto` column (`True`/`False`) so
+  users can filter Pareto-optimal rows in pandas without losing dominated rows.  Absent
+  optional metrics are written as empty cells so `pandas.read_csv()` produces `NaN`
+  automatically.  Composes with `--output`:
+  ```
+  llm-bench pareto results/*.csv --format csv
+  llm-bench pareto results/*.csv --format csv --output pareto.csv
+  df = pd.read_csv("pareto.csv"); optimal = df[df["pareto"]]
+  ```
+
 - `llm-bench compare --format csv`: export the comparison table as a CSV file.
   Header row uses snake_case field names identical to JSON keys; absent optional
   metrics are written as empty cells (not `"N/A"`) so `pandas.read_csv()` produces
