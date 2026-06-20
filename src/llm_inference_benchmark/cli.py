@@ -423,6 +423,16 @@ def pareto_cmd(
     help="Maximum time-to-first-token p50 in ms (requires stream=True benchmark run)",
 )
 @click.option(
+    "--filter",
+    "filters",
+    multiple=True,
+    metavar="FIELD=PATTERN",
+    help=(
+        "Keep only rows where FIELD contains PATTERN (case-insensitive substring). "
+        "Supported fields: backend, model. Repeatable; multiple filters are ANDed."
+    ),
+)
+@click.option(
     "--format",
     "output_format",
     default="table",
@@ -447,6 +457,7 @@ def recommend_cmd(
     min_judge: float | None,
     max_load_ms: float | None,
     max_ttft_ms: float | None,
+    filters: tuple[str, ...],
     output_format: str,
     output_path: str | None,
 ) -> None:
@@ -460,8 +471,10 @@ def recommend_cmd(
 
         llm-bench recommend results/*.csv --max-vram-mb 4096 --max-p95-ms 1000
         llm-bench recommend results/*.csv --max-p95-ms 500 --format json
+        llm-bench recommend results/*.csv --filter backend=llama_cpp --max-p95-ms 1000
+        llm-bench recommend results/*.csv --filter backend=llama_cpp --filter model=Q4
     """
-    from llm_inference_benchmark.compare import load_csv
+    from llm_inference_benchmark.compare import filter_rows, load_csv
     from llm_inference_benchmark.recommend import (
         Constraints,
         build_recommendation,
@@ -481,12 +494,18 @@ def recommend_cmd(
     )
 
     if output_format == "json":
-        rows = [load_csv(p) for p in csv_files]
+        try:
+            rows = filter_rows([load_csv(p) for p in csv_files], list(filters))
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
         result = recommend(rows, constraints)
         text = render_recommendation_json(result)
         has_winner = result.winner is not None
     else:
-        text, has_winner = build_recommendation(list(csv_files), constraints)
+        try:
+            text, has_winner = build_recommendation(list(csv_files), constraints, list(filters))
+        except ValueError as exc:
+            raise click.UsageError(str(exc)) from exc
 
     if output_path:
         Path(output_path).write_text(text + "\n")
