@@ -8,17 +8,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
-- `llm-bench serve [--host HOST] [--port PORT]`: start a FastAPI HTTP API server that
-  exposes benchmark jobs as REST resources.  Endpoints: `GET /api/health`,
-  `GET /api/models` (lists GGUF files and HuggingFace cache dirs), `GET /api/runs`,
-  `POST /api/runs` (submit a benchmark config; returns `run_id` immediately),
-  `GET /api/runs/{run_id}` (poll status and results), `GET /api/runs/{run_id}/stream`
-  (Server-Sent Events streaming stdout while the job runs).  Results are persisted in
-  a local SQLite database at `~/.llm-bench/results.db`.  Requires the new `server`
-  optional extra: `uv pip install 'llm-inference-benchmark[server]'`.
+- `llm-bench serve [--host HOST] [--port PORT]`: start a FastAPI server with a built-in
+  HTMX + Plotly dashboard.  Opening `http://localhost:8080` in a browser shows a live
+  runs table (auto-refreshed every 5 s via HTMX), per-run SSE log streaming, a bar-chart
+  comparison for selected runs, and a Pareto scatter page (p95 latency vs throughput)
+  for each run.  REST endpoints: `GET /api/health`, `GET /api/models` (GGUF files and
+  HuggingFace cache dirs), `GET /api/runs`, `POST /api/runs` (submit a config; returns
+  `run_id` immediately), `GET /api/runs/{run_id}` (poll status/results),
+  `GET /api/runs/{run_id}/stream` (Server-Sent Events), `GET /api/ui/runs-table`
+  (HTMX HTML fragment), `GET /runs/{run_id}/pareto.html` (interactive Plotly page).
+  Results are persisted in `~/.llm-bench/results.db`.  Requires the `server` extra:
+  `uv pip install 'llm-inference-benchmark[server]'`.
 
 - New `server` optional extra: `fastapi[standard]>=0.111`, `uvicorn[standard]>=0.30`,
   `huggingface-hub>=0.23`.
+
+- Playwright E2E test suite (`tests/e2e/test_ui.py`) covering dashboard load, runs table
+  population, status badges, live-log panel, compare-chart rendering, and Pareto page.
 
 - `llm-bench recommend --filter FIELD=PATTERN`: narrow the candidate pool before
   constraint evaluation and Pareto selection.  Supported fields: `backend`, `model`

@@ -31,4 +31,24 @@ jobs:
         run: uv run pyright
 
       - name: Tests
-        run: uv run pytest -v --cov=llm_inference_benchmark --cov-report=term-missing
+        run: uv run pytest -v --ignore=tests/e2e --cov=llm_inference_benchmark --cov-report=term-missing
+
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - uses: astral-sh/setup-uv@v4
+
+      - name: Install dependencies
+        run: uv sync
+
+      - name: Install Playwright browsers
+        run: uv run playwright install chromium --with-deps
+
+      - name: E2E tests
+        run: uv run pytest tests/e2e/test_ui.py -v

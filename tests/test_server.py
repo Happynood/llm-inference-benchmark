@@ -15,6 +15,10 @@ from llm_inference_benchmark.server import (
     _buffers,
     _get_db,
     _now_iso,
+    _pareto_mask,
+    _parse_metrics_from_output,
+    _render_pareto_html,
+    _render_runs_table_rows,
     _row_to_result,
     _set_db_path,
     app,
@@ -362,3 +366,162 @@ class _MockProc:
 
     def wait(self) -> int:
         return self.returncode
+
+
+# ── _parse_metrics_from_output ────────────────────────────────────────────────
+
+
+def test_parse_metrics_none_output() -> None:
+    m = _parse_metrics_from_output(None)
+    assert m["tokens_per_second"] is None
+    assert m["p50_ttft_ms"] is None
+    assert m["p95_latency_ms"] is None
+
+
+def test_parse_metrics_from_typical_output() -> None:
+    output = (
+        "Backend: mock  Model: gpt2  Requests: 10\n"
+        "=== Benchmark Results ===\n"
+        "  request_count: 10\n"
+        "  tokens_per_second: 123.45\n"
+        "  p95_latency_ms: 210.00\n"
+        "  p50_ttft_ms: 55.20\n"
+    )
+    m = _parse_metrics_from_output(output)
+    assert m["tokens_per_second"] == pytest.approx(123.45)
+    assert m["p95_latency_ms"] == pytest.approx(210.0)
+    assert m["p50_ttft_ms"] == pytest.approx(55.20)
+
+
+def test_parse_metrics_na_values() -> None:
+    output = "  tokens_per_second: 80.00\n  p50_ttft_ms: N/A\n"
+    m = _parse_metrics_from_output(output)
+    assert m["tokens_per_second"] == pytest.approx(80.0)
+    assert m["p50_ttft_ms"] is None
+
+
+# ── _pareto_mask ──────────────────────────────────────────────────────────────
+
+
+def test_pareto_mask_single_point() -> None:
+    assert _pareto_mask([(100.0, 50.0)]) == [True]
+
+
+def test_pareto_mask_dominated() -> None:
+    # point 0 is dominated by point 1 (lower latency, higher throughput)
+    mask = _pareto_mask([(200.0, 40.0), (100.0, 60.0)])
+    assert mask == [False, True]
+
+
+def test_pareto_mask_two_on_front() -> None:
+    # Neither dominates the other (tradeoff)
+    mask = _pareto_mask([(100.0, 40.0), (200.0, 80.0)])
+    assert mask == [True, True]
+
+
+# ── Dashboard and fragment endpoints ─────────────────────────────────────────
+
+
+async def test_dashboard_returns_html(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/")
+    assert resp.status_code == 200
+    assert "text/html" in resp.headers["content-type"]
+    assert "llm-bench" in resp.text
+    assert "runs-tbody" in resp.text
+
+
+async def test_runs_table_fragment_empty(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/api/ui/runs-table")
+    assert resp.status_code == 200
+    assert "No runs yet" in resp.text
+
+
+async def test_runs_table_fragment_with_data(client: httpx.AsyncClient, isolated_db: Path) -> None:
+    db = _get_db()
+    output = (
+        "=== Benchmark Results ===\n"
+        "  tokens_per_second: 95.10\n"
+        "  p95_latency_ms: 180.00\n"
+        "  p50_ttft_ms: N/A\n"
+    )
+    db.execute(
+        "INSERT INTO runs (id, status, config, output, created_at) VALUES (?,?,?,?,?)",
+        ("abc12345", "done", '{"backend":"mock","model":"gpt2"}', output, _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.get("/api/ui/runs-table")
+    assert resp.status_code == 200
+    assert "abc123" in resp.text
+    assert "95.1" in resp.text
+    assert "mock" in resp.text
+    assert "badge-done" in resp.text
+
+
+async def test_pareto_page_not_found(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/runs/nonexistent-id/pareto.html")
+    assert resp.status_code == 404
+
+
+async def test_pareto_page_no_metrics(client: httpx.AsyncClient, isolated_db: Path) -> None:
+    _get_db().execute(
+        "INSERT INTO runs (id, status, config, output, created_at) VALUES (?,?,?,?,?)",
+        ("run-p1", "done", '{"backend":"mock","model":"m"}', None, _now_iso()),
+    )
+    _get_db().commit()
+    resp = await client.get("/runs/run-p1/pareto.html")
+    assert resp.status_code == 200
+    assert "No completed runs" in resp.text
+
+
+async def test_pareto_page_with_metrics(client: httpx.AsyncClient, isolated_db: Path) -> None:
+    output = "  tokens_per_second: 70.0\n  p95_latency_ms: 150.0\n"
+    _get_db().execute(
+        "INSERT INTO runs (id, status, config, output, created_at) VALUES (?,?,?,?,?)",
+        ("run-p2", "done", '{"backend":"mock","model":"m"}', output, _now_iso()),
+    )
+    _get_db().commit()
+    resp = await client.get("/runs/run-p2/pareto.html")
+    assert resp.status_code == 200
+    assert "Plotly.newPlot" in resp.text
+    assert "run-p2"[:8] in resp.text
+
+
+# ── _render_runs_table_rows and _render_pareto_html unit tests ────────────────
+
+
+def test_render_runs_table_rows_empty() -> None:
+    html_out = _render_runs_table_rows([])
+    assert "No runs yet" in html_out
+
+
+def test_render_pareto_html_no_metrics(isolated_db: Path) -> None:
+    from llm_inference_benchmark.server import RunResult
+
+    result = RunResult(
+        run_id="abc",
+        status="done",
+        config={},
+        output=None,
+        created_at=_now_iso(),
+        finished_at=None,
+    )
+    out = _render_pareto_html("abc", [result])
+    assert "No completed runs" in out
+
+
+def test_render_pareto_html_with_metrics(isolated_db: Path) -> None:
+    from llm_inference_benchmark.server import RunResult
+
+    output = "  tokens_per_second: 60.0\n  p95_latency_ms: 200.0\n"
+    result = RunResult(
+        run_id="abc",
+        status="done",
+        config={"backend": "mock", "model": "m"},
+        output=output,
+        created_at=_now_iso(),
+        finished_at=None,
+    )
+    out = _render_pareto_html("abc", [result])
+    assert "Plotly.newPlot" in out
+    assert "60.0" in out
