@@ -144,6 +144,37 @@ def load_csv(path: str | Path) -> RunRow:
     )
 
 
+_FILTER_FIELDS: frozenset[str] = frozenset({"backend", "model"})
+
+
+def filter_rows(rows: list[RunRow], filters: list[str]) -> list[RunRow]:
+    """Return rows where every FIELD=PATTERN filter matches (case-insensitive substring).
+
+    Raises ValueError for unsupported field names.
+    """
+    if not filters:
+        return rows
+
+    parsed: list[tuple[str, str]] = []
+    for f in filters:
+        if "=" not in f:
+            raise ValueError(
+                f"Invalid filter {f!r}: expected FIELD=PATTERN (e.g. backend=llama_cpp)"
+            )
+        field, _, pattern = f.partition("=")
+        if field not in _FILTER_FIELDS:
+            raise ValueError(
+                f"Unknown filter field {field!r}. Valid fields: {sorted(_FILTER_FIELDS)}"
+            )
+        parsed.append((field, pattern.lower()))
+
+    result = []
+    for row in rows:
+        if all(pattern in getattr(row, field).lower() for field, pattern in parsed):
+            result.append(row)
+    return result
+
+
 def sort_rows(rows: list[RunRow], sort_by: str = "p95") -> list[RunRow]:
     """Return a new sorted list; does not mutate the input."""
     if sort_by == "backend":

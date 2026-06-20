@@ -8,6 +8,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench compare --filter FIELD=PATTERN`: filter comparison rows before sorting and
+  `--limit`. Pattern is a case-insensitive substring match. Supported fields: `backend`,
+  `model`. The flag is repeatable; multiple filters are ANDed:
+  ```
+  llm-bench compare results/*.csv --filter backend=llama_cpp
+  llm-bench compare results/*.csv --filter model=Llama-3.2 --sort toks
+  llm-bench compare results/*.csv --filter backend=llama_cpp --filter model=Q4_K_M --limit 3
+  llm-bench compare results/*.csv --filter backend=llama_cpp --format json
+  ```
+  An unsupported field name produces a clear `UsageError` listing valid fields. When no rows
+  survive filtering, an empty table or empty JSON array is returned (not an error). Composes
+  naturally with `--sort`, `--limit`, and `--format`.
+
+
 - `llm-bench compare --limit N`: cap the output table or JSON array to the top N rows after
   sorting. Composes naturally with `--sort` to get a focused view of the best runs:
   ```

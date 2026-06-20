@@ -11,6 +11,7 @@ from llm_inference_benchmark.cli import main
 from llm_inference_benchmark.compare import (
     RunRow,
     build_comparison_table,
+    filter_rows,
     load_csv,
     render_json,
     render_table,
@@ -480,6 +481,136 @@ def test_compare_subcommand_limit_json() -> None:
 def test_compare_subcommand_limit_zero_rejected() -> None:
     result = CliRunner().invoke(main, ["compare", str(MOCK_CSV), "--limit", "0"])
     assert result.exit_code != 0
+
+
+# ---------------------------------------------------------------------------
+# filter_rows unit tests
+# ---------------------------------------------------------------------------
+
+_FILTER_ROWS = [
+    RunRow("llama_cpp", "Llama-3.2-3B-Q4_K_M", 10, 20.0, 22.0, 39.0, 800.0, None, 2361.0),
+    RunRow("transformers", "tiny-gpt2", 10, 40.0, 44.0, 1200.0, 720.0, 0.0, 1024.0),
+    RunRow("mock", "mock-gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None),
+]
+
+
+def test_filter_rows_no_filters_returns_all() -> None:
+    assert filter_rows(_FILTER_ROWS, []) == _FILTER_ROWS
+
+
+def test_filter_rows_by_backend_exact() -> None:
+    result = filter_rows(_FILTER_ROWS, ["backend=mock"])
+    assert len(result) == 1
+    assert result[0].backend == "mock"
+
+
+def test_filter_rows_by_backend_substring() -> None:
+    result = filter_rows(_FILTER_ROWS, ["backend=llama"])
+    assert len(result) == 1
+    assert result[0].backend == "llama_cpp"
+
+
+def test_filter_rows_by_model_substring() -> None:
+    result = filter_rows(_FILTER_ROWS, ["model=gpt2"])
+    assert len(result) == 2
+    backends = {r.backend for r in result}
+    assert backends == {"transformers", "mock"}
+
+
+def test_filter_rows_case_insensitive() -> None:
+    result = filter_rows(_FILTER_ROWS, ["backend=MOCK"])
+    assert len(result) == 1
+    assert result[0].backend == "mock"
+
+
+def test_filter_rows_multiple_and_semantics() -> None:
+    result = filter_rows(_FILTER_ROWS, ["model=gpt2", "backend=mock"])
+    assert len(result) == 1
+    assert result[0].backend == "mock"
+
+
+def test_filter_rows_no_match_returns_empty() -> None:
+    result = filter_rows(_FILTER_ROWS, ["backend=vllm"])
+    assert result == []
+
+
+def test_filter_rows_invalid_field_raises() -> None:
+    with pytest.raises(ValueError, match="Unknown filter field"):
+        filter_rows(_FILTER_ROWS, ["p95=100"])
+
+
+def test_filter_rows_missing_equals_raises() -> None:
+    with pytest.raises(ValueError, match="expected FIELD=PATTERN"):
+        filter_rows(_FILTER_ROWS, ["backendmock"])
+
+
+# ---------------------------------------------------------------------------
+# --filter CLI tests
+# ---------------------------------------------------------------------------
+
+
+def test_compare_filter_by_backend() -> None:
+    result = CliRunner().invoke(
+        main, ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--filter", "backend=mock"]
+    )
+    assert result.exit_code == 0
+    assert "mock" in result.output
+    assert "transformers" not in result.output
+
+
+def test_compare_filter_by_model_substring() -> None:
+    result = CliRunner().invoke(
+        main, ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--filter", "model=gpt2"]
+    )
+    assert result.exit_code == 0
+    assert "gpt2" in result.output.lower()
+
+
+def test_compare_filter_no_match_empty_table() -> None:
+    result = CliRunner().invoke(main, ["compare", str(MOCK_CSV), "--filter", "backend=vllm"])
+    assert result.exit_code == 0
+    # Header line still present; no data rows
+    assert "Backend" in result.output
+    lines = [ln for ln in result.output.splitlines() if ln.strip() and not ln.startswith("|")]
+    assert lines == []
+
+
+def test_compare_filter_invalid_field_usage_error() -> None:
+    result = CliRunner().invoke(main, ["compare", str(MOCK_CSV), "--filter", "p95=100"])
+    assert result.exit_code != 0
+    assert "Unknown filter field" in result.output
+
+
+def test_compare_filter_composes_with_limit() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--filter", "model=gpt2", "--limit", "1"],
+    )
+    assert result.exit_code == 0
+    data_lines = [ln for ln in result.output.splitlines() if ln.startswith("|") and "---" not in ln]
+    assert len(data_lines) == 2  # header + 1 data row
+
+
+def test_compare_filter_composes_with_json() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "compare",
+            str(MOCK_CSV),
+            str(TRANSFORMERS_CSV),
+            "--filter",
+            "backend=mock",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0
+    import json
+
+    data = json.loads(result.output)
+    assert isinstance(data, list)
+    assert len(data) == 1
+    assert data[0]["backend"] == "mock"
 
 
 # ---------------------------------------------------------------------------

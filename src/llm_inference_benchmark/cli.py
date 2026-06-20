@@ -246,6 +246,16 @@ def main(
     help="Output format: table=Markdown, json=machine-readable JSON array",
 )
 @click.option(
+    "--filter",
+    "filters",
+    multiple=True,
+    metavar="FIELD=PATTERN",
+    help=(
+        "Keep only rows where FIELD contains PATTERN (case-insensitive substring). "
+        "Supported fields: backend, model. Repeatable; multiple filters are ANDed."
+    ),
+)
+@click.option(
     "--output",
     "output_path",
     default=None,
@@ -257,6 +267,7 @@ def compare_cmd(
     sort_by: str,
     limit: int | None,
     output_format: str,
+    filters: tuple[str, ...],
     output_path: str | None,
 ) -> None:
     """Generate a comparison table from benchmark CSV files.
@@ -265,16 +276,24 @@ def compare_cmd(
 
         llm-bench compare mock.csv transformers.csv --sort p95
         llm-bench compare results/*.csv --sort toks --limit 5
+        llm-bench compare results/*.csv --filter backend=llama_cpp
+        llm-bench compare results/*.csv --filter backend=llama_cpp --filter model=Q4_K_M
         llm-bench compare results/*.csv --format json
     """
     from llm_inference_benchmark.compare import (
+        filter_rows,
         load_csv,
         render_json,
         render_table,
         sort_rows,
     )
 
-    rows = sort_rows([load_csv(p) for p in csv_files], sort_by=sort_by)
+    try:
+        rows = filter_rows([load_csv(p) for p in csv_files], list(filters))
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from exc
+
+    rows = sort_rows(rows, sort_by=sort_by)
     if limit is not None:
         rows = rows[:limit]
 
