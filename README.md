@@ -105,6 +105,9 @@ llm-bench recommend results/q4km.csv results/q8.csv \
   --max-p95-ms 1000 \
   --max-ttft-ms 200 \
   --min-sanity 1.0
+
+# Narrow the candidate pool before constraint evaluation (repeatable, ANDed)
+llm-bench recommend results/*.csv --filter backend=llama_cpp --filter model=Q4_K_M --max-p95-ms 1000
 ```
 
 ```
@@ -221,7 +224,7 @@ Full offload is **3.1× faster** than CPU-only. Partial offload (20/28) captures
 - **Self-perplexity** — teacher-forcing PPL on generated completions (`transformers` only)
 - **LLM-as-judge** — P(Yes) from fixed yes/no relevance question (`transformers` only)
 - **Pareto analysis** — classifies configs as optimal or dominated across all metrics
-- **Constraint-based recommender** — `--max-vram-mb`, `--max-p95-ms`, `--max-ttft-ms`, `--min-sanity`, `--min-quality`, `--max-perplexity`, `--min-judge`, `--max-load-ms`
+- **Constraint-based recommender** — `--max-vram-mb`, `--max-p95-ms`, `--max-ttft-ms`, `--min-sanity`, `--min-quality`, `--max-perplexity`, `--min-judge`, `--max-load-ms`; `--filter FIELD=PATTERN` to pre-filter by `backend` or `model`
 - **JSON run manifest** — git commit, config/prompts SHA256, Python/OS/CPU/GPU fingerprint
 - **Docker image** — mock + transformers CPU published to ghcr.io on each release
 
