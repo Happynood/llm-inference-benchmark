@@ -8,6 +8,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench pipeline --config <file>`: run a full benchmark study from a single YAML config.
+  Executes all matrix cells in sequence, then writes compare, Pareto, and recommendation
+  outputs to `results_dir/`. Supports `--dry-run` to preview the plan without executing,
+  `--continue-on-error` to keep running after a cell failure, and `--format table|json`
+  for terminal progress. The `pipeline:` block is optional — a plain matrix YAML is valid
+  pipeline input. Example:
+  ```
+  llm-bench pipeline --config configs/pipeline-example.yaml
+  llm-bench pipeline --config configs/pipeline-example.yaml --dry-run
+  llm-bench pipeline --config configs/pipeline-example.yaml --continue-on-error
+  ```
+  Output files written to `results_dir/`: `compare.md`, `compare.json`; `pareto.md`,
+  `pareto.json` (when `pipeline.pareto: true`); `recommend.md`, `recommend.json` (when
+  `pipeline.recommend:` block is present). Exits 1 when any cell failed or when a
+  `recommend` block finds no winner. Calls library functions directly — no subprocess
+  calls to other `llm-bench` subcommands. A `configs/pipeline-example.yaml` ships with
+  the repo and uses the mock backend (no model download required).
+
 - `llm-bench compare --filter FIELD=PATTERN`: filter comparison rows before sorting and
   `--limit`. Pattern is a case-insensitive substring match. Supported fields: `backend`,
   `model`. The flag is repeatable; multiple filters are ANDed:
