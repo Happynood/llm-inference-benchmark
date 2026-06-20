@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from pathlib import Path
 
@@ -12,9 +14,11 @@ from llm_inference_benchmark.cli import main
 from llm_inference_benchmark.diff import (
     _fmt_change,
     _pct_change,
+    build_diff_csv,
     build_diff_json,
     build_diff_table,
     find_regressions,
+    render_diff_csv,
 )
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -750,3 +754,188 @@ def test_diff_format_table_is_default(tmp_path: Path) -> None:
     result = CliRunner().invoke(main, ["diff", str(a), str(b)])
     assert result.exit_code == 0, result.output
     assert "## Benchmark Diff" in result.output
+
+
+# ---------------------------------------------------------------------------
+# render_diff_csv / build_diff_csv — unit tests
+# ---------------------------------------------------------------------------
+
+
+def _parse_csv(text: str) -> list[dict[str, str]]:
+    return list(csv.DictReader(io.StringIO(text)))
+
+
+def test_build_diff_csv_valid_csv(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    text = build_diff_csv(str(a), str(b))
+    rows = _parse_csv(text)
+    assert len(rows) > 0
+
+
+def test_build_diff_csv_header_fields(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    text = build_diff_csv(str(a), str(b))
+    reader = csv.DictReader(io.StringIO(text))
+    assert reader.fieldnames == ["metric", "baseline", "current", "change_pct", "direction"]
+
+
+def test_build_diff_csv_required_metrics_always_present(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    rows = _parse_csv(build_diff_csv(str(a), str(b)))
+    labels = {r["metric"] for r in rows}
+    assert {"p50 (ms)", "p95 (ms)", "tok/s", "CPU mem (MB)"}.issubset(labels)
+
+
+def test_build_diff_csv_optional_absent_both_omitted(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    rows = _parse_csv(build_diff_csv(str(a), str(b)))
+    labels = {r["metric"] for r in rows}
+    assert "VRAM (MB)" not in labels
+    assert "TTFT p50 (ms)" not in labels
+
+
+def test_build_diff_csv_optional_included_when_present(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, peak_vram_memory_mb="2048.0")
+    _write_csv(b, peak_vram_memory_mb="2200.0")
+    rows = _parse_csv(build_diff_csv(str(a), str(b)))
+    labels = {r["metric"] for r in rows}
+    assert "VRAM (MB)" in labels
+
+
+def test_build_diff_csv_one_side_absent_gives_empty_cell(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, peak_vram_memory_mb="2048.0")
+    _write_csv(b)
+    rows = _parse_csv(build_diff_csv(str(a), str(b)))
+    vram = next(r for r in rows if r["metric"] == "VRAM (MB)")
+    assert vram["baseline"] == "2048.0"
+    assert vram["current"] == ""
+    assert vram["change_pct"] == ""
+    assert vram["direction"] == "n/a"
+
+
+def test_build_diff_csv_change_pct_rounded(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_latency_ms="100.0")
+    _write_csv(b, p50_latency_ms="120.0")
+    rows = _parse_csv(build_diff_csv(str(a), str(b)))
+    p50 = next(r for r in rows if r["metric"] == "p50 (ms)")
+    assert float(p50["change_pct"]) == pytest.approx(20.0, abs=0.01)
+
+
+def test_build_diff_csv_direction_regression(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_latency_ms="100.0")
+    _write_csv(b, p50_latency_ms="150.0")
+    rows = _parse_csv(build_diff_csv(str(a), str(b)))
+    p50 = next(r for r in rows if r["metric"] == "p50 (ms)")
+    assert p50["direction"] == "regression"
+
+
+def test_build_diff_csv_direction_improvement(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_latency_ms="150.0")
+    _write_csv(b, p50_latency_ms="100.0")
+    rows = _parse_csv(build_diff_csv(str(a), str(b)))
+    p50 = next(r for r in rows if r["metric"] == "p50 (ms)")
+    assert p50["direction"] == "improvement"
+
+
+def test_build_diff_csv_direction_neutral_for_tiny_change(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_latency_ms="100.0")
+    _write_csv(b, p50_latency_ms="100.0001")
+    rows = _parse_csv(build_diff_csv(str(a), str(b)))
+    p50 = next(r for r in rows if r["metric"] == "p50 (ms)")
+    assert p50["direction"] == "neutral"
+
+
+def test_build_diff_csv_change_pct_empty_for_zero_baseline(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_latency_ms="0.0")
+    _write_csv(b, p50_latency_ms="50.0")
+    rows = _parse_csv(build_diff_csv(str(a), str(b)))
+    p50 = next(r for r in rows if r["metric"] == "p50 (ms)")
+    assert p50["change_pct"] == ""
+    assert p50["direction"] == "n/a"
+
+
+def test_render_diff_csv_empty_candidates_gives_header_only() -> None:
+    text = render_diff_csv([])
+    rows = _parse_csv(text)
+    assert rows == []
+    assert "metric" in text
+
+
+# ---------------------------------------------------------------------------
+# diff --format csv — CLI integration tests
+# ---------------------------------------------------------------------------
+
+
+def test_diff_format_csv_stdout(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = CliRunner().invoke(main, ["diff", str(a), str(b), "--format", "csv"])
+    assert result.exit_code == 0, result.output
+    rows = _parse_csv(result.output.strip())
+    assert len(rows) > 0
+    assert all("metric" in r for r in rows)
+
+
+def test_diff_format_csv_no_markdown(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = CliRunner().invoke(main, ["diff", str(a), str(b), "--format", "csv"])
+    assert "## Benchmark Diff" not in result.output
+    assert "✓" not in result.output
+
+
+def test_diff_format_csv_output_file(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    out = tmp_path / "delta.csv"
+    _write_csv(a)
+    _write_csv(b)
+    result = CliRunner().invoke(
+        main, ["diff", str(a), str(b), "--format", "csv", "--output", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    rows = _parse_csv(out.read_text())
+    assert len(rows) > 0
+
+
+def test_diff_format_csv_with_fail_on_regression(tmp_path: Path) -> None:
+    a = tmp_path / "a.csv"
+    b = tmp_path / "b.csv"
+    _write_csv(a, p50_latency_ms="100.0")
+    _write_csv(b, p50_latency_ms="200.0")
+    result = CliRunner().invoke(
+        main, ["diff", str(a), str(b), "--format", "csv", "--fail-on-regression", "0"]
+    )
+    assert result.exit_code == 1
+    assert "metric" in result.output

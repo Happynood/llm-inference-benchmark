@@ -8,6 +8,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench diff --format csv`: export the per-metric regression diff as a CSV file.
+  Columns: `metric`, `baseline`, `current`, `change_pct`, `direction`.  Absent optional
+  metrics are omitted; absent individual values and uncomputable `change_pct` are written
+  as empty cells so `pandas.read_csv()` produces `NaN` automatically.  Composes with
+  `--output` and `--fail-on-regression`:
+  ```
+  llm-bench diff baseline.csv current.csv --format csv
+  llm-bench diff baseline.csv current.csv --format csv --output delta.csv
+  df = pd.read_csv("delta.csv"); regressions = df[df["direction"] == "regression"]
+  ```
+
 - `llm-bench pareto --format csv`: export the Pareto classification table as a CSV file.
   Includes all `compare --format csv` columns plus a `pareto` column (`True`/`False`) so
   users can filter Pareto-optimal rows in pandas without losing dominated rows.  Absent

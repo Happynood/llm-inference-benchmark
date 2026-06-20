@@ -2,11 +2,18 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from dataclasses import dataclass
 from pathlib import Path
 
 from llm_inference_benchmark.compare import load_csv
+
+_DIFF_CSV_FIELDS = ["metric", "baseline", "current", "change_pct", "direction"]
+
+# (label, baseline_val, current_val, lower_is_better, required)
+_Candidate = tuple[str, float | None, float | None, bool, bool]
 
 
 @dataclass(frozen=True)
@@ -213,6 +220,75 @@ def find_regressions(
     return regressions
 
 
+def _direction(b_val: float | None, c_val: float | None, lower_is_better: bool) -> str:
+    if b_val is None or c_val is None:
+        return "n/a"
+    pct = _pct_change(b_val, c_val)
+    if pct is None:
+        return "n/a"
+    if abs(pct) < 0.05:
+        return "neutral"
+    good = (pct < 0) == lower_is_better
+    return "improvement" if good else "regression"
+
+
+def render_diff_csv(candidates: list[_Candidate]) -> str:
+    """Serialize diff candidates to a CSV string.
+
+    Columns: metric, baseline, current, change_pct, direction.
+    Optional metrics absent from both runs are omitted.
+    Absent individual values and uncomputable change_pct are empty cells so
+    ``pandas.read_csv()`` produces ``NaN`` automatically.
+    """
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=_DIFF_CSV_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    for label, b_val, c_val, lower_is_better, required in candidates:
+        if not required and b_val is None and c_val is None:
+            continue
+        if b_val is not None and c_val is not None:
+            raw = _pct_change(b_val, c_val)
+            chg: float | str = "" if raw is None else round(raw, 2)
+        else:
+            chg = ""
+        writer.writerow(
+            {
+                "metric": label,
+                "baseline": "" if b_val is None else b_val,
+                "current": "" if c_val is None else c_val,
+                "change_pct": chg,
+                "direction": _direction(b_val, c_val, lower_is_better),
+            }
+        )
+    return buf.getvalue().rstrip("\n")
+
+
+def build_diff_csv(baseline_path: str | Path, current_path: str | Path) -> str:
+    """Load two benchmark CSVs and return a CSV diff string.
+
+    Each row represents one metric. Columns: metric, baseline, current,
+    change_pct, direction. Optional metrics absent from both runs are omitted.
+    """
+    b = load_csv(baseline_path)
+    c = load_csv(current_path)
+    candidates: list[_Candidate] = [
+        ("p50 (ms)", b.p50_latency_ms, c.p50_latency_ms, True, True),
+        ("p95 (ms)", b.p95_latency_ms, c.p95_latency_ms, True, True),
+        ("tok/s", b.tokens_per_second, c.tokens_per_second, False, True),
+        ("Decode tok/s", b.decode_tokens_per_second, c.decode_tokens_per_second, False, False),
+        ("Load (ms)", b.model_load_ms, c.model_load_ms, True, False),
+        ("TTFT p50 (ms)", b.p50_ttft_ms, c.p50_ttft_ms, True, False),
+        ("TTFT p95 (ms)", b.p95_ttft_ms, c.p95_ttft_ms, True, False),
+        ("VRAM (MB)", b.peak_vram_memory_mb, c.peak_vram_memory_mb, True, False),
+        ("CPU mem (MB)", b.peak_cpu_memory_mb, c.peak_cpu_memory_mb, True, True),
+        ("Sanity %", b.sanity_pass_rate, c.sanity_pass_rate, False, False),
+        ("Task Q %", b.task_quality_pass_rate, c.task_quality_pass_rate, False, False),
+        ("PPL", b.perplexity, c.perplexity, True, False),
+        ("Judge", b.judge_score, c.judge_score, False, False),
+    ]
+    return render_diff_csv(candidates)
+
+
 def build_diff_json(baseline_path: str | Path, current_path: str | Path) -> str:
     """Load two benchmark CSVs and return a JSON diff string.
 
@@ -227,17 +303,6 @@ def build_diff_json(baseline_path: str | Path, current_path: str | Path) -> str:
     """
     b = load_csv(baseline_path)
     c = load_csv(current_path)
-
-    def _direction(b_val: float | None, c_val: float | None, lower_is_better: bool) -> str:
-        if b_val is None or c_val is None:
-            return "n/a"
-        pct = _pct_change(b_val, c_val)
-        if pct is None:
-            return "n/a"
-        if abs(pct) < 0.05:
-            return "neutral"
-        good = (pct < 0) == lower_is_better
-        return "improvement" if good else "regression"
 
     def _entry(
         label: str,
