@@ -352,18 +352,52 @@ Results are persisted in a local SQLite database at `~/.llm-bench/results.db`.
 
 ## Roadmap
 
-**Stable (v1.0.0+)**
-- [x] Mock, transformers, llama.cpp, OpenAI endpoint, ONNX Runtime backends
+### Phase 1 — Core Harness (complete)
+
+- [x] Mock, transformers, llama.cpp, OpenAI-compatible endpoint, ONNX Runtime, vLLM backends
 - [x] p50/p95 latency, TTFT, tok/s, VRAM, lifecycle, variance metrics
 - [x] Sanity checks, task quality, perplexity, LLM-as-judge
 - [x] Pareto analysis, constraint-based recommender
 - [x] Run matrix, parameter sweeps, workload profiles
 - [x] JSON manifest, CSV output, Markdown comparison table
-- [x] Docker image (ghcr.io), GitHub Actions CI
+- [x] Docker multi-stage image (CPU + GPU), GitHub Actions CI + Release
+- [x] Real sweep evidence: RTX 3050, n_gpu_layers sweep on Llama 3.2 3B
 
-**Planned**
-- [x] `vllm` backend — high-throughput GPU serving
-- [x] Real parameter sweep evidence: RTX 3050, n\_gpu\_layers sweep on Llama 3.2 3B
+### Phase 2 — Web UI (in progress)
+
+- [x] `llm-bench serve` — FastAPI backend, SQLite result store, SSE streaming
+- [ ] Frontend — runs table, live chart, config form (HTMX or React)
+- [ ] Pareto chart — interactive HTML/Plotly export instead of text table
+
+### Phase 3 — Real-World Datasets
+
+Replace synthetic prompts with representative HuggingFace datasets for reproducible, contamination-resistant benchmarks:
+
+- [ ] `lmsys/lmsys-chat-1m` sampler — real multi-turn chat (default profile)
+- [ ] Function-calling dataset — structured output / JSON grammar benchmarks
+- [ ] Long-context sampler (4 k / 16 k / 64 k tokens) — prefill-phase stress test
+- [ ] `llm-bench datasets pull <name>` CLI — stream and cache dataset samples locally
+
+### Phase 4 — Advanced Metrics
+
+- [ ] **TTFT / TPOT separation** — explicit prefill-phase vs. decode-phase reporting
+- [ ] **Tokens / Joule** — energy efficiency via `nvidia-smi power.draw` (GPU) and RAPL (CPU)
+- [ ] **Thermal throttling index** — compare tok/s at t=0 vs t=60 s to detect frequency scaling
+- [ ] **ITL variance (jitter)** — inter-token latency std-dev for streaming UX quality
+- [ ] **Hardware profile report** — auto-detect CPU, RAM, GPU VRAM, OS; attach to every result
+- [ ] **Reasoning token parser** — separate `<think>…</think>` metrics for DeepSeek-R1 / QwQ
+
+### Phase 5 — Concurrency & Engine Agnosticism
+
+- [ ] **`llm-bench sweep`** — auto-ramp concurrency until p95 latency exceeds threshold; plot throughput vs. latency curve
+- [ ] **Open-loop load mode** — constant-arrival-rate requests (not closed-loop sequential)
+- [ ] **`--base-url` / `--api-key` global flags** — test any OpenAI-compatible server (LM Studio, Jan, Ollama, vLLM remote) without a config file
+
+### Phase 6 — Model Downloads
+
+- [ ] `llm-bench pull <model-id> [--quant Q4_K_M]` — download GGUF to `~/models/` or HF snapshot to cache
+- [ ] Hash verification, size-limit guard, progress bar
+- [ ] Auto-suggest downloadable versions of models that exceed local VRAM
 
 ---
 
