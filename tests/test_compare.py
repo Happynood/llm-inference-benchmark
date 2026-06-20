@@ -445,6 +445,43 @@ def test_compare_subcommand_no_files_fails() -> None:
     assert result.exit_code != 0
 
 
+def test_compare_subcommand_limit_one() -> None:
+    result = CliRunner().invoke(
+        main, ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--sort", "p95", "--limit", "1"]
+    )
+    assert result.exit_code == 0, result.output
+    # Only one data row should appear; both backends cannot both be present
+    has_mock = "mock" in result.output
+    has_transformers = "transformers" in result.output
+    assert has_mock != has_transformers, "exactly one backend row expected with --limit 1"
+
+
+def test_compare_subcommand_limit_exceeds_count() -> None:
+    result = CliRunner().invoke(
+        main, ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--limit", "100"]
+    )
+    assert result.exit_code == 0, result.output
+    assert "mock" in result.output
+    assert "transformers" in result.output
+
+
+def test_compare_subcommand_limit_json() -> None:
+    import json as _json
+
+    result = CliRunner().invoke(
+        main,
+        ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--format", "json", "--limit", "1"],
+    )
+    assert result.exit_code == 0, result.output
+    data = _json.loads(result.output)
+    assert len(data) == 1
+
+
+def test_compare_subcommand_limit_zero_rejected() -> None:
+    result = CliRunner().invoke(main, ["compare", str(MOCK_CSV), "--limit", "0"])
+    assert result.exit_code != 0
+
+
 # ---------------------------------------------------------------------------
 # Backward-compat: existing llm-bench --config ... still works
 # ---------------------------------------------------------------------------

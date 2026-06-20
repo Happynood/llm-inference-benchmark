@@ -8,6 +8,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench compare --limit N`: cap the output table or JSON array to the top N rows after
+  sorting. Composes naturally with `--sort` to get a focused view of the best runs:
+  ```
+  llm-bench compare results/*.csv --sort toks --limit 5
+  llm-bench compare results/*.csv --sort p95 --limit 3 --format json
+  ```
+  Values below 1 are rejected with a usage error. When N exceeds the number of available
+  rows all rows are returned unchanged.
+
 - `--set KEY=VALUE` flag on the main `llm-bench` run command and on `llm-bench validate-config`:
   overrides any config field via dot-path without editing the YAML. Values are parsed as YAML
   scalars (so `200` becomes `int`, `3.14` becomes `float`, `true` becomes `bool`, `cuda`
