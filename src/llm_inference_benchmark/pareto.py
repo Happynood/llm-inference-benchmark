@@ -18,6 +18,8 @@ penalising either row.
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 from pathlib import Path
 
@@ -200,3 +202,82 @@ def build_pareto_json(paths: list[str | Path]) -> str:
         raise ValueError("At least one CSV path is required")
     rows = [load_csv(p) for p in paths]
     return render_pareto_json(pareto_classify(rows))
+
+
+_PARETO_CSV_FIELDS = [
+    "backend",
+    "model",
+    "request_count",
+    "p50_latency_ms",
+    "p95_latency_ms",
+    "tokens_per_second",
+    "decode_tokens_per_second",
+    "mean_input_tokens",
+    "mean_output_tokens",
+    "model_load_ms",
+    "p50_ttft_ms",
+    "p95_ttft_ms",
+    "peak_cpu_memory_mb",
+    "peak_cuda_memory_mb",
+    "peak_vram_memory_mb",
+    "sanity_pass_rate",
+    "task_quality_pass_rate",
+    "perplexity",
+    "judge_score",
+    "p95_latency_ms_std",
+    "tokens_per_second_std",
+    "pareto",
+]
+
+
+def _or_empty(v: float | None) -> float | str:
+    return "" if v is None else v
+
+
+def render_pareto_csv(classified: list[tuple[RunRow, bool]]) -> str:
+    """Serialize classified rows to a CSV string with snake_case headers.
+
+    Includes all RunRow fields plus a ``pareto`` column (``True``/``False``)
+    so callers can filter in pandas without losing dominated rows.  Absent
+    optional metrics are written as empty cells so ``pandas.read_csv()``
+    produces ``NaN`` automatically.
+    """
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=_PARETO_CSV_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    for r, is_opt in classified:
+        writer.writerow(
+            {
+                "backend": r.backend,
+                "model": r.model,
+                "request_count": r.request_count,
+                "p50_latency_ms": r.p50_latency_ms,
+                "p95_latency_ms": r.p95_latency_ms,
+                "tokens_per_second": r.tokens_per_second,
+                "decode_tokens_per_second": _or_empty(r.decode_tokens_per_second),
+                "mean_input_tokens": _or_empty(r.mean_input_tokens),
+                "mean_output_tokens": _or_empty(r.mean_output_tokens),
+                "model_load_ms": _or_empty(r.model_load_ms),
+                "p50_ttft_ms": _or_empty(r.p50_ttft_ms),
+                "p95_ttft_ms": _or_empty(r.p95_ttft_ms),
+                "peak_cpu_memory_mb": r.peak_cpu_memory_mb,
+                "peak_cuda_memory_mb": _or_empty(r.peak_cuda_memory_mb),
+                "peak_vram_memory_mb": _or_empty(r.peak_vram_memory_mb),
+                "sanity_pass_rate": _or_empty(r.sanity_pass_rate),
+                "task_quality_pass_rate": _or_empty(r.task_quality_pass_rate),
+                "perplexity": _or_empty(r.perplexity),
+                "judge_score": _or_empty(r.judge_score),
+                "p95_latency_ms_std": _or_empty(r.p95_latency_ms_std),
+                "tokens_per_second_std": _or_empty(r.tokens_per_second_std),
+                "pareto": is_opt,
+            }
+        )
+    return buf.getvalue().rstrip("\n")
+
+
+def build_pareto_csv(paths: list[str | Path]) -> str:
+    """Load CSVs, classify, and return a CSV string with a ``pareto`` column."""
+    if not paths:
+        raise ValueError("At least one CSV path is required")
+    rows = [load_csv(p) for p in paths]
+    return render_pareto_csv(pareto_classify(rows))

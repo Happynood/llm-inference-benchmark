@@ -11,10 +11,12 @@ from click.testing import CliRunner
 from llm_inference_benchmark.cli import main
 from llm_inference_benchmark.compare import RunRow
 from llm_inference_benchmark.pareto import (
+    build_pareto_csv,
     build_pareto_json,
     build_pareto_table,
     dominates,
     pareto_classify,
+    render_pareto_csv,
     render_pareto_json,
     render_pareto_table,
 )
@@ -594,3 +596,147 @@ def test_pareto_subcommand_default_format_is_table() -> None:
     assert result.exit_code == 0, result.output
     assert "Pareto" in result.output
     assert result.output.strip().startswith("|")
+
+
+# ---------------------------------------------------------------------------
+# render_pareto_csv()
+# ---------------------------------------------------------------------------
+
+
+def test_render_pareto_csv_has_pareto_column() -> None:
+    classified = pareto_classify([_row()])
+    output = render_pareto_csv(classified)
+    header = output.splitlines()[0]
+    assert "pareto" in header
+
+
+def test_render_pareto_csv_optimal_row_is_true() -> None:
+    optimal = _row(backend="fast", p95=9.0, toks=110.0)
+    dominated = _row(backend="slow", p95=10.0, toks=100.0)
+    output = render_pareto_csv([(optimal, True), (dominated, False)])
+    lines = output.splitlines()
+    assert "True" in lines[1]
+    assert "False" in lines[2]
+
+
+def test_render_pareto_csv_empty_cells_for_absent_optional() -> None:
+    classified = [(_row(vram=None, sanity=None, ppl=None, judge=None), True)]
+    output = render_pareto_csv(classified)
+    import csv as csv_mod
+    import io
+
+    reader = csv_mod.DictReader(io.StringIO(output))
+    row = next(reader)
+    assert row["peak_vram_memory_mb"] == ""
+    assert row["sanity_pass_rate"] == ""
+    assert row["perplexity"] == ""
+    assert row["judge_score"] == ""
+
+
+def test_render_pareto_csv_optional_values_when_present() -> None:
+    classified = [(_row(vram=2048.0, sanity=0.9, ppl=8.5, judge=0.75), True)]
+    output = render_pareto_csv(classified)
+    import csv as csv_mod
+    import io
+
+    reader = csv_mod.DictReader(io.StringIO(output))
+    row = next(reader)
+    assert float(row["peak_vram_memory_mb"]) == pytest.approx(2048.0)
+    assert float(row["sanity_pass_rate"]) == pytest.approx(0.9)
+    assert float(row["perplexity"]) == pytest.approx(8.5)
+    assert float(row["judge_score"]) == pytest.approx(0.75)
+
+
+def test_render_pareto_csv_row_count() -> None:
+    rows = [_row(backend=f"b{i}", p95=float(i + 1) * 2, toks=float(100 - i * 10)) for i in range(3)]
+    output = render_pareto_csv(pareto_classify(rows))
+    lines = output.splitlines()
+    assert len(lines) == 4  # 1 header + 3 data rows
+
+
+def test_render_pareto_csv_no_na_strings() -> None:
+    classified = [(_row(vram=None), True)]
+    output = render_pareto_csv(classified)
+    assert "N/A" not in output
+    assert "null" not in output
+
+
+# ---------------------------------------------------------------------------
+# build_pareto_csv()
+# ---------------------------------------------------------------------------
+
+
+def test_build_pareto_csv_from_fixtures() -> None:
+    output = build_pareto_csv(
+        [
+            FIXTURES / "mock_run.csv",
+            FIXTURES / "transformers_run.csv",
+        ]
+    )
+    assert "pareto" in output.splitlines()[0]
+    assert "mock" in output
+    assert "transformers" in output
+
+
+def test_build_pareto_csv_mock_is_optimal() -> None:
+    import csv as csv_mod
+    import io
+
+    output = build_pareto_csv(
+        [
+            FIXTURES / "mock_run.csv",
+            FIXTURES / "transformers_run.csv",
+        ]
+    )
+    reader = csv_mod.DictReader(io.StringIO(output))
+    rows_by_model = {row["model"]: row for row in reader}
+    assert rows_by_model["mock-gpt2"]["pareto"] == "True"
+    assert rows_by_model["sshleifer/tiny-gpt2"]["pareto"] == "False"
+
+
+def test_build_pareto_csv_empty_raises() -> None:
+    with pytest.raises(ValueError, match="At least one CSV"):
+        build_pareto_csv([])
+
+
+# ---------------------------------------------------------------------------
+# CLI --format csv
+# ---------------------------------------------------------------------------
+
+
+def test_pareto_subcommand_format_csv_stdout() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "pareto",
+            str(FIXTURES / "mock_run.csv"),
+            str(FIXTURES / "transformers_run.csv"),
+            "--format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert result.output.splitlines()[0].startswith("backend,")
+    assert "pareto" in result.output.splitlines()[0]
+    assert "True" in result.output
+
+
+def test_pareto_subcommand_format_csv_output_file(tmp_path: Path) -> None:
+    out = tmp_path / "pareto.csv"
+    result = CliRunner().invoke(
+        main,
+        ["pareto", str(FIXTURES / "mock_run.csv"), "--format", "csv", "--output", str(out)],
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    content = out.read_text()
+    assert "pareto" in content.splitlines()[0]
+
+
+def test_pareto_subcommand_format_csv_single_file() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["pareto", str(FIXTURES / "mock_run.csv"), "--format", "csv"],
+    )
+    assert result.exit_code == 0, result.output
+    assert "True" in result.output
