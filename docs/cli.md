@@ -32,6 +32,8 @@ llm-bench [OPTIONS]
 | `--requests N` | int ≥ 1 | — | Override `requests` from the config |
 | `--warmup-requests N` | int ≥ 0 | — | Override `warmup_requests` from the config |
 | `--concurrency N` | int ≥ 1 | — | Override `concurrency` from the config |
+| `--seed N` | int | — | Override `seed` from the config for reproducible prompt sampling |
+| `--set KEY=VALUE` | str (repeatable) | — | Override any config field via dot-path, e.g. `--set llama_cpp.max_tokens=200`. Values are parsed as YAML scalars (int, float, bool, str). Can be repeated. |
 
 **Examples**
 
@@ -56,6 +58,15 @@ llm-bench --config configs/example.yaml --requests 50 --concurrency 4
 
 # Disable warmup for a fast sanity check
 llm-bench --config configs/example.yaml --warmup-requests 0 --requests 5
+
+# Override backend-specific fields without editing YAML (--set accepts dot-paths)
+llm-bench --config configs/example.yaml --set mock.latency_ms=5
+
+# Multiple --set overrides in one command
+llm-bench --config configs/llama-cpp-cpu.yaml --set llama_cpp.max_tokens=200 --set llama_cpp.n_threads=4
+
+# Reproducible run with a fixed seed for prompt sampling
+llm-bench --config configs/example.yaml --seed 42 --requests 20
 ```
 
 The YAML config file controls which backend is used, the model, request count, and all
@@ -98,8 +109,10 @@ llm-bench compare [OPTIONS] CSV_FILES...
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--sort` | choice | `p95` | Sort column. Choices: `backend`, `model`, `p95`, `toks`, `load` |
-| `--output PATH` | path | — | Write Markdown to file instead of stdout |
+| `--sort` | choice | `p95` | Sort column. Choices: `backend`, `model`, `p95`, `toks`, `load`, `ttft` |
+| `--limit N` | int ≥ 1 | — | Show only the top N rows after sorting (omit to show all rows) |
+| `--format` | choice | `table` | Output format: `table` = Markdown table, `json` = JSON array of row objects |
+| `--output PATH` | path | — | Write output to file instead of stdout |
 
 Sort values:
 
@@ -108,6 +121,7 @@ Sort values:
 | `p95` | p95 latency ascending (fastest first) |
 | `toks` | tokens/sec descending (highest throughput first) |
 | `load` | model load time ascending (fastest load first; N/A rows last) |
+| `ttft` | TTFT p50 ascending (lowest time-to-first-token first; N/A rows last) |
 | `backend` | alphabetical by backend, then model |
 | `model` | alphabetical by model, then backend |
 
@@ -117,6 +131,15 @@ Sort values:
 llm-bench compare results/mock.csv results/transformers.csv
 llm-bench compare results/*.csv --sort toks
 llm-bench compare results/a.csv results/b.csv --sort backend --output table.md
+
+# Focus on the 5 fastest runs by throughput
+llm-bench compare results/*.csv --sort toks --limit 5
+
+# Machine-readable output for CI scripting
+llm-bench compare results/*.csv --sort p95 --format json
+
+# Top 3 by latency, emitted as JSON
+llm-bench compare results/*.csv --sort p95 --limit 3 --format json
 ```
 
 **Table columns**: Backend, Model, N, p50 (ms), p95 (ms) ±std, tok/s ±std, Load (ms),
@@ -300,6 +323,52 @@ in a matrix run entry.
 ```bash
 llm-bench profiles
 ```
+
+---
+
+## env
+
+Print current Python, package, and hardware environment information.
+
+```
+llm-bench env
+```
+
+No options. Outputs a one-line-per-field summary of the runtime environment useful for
+reproducing or reporting benchmark results.
+
+**Fields printed**
+
+| Field | Description |
+|-------|-------------|
+| `python` | Python version and build info |
+| `platform` | OS, kernel, and CPU architecture |
+| `cpu` | CPU model and core count |
+| `package` | `llm-inference-benchmark` version |
+| `torch` | PyTorch version (if installed) |
+| `transformers` | Transformers version (if installed) |
+| `psutil` | psutil version |
+| `gpu` | `detected` if a CUDA GPU is visible, otherwise `none` |
+
+**Example**
+
+```bash
+llm-bench env
+```
+
+```
+python      : 3.11.9 (main, Apr 19 2024, 16:48:33) [GCC 11.2.0]
+platform    : Linux-6.8.0-generic-x86_64-with-glibc2.35
+cpu         : AMD Ryzen 9 7950X (32 cores)
+package     : llm-inference-benchmark 1.3.0
+torch       : 2.3.0
+transformers: 4.40.0
+psutil      : 5.9.8
+gpu         : detected
+```
+
+Use `llm-bench env` to capture the environment fingerprint before a benchmark session, or
+include its output in bug reports and result comparisons.
 
 ---
 

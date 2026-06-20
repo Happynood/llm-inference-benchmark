@@ -569,3 +569,59 @@ def test_validate_config_set_unknown_path_fails(tmp_config: Path) -> None:
     )
     assert result.exit_code != 0
     assert "Unknown override path" in result.output
+
+
+# env subcommand
+
+
+def test_env_exits_zero() -> None:
+    result = CliRunner().invoke(main, ["env"])
+    assert result.exit_code == 0, result.output
+
+
+def test_env_includes_python_and_platform() -> None:
+    result = CliRunner().invoke(main, ["env"])
+    assert result.exit_code == 0, result.output
+    assert "python" in result.output
+    assert "platform" in result.output
+    assert "cpu" in result.output
+    assert "package" in result.output
+
+
+def test_env_includes_psutil() -> None:
+    result = CliRunner().invoke(main, ["env"])
+    assert result.exit_code == 0, result.output
+    assert "psutil" in result.output
+
+
+# help-text smoke tests — verify key flags are discoverable
+
+
+def test_help_includes_set_flag() -> None:
+    result = CliRunner().invoke(main, ["--help"])
+    assert result.exit_code == 0, result.output
+    assert "--set" in result.output
+
+
+def test_help_includes_seed_flag() -> None:
+    result = CliRunner().invoke(main, ["--help"])
+    assert result.exit_code == 0, result.output
+    assert "--seed" in result.output
+
+
+def test_compare_help_includes_limit_flag() -> None:
+    result = CliRunner().invoke(main, ["compare", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--limit" in result.output
+
+
+def test_compare_help_includes_format_flag() -> None:
+    result = CliRunner().invoke(main, ["compare", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "--format" in result.output
+
+
+def test_compare_help_includes_ttft_sort_option() -> None:
+    result = CliRunner().invoke(main, ["compare", "--help"])
+    assert result.exit_code == 0, result.output
+    assert "ttft" in result.output

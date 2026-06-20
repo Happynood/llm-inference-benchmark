@@ -71,12 +71,32 @@ make install-llama-cpp-cuda
 uv run llm-bench --config configs/openai-endpoint.yaml --output results/openai.csv
 ```
 
+## Override config fields without editing YAML
+
+Use `--set KEY=VALUE` to override any config field on the command line. Values are parsed
+as YAML scalars (int, float, bool, str) and take precedence over the YAML file.
+
+```bash
+# Override latency for the mock backend
+uv run llm-bench --config configs/example.yaml --set mock.latency_ms=5
+
+# Override llama.cpp token limit and thread count in one command
+uv run llm-bench --config configs/llama-cpp-cpu.yaml \
+  --set llama_cpp.max_tokens=200 --set llama_cpp.n_threads=4
+
+# Combine --set with other flags
+uv run llm-bench --config configs/example.yaml --set mock.latency_ms=0 --requests 100
+```
+
 ## Run matrix (multiple configs in one command)
 
 ```bash
 uv run llm-bench matrix --config configs/matrix-example.yaml
 uv run llm-bench matrix --config configs/matrix-example.yaml --dry-run   # preview
 uv run llm-bench compare results/*.csv --sort p95
+
+# Show only the 3 fastest configurations by throughput
+uv run llm-bench compare results/*.csv --sort toks --limit 3
 ```
 
 ## Parameter sweep
