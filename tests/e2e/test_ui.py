@@ -174,8 +174,10 @@ def test_pareto_page_has_plotly_chart(page: Page, live_server: str) -> None:
     first_href = page.locator("a:has-text('Pareto')").first.get_attribute("href")
     assert first_href is not None
     page.goto(live_server + first_href)
-    page.wait_for_function("() => document.querySelector('#chart svg') !== null", timeout=8000)
-    svg = page.locator("#chart svg")
+    page.wait_for_function(
+        "() => document.querySelector('#chart .main-svg') !== null", timeout=8000
+    )
+    svg = page.locator("#chart .main-svg").first
     expect(svg).to_be_visible()
 
 

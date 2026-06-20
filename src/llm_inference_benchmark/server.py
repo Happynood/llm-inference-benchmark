@@ -316,7 +316,7 @@ document.getElementById('select-all').addEventListener('change', function() {
 var _sse = null;
 function streamLog(runId) {
   if (_sse) { _sse.close(); }
-  document.getElementById('log-section').style.display = '';
+  document.getElementById('log-section').style.display = 'block';
   document.getElementById('log-run-id').textContent = runId.slice(0, 8);
   var pre = document.getElementById('log-output');
   pre.textContent = '';
@@ -335,7 +335,7 @@ function compareSelected() {
   var toks   = cbs.map(function(cb){ return parseFloat(cb.dataset.toks) || 0; });
   var ttfts  = cbs.map(function(cb){
     return cb.dataset.ttft ? parseFloat(cb.dataset.ttft) : null; });
-  document.getElementById('chart-section').style.display = '';
+  document.getElementById('chart-section').style.display = 'block';
   var traces = [{type:'bar', name:'Tok/s', x:labels, y:toks}];
   if (ttfts.some(function(v){ return v !== null; })) {
     traces.push({type:'bar', name:'TTFT p50 (ms)', x:labels, y:ttfts});
