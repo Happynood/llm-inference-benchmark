@@ -478,9 +478,7 @@ def test_compare_subcommand_limit_json() -> None:
 
 
 def test_compare_subcommand_limit_zero_rejected() -> None:
-    result = CliRunner().invoke(
-        main, ["compare", str(MOCK_CSV), "--limit", "0"]
-    )
+    result = CliRunner().invoke(main, ["compare", str(MOCK_CSV), "--limit", "0"])
     assert result.exit_code != 0
 
 
