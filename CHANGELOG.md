@@ -8,6 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench pareto --filter FIELD=PATTERN`: narrow the Pareto candidate pool before
+  running dominance analysis.  Supported fields: `backend`, `model` (case-insensitive
+  substring match; repeatable; multiple filters are ANDed).  Composes with `--format`
+  and `--output`:
+  ```
+  llm-bench pareto results/*.csv --filter backend=llama_cpp
+  llm-bench pareto results/*.csv --filter backend=llama_cpp --filter model=Q4_K_M
+  llm-bench pareto results/*.csv --filter model=Q4 --format csv --output pareto.csv
+  ```
+
 - `llm-bench diff --format csv`: export the per-metric regression diff as a CSV file.
   Columns: `metric`, `baseline`, `current`, `change_pct`, `direction`.  Absent optional
   metrics are omitted; absent individual values and uncomputable `change_pct` are written

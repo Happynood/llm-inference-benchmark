@@ -740,3 +740,131 @@ def test_pareto_subcommand_format_csv_single_file() -> None:
     )
     assert result.exit_code == 0, result.output
     assert "True" in result.output
+
+
+# ---------------------------------------------------------------------------
+# CLI --filter
+# ---------------------------------------------------------------------------
+
+
+def test_pareto_filter_backend_keeps_matching_rows() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "pareto",
+            str(FIXTURES / "mock_run.csv"),
+            str(FIXTURES / "transformers_run.csv"),
+            "--filter",
+            "backend=mock",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "mock" in result.output
+    assert "transformers" not in result.output
+
+
+def test_pareto_filter_backend_excludes_non_matching_rows() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "pareto",
+            str(FIXTURES / "mock_run.csv"),
+            str(FIXTURES / "transformers_run.csv"),
+            "--filter",
+            "backend=transformers",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "transformers" in result.output
+    assert "mock-gpt2" not in result.output
+
+
+def test_pareto_filter_and_conjunction() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "pareto",
+            str(FIXTURES / "mock_run.csv"),
+            str(FIXTURES / "transformers_run.csv"),
+            "--filter",
+            "backend=mock",
+            "--filter",
+            "model=gpt2",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert "mock" in result.output
+    assert "transformers" not in result.output
+
+
+def test_pareto_filter_unknown_field_is_usage_error() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "pareto",
+            str(FIXTURES / "mock_run.csv"),
+            "--filter",
+            "quantization=Q4",
+        ],
+    )
+    assert result.exit_code != 0
+    assert "quantization" in result.output.lower() or "error" in result.output.lower()
+
+
+def test_pareto_filter_composable_with_format_json() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "pareto",
+            str(FIXTURES / "mock_run.csv"),
+            str(FIXTURES / "transformers_run.csv"),
+            "--filter",
+            "backend=mock",
+            "--format",
+            "json",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    parsed = json.loads(result.output)
+    assert all(row["backend"] == "mock" for row in parsed)
+
+
+def test_pareto_filter_composable_with_format_csv() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "pareto",
+            str(FIXTURES / "mock_run.csv"),
+            str(FIXTURES / "transformers_run.csv"),
+            "--filter",
+            "backend=transformers",
+            "--format",
+            "csv",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    lines = result.output.strip().splitlines()
+    assert lines[0].startswith("backend,")
+    data_lines = [line for line in lines[1:] if line.strip()]
+    assert all("transformers" in line for line in data_lines)
+
+
+def test_pareto_filter_composable_with_output_file(tmp_path: Path) -> None:
+    out = tmp_path / "pareto_filtered.md"
+    result = CliRunner().invoke(
+        main,
+        [
+            "pareto",
+            str(FIXTURES / "mock_run.csv"),
+            str(FIXTURES / "transformers_run.csv"),
+            "--filter",
+            "backend=mock",
+            "--output",
+            str(out),
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    content = out.read_text()
+    assert "mock" in content
+    assert "transformers" not in content

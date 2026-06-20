@@ -330,7 +330,22 @@ def compare_cmd(
     type=click.Choice(["table", "json", "csv"], case_sensitive=False),
     help="Output format: table=Markdown, json=machine-readable JSON array, csv=spreadsheet/pandas",
 )
-def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None, output_format: str) -> None:
+@click.option(
+    "--filter",
+    "filters",
+    multiple=True,
+    metavar="FIELD=PATTERN",
+    help=(
+        "Keep only rows where FIELD contains PATTERN (case-insensitive substring). "
+        "Supported fields: backend, model. Repeatable; multiple filters are ANDed."
+    ),
+)
+def pareto_cmd(
+    csv_files: tuple[str, ...],
+    output_path: str | None,
+    output_format: str,
+    filters: tuple[str, ...],
+) -> None:
     """Identify Pareto-optimal benchmark configurations from CSV files.
 
     A configuration is Pareto-optimal when no other configuration is at least
@@ -340,19 +355,30 @@ def pareto_cmd(csv_files: tuple[str, ...], output_path: str | None, output_forma
 
         llm-bench pareto results/q4km.csv results/q8.csv
         llm-bench pareto results/*.csv --format json
+        llm-bench pareto results/*.csv --filter backend=llama_cpp
+        llm-bench pareto results/*.csv --filter backend=llama_cpp --filter model=Q4_K_M
     """
+    from llm_inference_benchmark.compare import filter_rows, load_csv
     from llm_inference_benchmark.pareto import (
-        build_pareto_csv,
-        build_pareto_json,
-        build_pareto_table,
+        pareto_classify,
+        render_pareto_csv,
+        render_pareto_json,
+        render_pareto_table,
     )
 
+    try:
+        rows = filter_rows([load_csv(p) for p in csv_files], list(filters))
+    except ValueError as exc:
+        raise click.UsageError(str(exc)) from exc
+
+    classified = pareto_classify(rows)
+
     if output_format == "json":
-        text = build_pareto_json(list(csv_files))
+        text = render_pareto_json(classified)
     elif output_format == "csv":
-        text = build_pareto_csv(list(csv_files))
+        text = render_pareto_csv(classified)
     else:
-        text = build_pareto_table(list(csv_files))
+        text = render_pareto_table(classified)
 
     if output_path:
         Path(output_path).write_text(text + "\n")
