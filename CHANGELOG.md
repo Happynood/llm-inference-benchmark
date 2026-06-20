@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench datasets pull <name>`: download and cache real-world prompt samples from
+  HuggingFace to `~/.cache/llm-bench/datasets/<name>.jsonl` (streaming, no full-dataset
+  RAM load).  Supported datasets: `lmsys-chat` (up to 500 first-user-turn samples from
+  `lmsys/lmsys-chat-1m`) and `hermes-fn` (up to 200 function-calling prompts from
+  `NousResearch/hermes-function-calling-v1`).  Requires `pip install datasets`.
+
+- `llm-bench datasets list`: print locally cached dataset names and sample counts.
+
+- `llm-bench --dataset <name>`: use a cached dataset as the prompt source for a benchmark
+  run instead of the config `prompts_file`.  Sampling is reproducible via `--seed`.
+
+- New `datasets` optional extra: `datasets>=2.0`.
+
 - `llm-bench serve [--host HOST] [--port PORT]`: start a FastAPI server with a built-in
   HTMX + Plotly dashboard.  Opening `http://localhost:8080` in a browser shows a live
   runs table (auto-refreshed every 5 s via HTMX), per-run SSE log streaming, a bar-chart
