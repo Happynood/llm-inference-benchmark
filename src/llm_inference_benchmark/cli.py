@@ -230,6 +230,14 @@ def main(
     ),
 )
 @click.option(
+    "--limit",
+    "limit",
+    default=None,
+    type=click.IntRange(min=1),
+    metavar="N",
+    help="Show only the top N rows after sorting (omit to show all).",
+)
+@click.option(
     "--format",
     "output_format",
     default="table",
@@ -245,27 +253,32 @@ def main(
     help="Write output to file instead of stdout",
 )
 def compare_cmd(
-    csv_files: tuple[str, ...], sort_by: str, output_format: str, output_path: str | None
+    csv_files: tuple[str, ...],
+    sort_by: str,
+    limit: int | None,
+    output_format: str,
+    output_path: str | None,
 ) -> None:
     """Generate a comparison table from benchmark CSV files.
 
     Accepts one or more CSV files produced by llm-bench --output:
 
         llm-bench compare mock.csv transformers.csv --sort p95
+        llm-bench compare results/*.csv --sort toks --limit 5
         llm-bench compare results/*.csv --format json
     """
     from llm_inference_benchmark.compare import (
-        build_comparison_table,
         load_csv,
         render_json,
+        render_table,
         sort_rows,
     )
 
-    if output_format == "json":
-        rows = sort_rows([load_csv(p) for p in csv_files], sort_by=sort_by)
-        text = render_json(rows)
-    else:
-        text = build_comparison_table(list(csv_files), sort_by=sort_by)
+    rows = sort_rows([load_csv(p) for p in csv_files], sort_by=sort_by)
+    if limit is not None:
+        rows = rows[:limit]
+
+    text = render_json(rows) if output_format == "json" else render_table(rows)
 
     if output_path:
         Path(output_path).write_text(text + "\n")
