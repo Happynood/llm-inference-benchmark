@@ -126,6 +126,16 @@ def _apply_set_overrides(cfg: BenchmarkConfig, set_overrides: tuple[str, ...]) -
     type=click.Choice(["table", "json"], case_sensitive=False),
     help="Output format: table=human-readable, json=machine-readable JSON",
 )
+@click.option(
+    "--dataset",
+    "dataset_name",
+    default=None,
+    metavar="NAME",
+    help=(
+        "Use a cached real-world dataset as prompt source instead of the config prompts file. "
+        "Pull datasets first with: llm-bench datasets pull <name>"
+    ),
+)
 def main(
     ctx: click.Context,
     config_path: str | None,
@@ -137,6 +147,7 @@ def main(
     seed_override: int | None,
     set_overrides: tuple[str, ...],
     output_format: str,
+    dataset_name: str | None,
 ) -> None:
     """LLM inference benchmark toolkit.
 
@@ -156,6 +167,11 @@ def main(
     Use the compare subcommand to generate a Markdown table from saved CSVs:
 
         llm-bench compare results_a.csv results_b.csv
+
+    Use a cached real-world dataset as prompt source:
+
+        llm-bench datasets pull lmsys-chat
+        llm-bench --config configs/example.yaml --dataset lmsys-chat --requests 50
     """
     if ctx.invoked_subcommand is not None:
         return
@@ -180,7 +196,16 @@ def main(
     _t0 = time.perf_counter()
     backend = _build_backend(cfg)
     model_load_ms = (time.perf_counter() - _t0) * 1000.0
-    prompts = load_prompts(cfg.resolve_prompts_file())
+
+    if dataset_name is not None:
+        from llm_inference_benchmark.datasets import load_prompts as _ds_load
+
+        try:
+            prompts = _ds_load(dataset_name, n=cfg.requests, seed=cfg.seed)
+        except FileNotFoundError as exc:
+            raise click.UsageError(str(exc)) from exc
+    else:
+        prompts = load_prompts(cfg.resolve_prompts_file())
 
     if output_format != "json":
         header = f"Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}"
@@ -1416,6 +1441,65 @@ def _print_report(report: object) -> None:
             click.echo(f"  {k}: N/A")
         else:
             click.echo(f"  {k}: {v}")
+
+
+@main.group("datasets")
+def datasets_group() -> None:
+    """Manage cached real-world prompt datasets for benchmarking."""
+
+
+@datasets_group.command("pull")
+@click.argument("name")
+@click.option(
+    "--max-samples",
+    "max_samples",
+    default=None,
+    type=click.IntRange(min=1),
+    metavar="N",
+    help="Override maximum number of samples to download (default: per-dataset limit)",
+)
+@click.option(
+    "--token",
+    "hf_token",
+    default=None,
+    envvar="HF_TOKEN",
+    metavar="TOKEN",
+    help="HuggingFace access token (or set HF_TOKEN env var)",
+)
+def datasets_pull(name: str, max_samples: int | None, hf_token: str | None) -> None:
+    """Download and cache a real-world prompt dataset.
+
+    Supported names: lmsys-chat, hermes-fn
+
+    Example:
+
+        llm-bench datasets pull lmsys-chat
+    """
+    from llm_inference_benchmark.datasets import REGISTRY, pull
+
+    if name not in REGISTRY:
+        known = ", ".join(REGISTRY)
+        raise click.UsageError(f"Unknown dataset {name!r}. Known datasets: {known}")
+    try:
+        out = pull(name, hf_token=hf_token, max_samples=max_samples)
+        click.echo(f"Dataset {name!r} cached at {out}")
+    except ImportError as exc:
+        raise click.UsageError(str(exc)) from exc
+
+
+@datasets_group.command("list")
+def datasets_list() -> None:
+    """List locally cached datasets and their sample counts."""
+    from llm_inference_benchmark.datasets import list_cached
+
+    rows = list_cached()
+    if not rows:
+        click.echo("No datasets cached. Run: llm-bench datasets pull <name>")
+        return
+    click.echo(f"{'Dataset':<20}  Samples")
+    click.echo("-" * 30)
+    for name, count in rows:
+        click.echo(f"{name:<20}  {count}")
 
 
 def _build_backend(cfg: BenchmarkConfig) -> Backend:

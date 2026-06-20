@@ -326,6 +326,31 @@ Results are persisted in a local SQLite database at `~/.llm-bench/results.db`.
 
 ---
 
+## Real-World Datasets
+
+Replace synthetic prompts with real-world samples from HuggingFace:
+
+```bash
+# Install the datasets extra
+pip install datasets
+
+# Download and cache prompt samples locally
+llm-bench datasets pull lmsys-chat    # 500 samples from lmsys/lmsys-chat-1m
+llm-bench datasets pull hermes-fn     # 200 function-calling prompts
+
+# List cached datasets
+llm-bench datasets list
+
+# Run a benchmark using cached prompts instead of the config prompts_file
+llm-bench --config configs/example.yaml --dataset lmsys-chat --requests 50
+```
+
+Samples are cached in `~/.cache/llm-bench/datasets/` as JSONL.  No network
+access is needed after the initial `pull`.  The `--dataset` flag is compatible
+with all other `llm-bench` options (`--seed`, `--requests`, `--concurrency`, etc.).
+
+---
+
 ## Tech Stack
 
 | Layer | Tool |
@@ -371,17 +396,18 @@ Results are persisted in a local SQLite database at `~/.llm-bench/results.db`.
 ### Phase 2 — Web UI (in progress)
 
 - [x] `llm-bench serve` — FastAPI backend, SQLite result store, SSE streaming
-- [ ] Frontend — runs table, live chart, config form (HTMX or React)
-- [ ] Pareto chart — interactive HTML/Plotly export instead of text table
+- [x] Frontend — HTMX runs table, live SSE log, bar-chart comparison, Plotly Pareto page
+- [x] Pareto chart — interactive HTML/Plotly export (`/runs/{id}/pareto.html`)
 
 ### Phase 3 — Real-World Datasets
 
 Replace synthetic prompts with representative HuggingFace datasets for reproducible, contamination-resistant benchmarks:
 
-- [ ] `lmsys/lmsys-chat-1m` sampler — real multi-turn chat (default profile)
-- [ ] Function-calling dataset — structured output / JSON grammar benchmarks
+- [x] `lmsys/lmsys-chat-1m` sampler — real multi-turn chat (`llm-bench datasets pull lmsys-chat`)
+- [x] Function-calling dataset — `NousResearch/hermes-function-calling-v1` (`llm-bench datasets pull hermes-fn`)
+- [x] `llm-bench datasets pull <name>` CLI — stream and cache dataset samples locally
+- [x] `llm-bench --dataset <name>` — use cached dataset as prompt source for a run
 - [ ] Long-context sampler (4 k / 16 k / 64 k tokens) — prefill-phase stress test
-- [ ] `llm-bench datasets pull <name>` CLI — stream and cache dataset samples locally
 
 ### Phase 4 — Advanced Metrics
 
