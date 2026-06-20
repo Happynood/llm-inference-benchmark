@@ -18,6 +18,41 @@ uv run llm-bench compare results/mock.csv
 The mock backend sleeps for a configured `latency_ms` — no model is loaded.
 Numbers validate that the measurement pipeline is wired correctly.
 
+## Verify your setup
+
+Run `llm-bench verify` after installation to confirm the harness is working and
+to check which optional backends are available:
+
+```bash
+uv run llm-bench verify
+```
+
+Example output:
+
+```
+BACKEND        STATUS      LATENCY  NOTES
+----------------------------------------------------
+mock           OK            1.3 ms
+transformers   OK               N/A  deps installed
+llama-cpp      SKIP             N/A  missing: llama_cpp
+openai         OK               N/A  stdlib only
+onnx           SKIP             N/A  missing: optimum
+vllm           SKIP             N/A  missing: vllm
+```
+
+- **OK (mock)** — the full inference pipeline ran end-to-end; the harness is wired correctly.
+- **OK (others)** — the required Python packages are installed.
+- **SKIP** — the optional dependency is not installed; install the relevant extra to enable it.
+- **FAIL** — a dependency is present but something went wrong; check the NOTES column.
+
+Use `--format json` for machine-readable output:
+
+```bash
+uv run llm-bench verify --format json
+```
+
+Run `verify` again after installing each new backend to confirm it is detected correctly.
+
 ## Transformers backend (CPU)
 
 ```bash

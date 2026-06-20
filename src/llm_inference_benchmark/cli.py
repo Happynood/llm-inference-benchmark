@@ -718,6 +718,57 @@ def profiles_cmd(output_format: str) -> None:
             click.echo()
 
 
+@main.command("verify")
+@click.option(
+    "--format",
+    "output_format",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format: table=human-readable, json=machine-readable JSON",
+)
+def verify_cmd(output_format: str) -> None:
+    """Check which backends are installed and run a smoke test on mock.
+
+    Runs a minimal inference call on the mock backend (always available) and
+    checks whether optional backend dependencies are installed.  Use this to
+    confirm your setup is working before running expensive benchmarks.
+
+        llm-bench verify
+        llm-bench verify --format json
+    """
+    from llm_inference_benchmark.verify import run_probes
+
+    probes = run_probes()
+
+    if output_format == "json":
+        data = [
+            {
+                "backend": p.backend,
+                "status": p.status,
+                "latency_ms": p.latency_ms,
+                "reason": p.reason,
+            }
+            for p in probes
+        ]
+        click.echo(json.dumps(data))
+        if any(p.status == "FAIL" for p in probes):
+            sys.exit(1)
+        return
+
+    click.echo(f"{'BACKEND':<14} {'STATUS':<8} {'LATENCY':>10}  NOTES")
+    click.echo("-" * 52)
+    any_fail = False
+    for p in probes:
+        lat = f"{p.latency_ms:.1f} ms" if p.latency_ms is not None else "N/A"
+        click.echo(f"{p.backend:<14} {p.status:<8} {lat:>10}  {p.reason}")
+        if p.status == "FAIL":
+            any_fail = True
+
+    if any_fail:
+        sys.exit(1)
+
+
 @main.command("env")
 @click.option(
     "--format",
