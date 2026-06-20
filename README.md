@@ -81,6 +81,7 @@ llm-bench compare   FILE [FILE...]                     # Markdown comparison tab
 llm-bench pareto    FILE [FILE...]                     # Pareto classification
 llm-bench recommend FILE [FILE...] [CONSTRAINTS]       # best config under constraints
 llm-bench matrix    --config MATRIX_YAML               # multi-run sweep
+llm-bench serve     [--host HOST] [--port PORT]        # start Web API server
 llm-bench profiles                                     # list built-in workload profiles
 llm-bench validate-config --config YAML                # validate config without running
 llm-bench env [--format json]                          # print environment/hardware info
@@ -283,6 +284,37 @@ docker compose run --rm llm-bench-cuda \
 
 > **Tip:** set `n_gpu_layers: 28` (or `-1` for all layers) in your YAML config instead of
 > passing `--n-gpu-layers` each time.
+
+---
+
+## Web UI
+
+`llm-bench serve` starts a local HTTP API server that exposes benchmark jobs as REST
+resources. The frontend is a separate component; this backend is the data layer.
+
+```bash
+# Install server dependencies
+uv pip install 'llm-inference-benchmark[server]'
+
+# Start the API (default: 127.0.0.1:8080)
+llm-bench serve
+
+# Bind to all interfaces on a custom port
+llm-bench serve --host 0.0.0.0 --port 9000
+```
+
+### API endpoints
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/health` | Liveness check |
+| `GET` | `/api/models` | List GGUF files from `~/models/` and HF cache dirs |
+| `GET` | `/api/runs` | List past benchmark results from `~/.llm-bench/results.db` |
+| `POST` | `/api/runs` | Submit a benchmark config (JSON body); returns `{"run_id": "..."}` immediately |
+| `GET` | `/api/runs/{run_id}` | Poll status (`pending`/`running`/`done`/`error`) and results |
+| `GET` | `/api/runs/{run_id}/stream` | Server-Sent Events streaming stdout of a running benchmark |
+
+Results are persisted in a local SQLite database at `~/.llm-bench/results.db`.
 
 ---
 

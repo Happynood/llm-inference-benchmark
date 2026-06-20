@@ -536,3 +536,38 @@ All fields are optional unless marked required.
 | `openai.temperature` | float ≥ 0 | `0.0` | Sampling temperature |
 | `openai.timeout_s` | float > 0 | `60.0` | Per-request HTTP timeout in seconds |
 | `openai.api_key_env` | string | — | Environment variable name holding the API key |
+
+
+## serve
+
+Start the llm-bench Web API server.
+
+```
+llm-bench serve [OPTIONS]
+```
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `--host TEXT` | string | `127.0.0.1` | Bind host |
+| `--port INTEGER` | int | `8080` | Bind port |
+
+Requires the `server` optional extra:
+
+```bash
+uv pip install 'llm-inference-benchmark[server]'
+llm-bench serve
+llm-bench serve --host 0.0.0.0 --port 9000
+```
+
+### API reference
+
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/api/health` | `{"status": "ok"}` liveness check |
+| `GET` | `/api/models` | List GGUF files (`~/models/**/*.gguf`) and HuggingFace cache model dirs |
+| `GET` | `/api/runs` | All past runs ordered by `created_at DESC` |
+| `POST` | `/api/runs` | Submit `{"config": {...}}` — returns `{"run_id": "..."}` immediately (202) |
+| `GET` | `/api/runs/{run_id}` | Status (`pending`/`running`/`done`/`error`) + output when done |
+| `GET` | `/api/runs/{run_id}/stream` | SSE stream of stdout lines; terminates with `data: [done:STATUS]` |
+
+Results persist in `~/.llm-bench/results.db` (SQLite, WAL mode).

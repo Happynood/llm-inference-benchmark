@@ -8,6 +8,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench serve [--host HOST] [--port PORT]`: start a FastAPI HTTP API server that
+  exposes benchmark jobs as REST resources.  Endpoints: `GET /api/health`,
+  `GET /api/models` (lists GGUF files and HuggingFace cache dirs), `GET /api/runs`,
+  `POST /api/runs` (submit a benchmark config; returns `run_id` immediately),
+  `GET /api/runs/{run_id}` (poll status and results), `GET /api/runs/{run_id}/stream`
+  (Server-Sent Events streaming stdout while the job runs).  Results are persisted in
+  a local SQLite database at `~/.llm-bench/results.db`.  Requires the new `server`
+  optional extra: `uv pip install 'llm-inference-benchmark[server]'`.
+
+- New `server` optional extra: `fastapi[standard]>=0.111`, `uvicorn[standard]>=0.30`,
+  `huggingface-hub>=0.23`.
+
 - `llm-bench pareto --filter FIELD=PATTERN`: narrow the Pareto candidate pool before
   running dominance analysis.  Supported fields: `backend`, `model` (case-insensitive
   substring match; repeatable; multiple filters are ANDed).  Composes with `--format`
