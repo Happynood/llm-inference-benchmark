@@ -13,6 +13,7 @@ from llm_inference_benchmark.compare import (
     build_comparison_table,
     filter_rows,
     load_csv,
+    render_csv,
     render_json,
     render_table,
     sort_rows,
@@ -932,3 +933,180 @@ def test_compare_subcommand_format_json_sorted_by_toks() -> None:
     parsed = json.loads(result.output)
     toks = [r["tokens_per_second"] for r in parsed]
     assert toks == sorted(toks, reverse=True)
+
+
+# ---------------------------------------------------------------------------
+# render_csv unit tests
+# ---------------------------------------------------------------------------
+
+
+def test_render_csv_header_row() -> None:
+    import csv as _csv
+    import io
+
+    out = render_csv(_ROWS[:1])
+    reader = _csv.DictReader(io.StringIO(out))
+    assert reader.fieldnames is not None
+    for field in (
+        "backend",
+        "model",
+        "request_count",
+        "p50_latency_ms",
+        "p95_latency_ms",
+        "tokens_per_second",
+        "peak_cpu_memory_mb",
+    ):
+        assert field in reader.fieldnames, f"Missing field: {field}"
+
+
+def test_render_csv_row_count() -> None:
+    out = render_csv(_ROWS)
+    lines = out.splitlines()
+    assert len(lines) == len(_ROWS) + 1  # header + data rows
+
+
+def test_render_csv_empty_rows_header_only() -> None:
+    out = render_csv([])
+    lines = out.splitlines()
+    assert len(lines) == 1
+    assert "backend" in lines[0]
+
+
+def test_render_csv_optional_fields_empty_when_absent() -> None:
+    import csv as _csv
+    import io
+
+    rows = [RunRow("mock", "gpt2", 20, 5.0, 5.1, 9000.0, 45.0, None, None)]
+    out = render_csv(rows)
+    record = next(_csv.DictReader(io.StringIO(out)))
+    assert record["peak_cuda_memory_mb"] == ""
+    assert record["peak_vram_memory_mb"] == ""
+    assert record["p50_ttft_ms"] == ""
+    assert record["model_load_ms"] == ""
+    assert record["perplexity"] == ""
+    assert record["judge_score"] == ""
+
+
+def test_render_csv_optional_fields_present_when_set() -> None:
+    import csv as _csv
+    import dataclasses
+    import io
+
+    row = dataclasses.replace(
+        _ROWS[0],
+        p50_ttft_ms=42.0,
+        p95_ttft_ms=80.0,
+        model_load_ms=1234.5,
+        perplexity=12.34,
+        judge_score=0.85,
+        peak_vram_memory_mb=2048.0,
+    )
+    out = render_csv([row])
+    record = next(_csv.DictReader(io.StringIO(out)))
+    assert float(record["p50_ttft_ms"]) == pytest.approx(42.0)
+    assert float(record["p95_ttft_ms"]) == pytest.approx(80.0)
+    assert float(record["model_load_ms"]) == pytest.approx(1234.5)
+    assert float(record["perplexity"]) == pytest.approx(12.34)
+    assert float(record["judge_score"]) == pytest.approx(0.85)
+    assert float(record["peak_vram_memory_mb"]) == pytest.approx(2048.0)
+
+
+def test_render_csv_values_match_row() -> None:
+    import csv as _csv
+    import io
+
+    row = _ROWS[0]
+    out = render_csv([row])
+    record = next(_csv.DictReader(io.StringIO(out)))
+    assert record["backend"] == row.backend
+    assert record["model"] == row.model
+    assert int(record["request_count"]) == row.request_count
+    assert float(record["p50_latency_ms"]) == pytest.approx(row.p50_latency_ms)
+    assert float(record["tokens_per_second"]) == pytest.approx(row.tokens_per_second)
+
+
+def test_render_csv_parseable_round_trip() -> None:
+    import csv as _csv
+    import io
+
+    out = render_csv(_ROWS)
+    records = list(_csv.DictReader(io.StringIO(out)))
+    assert len(records) == len(_ROWS)
+    backends = [r["backend"] for r in records]
+    assert set(backends) == {r.backend for r in _ROWS}
+
+
+# ---------------------------------------------------------------------------
+# CLI --format csv
+# ---------------------------------------------------------------------------
+
+
+def test_compare_subcommand_format_csv_stdout() -> None:
+    result = CliRunner().invoke(main, ["compare", str(MOCK_CSV), "--format", "csv"])
+    assert result.exit_code == 0, result.output
+    assert "backend" in result.output
+    assert "mock" in result.output
+    assert "mock-gpt2" in result.output
+
+
+def test_compare_subcommand_format_csv_two_files() -> None:
+    result = CliRunner().invoke(
+        main, ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--format", "csv"]
+    )
+    assert result.exit_code == 0, result.output
+    import csv as _csv
+    import io
+
+    records = list(_csv.DictReader(io.StringIO(result.output)))
+    assert len(records) == 2
+    backends = {r["backend"] for r in records}
+    assert backends == {"mock", "transformers"}
+
+
+def test_compare_subcommand_format_csv_file_output(tmp_path: Path) -> None:
+    out = tmp_path / "summary.csv"
+    result = CliRunner().invoke(
+        main, ["compare", str(MOCK_CSV), "--format", "csv", "--output", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+    import csv as _csv
+
+    records = list(_csv.DictReader(out.open()))
+    assert len(records) == 1
+    assert records[0]["backend"] == "mock"
+
+
+def test_compare_subcommand_format_csv_composes_with_limit() -> None:
+    result = CliRunner().invoke(
+        main,
+        ["compare", str(MOCK_CSV), str(TRANSFORMERS_CSV), "--format", "csv", "--limit", "1"],
+    )
+    assert result.exit_code == 0, result.output
+    import csv as _csv
+    import io
+
+    records = list(_csv.DictReader(io.StringIO(result.output)))
+    assert len(records) == 1
+
+
+def test_compare_subcommand_format_csv_composes_with_filter() -> None:
+    result = CliRunner().invoke(
+        main,
+        [
+            "compare",
+            str(MOCK_CSV),
+            str(TRANSFORMERS_CSV),
+            "--format",
+            "csv",
+            "--filter",
+            "backend=mock",
+        ],
+    )
+    assert result.exit_code == 0, result.output
+    import csv as _csv
+    import io
+
+    records = list(_csv.DictReader(io.StringIO(result.output)))
+    assert len(records) == 1
+    assert records[0]["backend"] == "mock"

@@ -242,8 +242,8 @@ def main(
     "output_format",
     default="table",
     show_default=True,
-    type=click.Choice(["table", "json"], case_sensitive=False),
-    help="Output format: table=Markdown, json=machine-readable JSON array",
+    type=click.Choice(["table", "json", "csv"], case_sensitive=False),
+    help="Output format: table=Markdown, json=machine-readable JSON array, csv=comma-separated",
 )
 @click.option(
     "--filter",
@@ -279,10 +279,12 @@ def compare_cmd(
         llm-bench compare results/*.csv --filter backend=llama_cpp
         llm-bench compare results/*.csv --filter backend=llama_cpp --filter model=Q4_K_M
         llm-bench compare results/*.csv --format json
+        llm-bench compare results/*.csv --format csv --output summary.csv
     """
     from llm_inference_benchmark.compare import (
         filter_rows,
         load_csv,
+        render_csv,
         render_json,
         render_table,
         sort_rows,
@@ -297,7 +299,12 @@ def compare_cmd(
     if limit is not None:
         rows = rows[:limit]
 
-    text = render_json(rows) if output_format == "json" else render_table(rows)
+    if output_format == "json":
+        text = render_json(rows)
+    elif output_format == "csv":
+        text = render_csv(rows)
+    else:
+        text = render_table(rows)
 
     if output_path:
         Path(output_path).write_text(text + "\n")

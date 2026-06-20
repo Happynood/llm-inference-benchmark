@@ -8,6 +8,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `llm-bench compare --format csv`: export the comparison table as a CSV file.
+  Header row uses snake_case field names identical to JSON keys; absent optional
+  metrics are written as empty cells (not `"N/A"`) so `pandas.read_csv()` produces
+  `NaN` automatically. Composes naturally with `--sort`, `--limit`, `--filter`,
+  and `--output`:
+  ```
+  llm-bench compare results/*.csv --format csv
+  llm-bench compare results/*.csv --format csv --output summary.csv
+  llm-bench compare results/*.csv --sort toks --limit 5 --format csv
+  llm-bench compare results/*.csv --filter backend=llama_cpp --format csv
+  ```
+
 - `llm-bench pipeline --config <file>`: run a full benchmark study from a single YAML config.
   Executes all matrix cells in sequence, then writes compare, Pareto, and recommendation
   outputs to `results_dir/`. Supports `--dry-run` to preview the plan without executing,
