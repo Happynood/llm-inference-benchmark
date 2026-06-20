@@ -1,0 +1,20 @@
+# Pipeline config: two mock runs followed by compare, Pareto analysis, and recommendation.
+# Run end-to-end:  llm-bench pipeline --config configs/pipeline-example.yaml
+# Preview plan:    llm-bench pipeline --config configs/pipeline-example.yaml --dry-run
+
+results_dir: results
+
+runs:
+  - name: mock-fast
+    config: configs/example.yaml
+    workload_profile: short_chat
+
+  - name: mock-slow
+    config: configs/example.yaml
+    workload_profile: summarization
+
+pipeline:
+  compare_sort: toks
+  pareto: true
+  recommend:
+    max_p95_ms: 200

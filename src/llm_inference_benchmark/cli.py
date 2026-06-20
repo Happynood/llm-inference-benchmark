@@ -1046,6 +1046,261 @@ def matrix_cmd(
     click.echo(f"  llm-bench compare {results_dir}/*.csv")
 
 
+@main.command("pipeline")
+@click.option(
+    "--config",
+    "pipeline_path",
+    required=True,
+    type=click.Path(exists=True),
+    help="YAML pipeline config file",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    default=False,
+    help="Print the run plan and exit without executing",
+)
+@click.option(
+    "--continue-on-error",
+    is_flag=True,
+    default=False,
+    help=(
+        "Continue remaining cells after a failure; run post-processing on successful "
+        "CSVs; exits 1 when any cell failed"
+    ),
+)
+@click.option(
+    "--format",
+    "output_format",
+    default="table",
+    show_default=True,
+    type=click.Choice(["table", "json"], case_sensitive=False),
+    help="Output format for terminal progress: table=human-readable, json=machine-readable",
+)
+def pipeline_cmd(
+    pipeline_path: str,
+    dry_run: bool,
+    continue_on_error: bool,
+    output_format: str,
+) -> None:
+    """Run a full benchmark study: matrix cells followed by compare, Pareto, and recommend.
+
+    Reads a pipeline YAML config (a superset of the matrix format), executes all
+    matrix cells, then writes comparison and analysis files to results_dir/:
+
+        llm-bench pipeline --config configs/pipeline-example.yaml
+
+    Preview the full plan without executing:
+
+        llm-bench pipeline --config configs/pipeline-example.yaml --dry-run
+
+    Continue on cell errors and run post-processing on successful results:
+
+        llm-bench pipeline --config configs/pipeline-example.yaml --continue-on-error
+    """
+    from llm_inference_benchmark.compare import (
+        filter_rows,
+        load_csv,
+        sort_rows,
+    )
+    from llm_inference_benchmark.compare import (
+        render_json as _cmp_json,
+    )
+    from llm_inference_benchmark.compare import (
+        render_table as _cmp_table,
+    )
+    from llm_inference_benchmark.config import load_config
+    from llm_inference_benchmark.manifest import collect_manifest, write_manifest
+    from llm_inference_benchmark.pipeline import load_pipeline
+    from llm_inference_benchmark.runner import load_prompts, run_repeated
+
+    pipeline = load_pipeline(pipeline_path)
+    results_dir = Path(pipeline.results_dir)
+    steps = pipeline.pipeline
+    runs = pipeline.runs
+    n = len(runs)
+
+    if dry_run:
+        click.echo(f"Pipeline: {n} cell(s) → {results_dir}/")
+        for idx, run in enumerate(runs, 1):
+            click.echo(f"  [{idx}/{n}] {run.name}")
+            click.echo(f"        config: {run.config}")
+            if run.workload_profile:
+                click.echo(f"        workload_profile: {run.workload_profile}")
+            if run.overrides:
+                overrides_str = ", ".join(f"{k}={v}" for k, v in run.overrides.items())
+                click.echo(f"        overrides: {overrides_str}")
+        click.echo("Post-processing:")
+        click.echo(f"  compare  → {results_dir}/compare.md, {results_dir}/compare.json")
+        if steps.pareto:
+            click.echo(f"  pareto   → {results_dir}/pareto.md, {results_dir}/pareto.json")
+        if steps.recommend is not None:
+            click.echo(f"  recommend → {results_dir}/recommend.md, {results_dir}/recommend.json")
+        return
+
+    _json = output_format == "json"
+    results_dir.mkdir(parents=True, exist_ok=True)
+    click.echo(f"Pipeline: {n} cell(s) → {results_dir}/", err=_json)
+
+    failures: list[tuple[str, str]] = []
+    successful_csvs: list[Path] = []
+    json_runs: list[dict[str, object]] = []
+
+    for idx, run in enumerate(runs, 1):
+        click.echo(f"\n[{idx}/{n}] {run.name}", err=_json)
+        try:
+            cfg = load_config(run.config)
+            if run.overrides:
+                from llm_inference_benchmark.sweep import apply_overrides
+
+                cfg = apply_overrides(cfg, run.overrides)
+            if run.workload_profile is not None:
+                cfg = cfg.model_copy(update={"workload_profile": run.workload_profile})
+
+            _t0 = time.perf_counter()
+            backend = _build_backend(cfg)
+            model_load_ms = (time.perf_counter() - _t0) * 1000.0
+            prompts = load_prompts(cfg.resolve_prompts_file())
+            click.echo(
+                f"  Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}",
+                err=_json,
+            )
+            report = run_repeated(backend, cfg, prompts, model_load_ms=model_load_ms)
+
+            csv_path = results_dir / f"{run.name}.csv"
+            manifest_path = results_dir / f"{run.name}.manifest.json"
+
+            # Defense-in-depth: confirm paths are contained within results_dir.
+            resolved_dir = results_dir.resolve()
+            if not csv_path.resolve().is_relative_to(resolved_dir):
+                raise click.ClickException(
+                    f"Run name {run.name!r} would write outside results directory"
+                )
+
+            row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
+            with open(csv_path, "w", newline="") as f:
+                writer = csv.DictWriter(f, fieldnames=list(row.keys()))
+                writer.writeheader()
+                writer.writerow(row)
+
+            manifest = collect_manifest(run.config, cfg)
+            write_manifest(manifest, manifest_path)
+
+            click.echo(f"  → {csv_path}", err=_json)
+            click.echo(f"  → {manifest_path}", err=_json)
+            successful_csvs.append(csv_path)
+
+            if _json:
+                json_runs.append(
+                    {
+                        "index": idx,
+                        "name": run.name,
+                        "status": "ok",
+                        "output": str(csv_path),
+                        "manifest": str(manifest_path),
+                    }
+                )
+
+            del backend
+            gc.collect()
+
+        except Exception as exc:  # noqa: BLE001
+            if not _json and not continue_on_error:
+                raise
+            msg = str(exc) or type(exc).__name__
+            click.echo(f"  FAILED: {msg}", err=True)
+            failures.append((run.name, msg))
+            if _json:
+                json_runs.append({"index": idx, "name": run.name, "status": "failed", "error": msg})
+
+    has_recommend_winner = True
+    if successful_csvs:
+        rows = [load_csv(p) for p in successful_csvs]
+
+        filtered = filter_rows(rows, steps.compare_filter)
+        sorted_rows = sort_rows(filtered, sort_by=steps.compare_sort)
+        if steps.compare_limit is not None:
+            sorted_rows = sorted_rows[: steps.compare_limit]
+        (results_dir / "compare.md").write_text(_cmp_table(sorted_rows) + "\n")
+        (results_dir / "compare.json").write_text(_cmp_json(sorted_rows) + "\n")
+        click.echo(
+            f"\ncompare  → {results_dir}/compare.md, {results_dir}/compare.json",
+            err=_json,
+        )
+
+        if steps.pareto:
+            from llm_inference_benchmark.pareto import (
+                pareto_classify,
+                render_pareto_json,
+                render_pareto_table,
+            )
+
+            classified = pareto_classify(rows)
+            (results_dir / "pareto.md").write_text(render_pareto_table(classified) + "\n")
+            (results_dir / "pareto.json").write_text(render_pareto_json(classified) + "\n")
+            click.echo(
+                f"pareto   → {results_dir}/pareto.md, {results_dir}/pareto.json",
+                err=_json,
+            )
+
+        if steps.recommend is not None:
+            from llm_inference_benchmark.recommend import (
+                Constraints,
+                recommend,
+                render_recommendation,
+                render_recommendation_json,
+            )
+
+            _CONSTRAINT_FIELDS = frozenset(
+                {
+                    "max_vram_mb",
+                    "max_p95_ms",
+                    "min_sanity",
+                    "min_quality",
+                    "max_perplexity",
+                    "min_judge",
+                    "max_load_ms",
+                    "max_ttft_ms",
+                }
+            )
+            constraints = Constraints(
+                **{k: v for k, v in steps.recommend.items() if k in _CONSTRAINT_FIELDS}
+            )
+            result = recommend(rows, constraints)
+            (results_dir / "recommend.md").write_text(render_recommendation(result) + "\n")
+            (results_dir / "recommend.json").write_text(render_recommendation_json(result) + "\n")
+            click.echo(
+                f"recommend → {results_dir}/recommend.md, {results_dir}/recommend.json",
+                err=_json,
+            )
+            has_recommend_winner = result.winner is not None
+
+    n_ok = n - len(failures)
+    if _json:
+        click.echo(
+            json.dumps(
+                {
+                    "pipeline": pipeline_path,
+                    "results_dir": str(results_dir),
+                    "total": n,
+                    "succeeded": n_ok,
+                    "failed": len(failures),
+                    "runs": json_runs,
+                }
+            )
+        )
+    elif failures:
+        click.echo(f"\nDone: {n_ok} completed, {len(failures)} failed.")
+        click.echo("Failed runs:")
+        for name, msg in failures:
+            click.echo(f"  {name}: {msg}")
+    else:
+        click.echo(f"\nDone. Results in {results_dir}/")
+
+    if failures or not has_recommend_winner:
+        sys.exit(1)
+
+
 def _print_report(report: object) -> None:
     """Print benchmark results to stdout.
 
