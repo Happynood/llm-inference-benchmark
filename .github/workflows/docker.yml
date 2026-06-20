@@ -1,0 +1,62 @@
+name: Docker
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  build-cpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/share/swift /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af
+          sudo apt-get clean
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build CPU image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: cpu
+          push: false
+          tags: llm-bench:cpu-ci
+          build-args: SKIP_LLAMA_CPP=1
+          cache-from: type=gha,scope=cpu
+          cache-to: type=gha,mode=max,scope=cpu
+          load: true
+
+      - name: Smoke test CPU image
+        run: docker run --rm llm-bench:cpu-ci llm-bench --help
+
+  build-gpu:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/share/swift /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af
+          sudo apt-get clean
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build GPU image (build only — no GPU runner available)
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: gpu
+          push: false
+          tags: llm-bench:gpu-ci
+          build-args: SKIP_LLAMA_CPP=1
+          cache-from: type=gha,scope=gpu
+          cache-to: type=gha,mode=max,scope=gpu
