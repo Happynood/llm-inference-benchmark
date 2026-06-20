@@ -292,14 +292,16 @@ docker compose run --rm llm-bench-cuda \
 
 ## Web UI
 
-`llm-bench serve` starts a local HTTP API server that exposes benchmark jobs as REST
-resources. The frontend is a separate component; this backend is the data layer.
+`llm-bench serve` starts a local server with a built-in browser dashboard (HTMX +
+Plotly).  Open `http://localhost:8080` to see a live runs table, per-run log streaming,
+a bar-chart comparison for selected runs, and a Pareto chart (p95 latency vs throughput)
+for each completed run.
 
 ```bash
 # Install server dependencies
 uv pip install 'llm-inference-benchmark[server]'
 
-# Start the API (default: 127.0.0.1:8080)
+# Start the server (default: 127.0.0.1:8080)
 llm-bench serve
 
 # Bind to all interfaces on a custom port
@@ -310,12 +312,15 @@ llm-bench serve --host 0.0.0.0 --port 9000
 
 | Method | Path | Description |
 |---|---|---|
+| `GET` | `/` | Dashboard (HTMX + Plotly) |
 | `GET` | `/api/health` | Liveness check |
 | `GET` | `/api/models` | List GGUF files from `~/models/` and HF cache dirs |
 | `GET` | `/api/runs` | List past benchmark results from `~/.llm-bench/results.db` |
 | `POST` | `/api/runs` | Submit a benchmark config (JSON body); returns `{"run_id": "..."}` immediately |
 | `GET` | `/api/runs/{run_id}` | Poll status (`pending`/`running`/`done`/`error`) and results |
 | `GET` | `/api/runs/{run_id}/stream` | Server-Sent Events streaming stdout of a running benchmark |
+| `GET` | `/api/ui/runs-table` | HTMX HTML fragment for the runs table |
+| `GET` | `/runs/{run_id}/pareto.html` | Interactive Plotly Pareto scatter page |
 
 Results are persisted in a local SQLite database at `~/.llm-bench/results.db`.
 

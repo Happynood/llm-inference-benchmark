@@ -55,6 +55,7 @@ dev = [
     "fastapi[standard]>=0.111",
     "uvicorn[standard]>=0.30",
     "huggingface-hub>=0.23",
+    "pytest-playwright>=0.4",
 ]
 
 [tool.ruff]
@@ -80,5 +81,8 @@ typeCheckingMode = "basic"
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = ["--import-mode=importlib"]
-markers = ["integration: marks integration tests that require optional deps or network access"]
+markers = [
+    "integration: marks integration tests that require optional deps or network access",
+    "e2e: marks E2E browser tests (require playwright install chromium)",
+]
 asyncio_mode = "auto"
