@@ -1347,6 +1347,29 @@ def pipeline_cmd(
         sys.exit(1)
 
 
+@main.command("serve")
+@click.option("--host", default="127.0.0.1", show_default=True, help="Bind host")
+@click.option("--port", default=8080, show_default=True, type=int, help="Bind port")
+def serve_cmd(host: str, port: int) -> None:
+    """Start the llm-bench Web API server.
+
+    Exposes a REST API for submitting benchmark jobs, streaming progress via
+    Server-Sent Events, and querying past results from a local SQLite store.
+
+        llm-bench serve
+        llm-bench serve --host 0.0.0.0 --port 8080
+    """
+    try:
+        import uvicorn
+    except ImportError:
+        raise click.ClickException(
+            "uvicorn is required: uv pip install 'llm-inference-benchmark[server]'"
+        ) from None
+    from llm_inference_benchmark.server import app
+
+    uvicorn.run(app, host=host, port=port)
+
+
 def _print_report(report: object) -> None:
     """Print benchmark results to stdout.
 

@@ -31,6 +31,11 @@ onnx = [
 vllm = [
     "vllm>=0.4",
 ]
+server = [
+    "fastapi[standard]>=0.111",
+    "uvicorn[standard]>=0.30",
+    "huggingface-hub>=0.23",
+]
 
 [build-system]
 requires = ["hatchling"]
@@ -45,6 +50,11 @@ dev = [
     "pytest-cov>=5.0",
     "pyright>=1.1",
     "ruff>=0.4",
+    "httpx>=0.27",
+    "pytest-asyncio>=0.23",
+    "fastapi[standard]>=0.111",
+    "uvicorn[standard]>=0.30",
+    "huggingface-hub>=0.23",
 ]
 
 [tool.ruff]
@@ -71,3 +81,4 @@ typeCheckingMode = "basic"
 testpaths = ["tests"]
 addopts = ["--import-mode=importlib"]
 markers = ["integration: marks integration tests that require optional deps or network access"]
+asyncio_mode = "auto"
