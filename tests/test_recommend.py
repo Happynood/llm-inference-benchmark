@@ -754,9 +754,7 @@ def test_filter_unknown_field_raises_usage_error(tmp_path: Path) -> None:
 
 def test_filter_no_rows_survive_exits_1(tmp_path: Path) -> None:
     p = _write_csv(tmp_path / "run.csv", _row(backend="hf", model="gpt2"))
-    result = CliRunner().invoke(
-        main, ["recommend", str(p), "--filter", "backend=llama_cpp"]
-    )
+    result = CliRunner().invoke(main, ["recommend", str(p), "--filter", "backend=llama_cpp"])
     assert result.exit_code == 1
 
 
