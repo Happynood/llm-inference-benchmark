@@ -1,10 +1,27 @@
 services:
-  llm-bench-cuda:
+  bench-cpu:
     build:
       context: .
-      dockerfile: Dockerfile.cuda
-    image: llm-bench-cuda
-    runtime: nvidia
+      target: cpu
+    image: llm-bench:cpu
+    volumes:
+      - ./configs:/app/configs
+      - ./results:/app/results
+      - ${HOME}/models:/models:ro
+    # Example: llm-bench run --config /app/configs/llama-cpp-cpu.yaml --output /app/results/bench.csv
+
+  bench-gpu:
+    build:
+      context: .
+      target: gpu
+    image: llm-bench:gpu
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
@@ -12,5 +29,4 @@ services:
       - ./configs:/app/configs
       - ./results:/app/results
       - ${HOME}/models:/models:ro
-    # Example: run a llama.cpp benchmark with full GPU offload
-    # command: ["--config", "/app/configs/example.yaml", "--output", "/app/results/bench.csv"]
+    # Example: llm-bench run --config /app/configs/llama-cpp-gpu.yaml --output /app/results/bench.csv

@@ -9,5 +9,7 @@ results/
 models/
 *.gguf
 *.csv
+*.log
 docs/
 tests/
+.claude/
