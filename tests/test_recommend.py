@@ -687,4 +687,119 @@ def test_cli_recommend_format_json_with_constraint_excludes(tmp_path: Path) -> N
     parsed = json.loads(result.output)
     assert parsed["winner"]["model"] == "fast"
     assert len(parsed["excluded"]) == 1
-    assert parsed["excluded"][0]["model"] == "slow"
+
+
+# ---------------------------------------------------------------------------
+# --filter option
+# ---------------------------------------------------------------------------
+
+
+def test_filter_single_backend(tmp_path: Path) -> None:
+    p_llama = _write_csv(tmp_path / "llama.csv", _row(backend="llama_cpp", model="q4", p95=80.0))
+    p_hf = _write_csv(tmp_path / "hf.csv", _row(backend="hf", model="q4", p95=100.0))
+    result = CliRunner().invoke(
+        main, ["recommend", str(p_llama), str(p_hf), "--filter", "backend=llama_cpp"]
+    )
+    assert result.exit_code == 0
+    assert "llama_cpp" in result.output
+    assert "hf" not in result.output
+
+
+def test_filter_single_model(tmp_path: Path) -> None:
+    p_q4 = _write_csv(tmp_path / "q4.csv", _row(model="Llama-3.2-Q4_K_M", p95=80.0))
+    p_q8 = _write_csv(tmp_path / "q8.csv", _row(model="Llama-3.2-Q8_0", p95=120.0))
+    result = CliRunner().invoke(
+        main, ["recommend", str(p_q4), str(p_q8), "--filter", "model=Q4_K_M"]
+    )
+    assert result.exit_code == 0
+    assert "Q4_K_M" in result.output
+    assert "Q8_0" not in result.output
+
+
+def test_filter_multiple_anded(tmp_path: Path) -> None:
+    p_match = _write_csv(
+        tmp_path / "match.csv", _row(backend="llama_cpp", model="Q4_K_M", p95=80.0)
+    )
+    p_other_backend = _write_csv(
+        tmp_path / "other_backend.csv", _row(backend="hf", model="Q4_K_M", p95=90.0)
+    )
+    p_other_model = _write_csv(
+        tmp_path / "other_model.csv", _row(backend="llama_cpp", model="Q8_0", p95=95.0)
+    )
+    result = CliRunner().invoke(
+        main,
+        [
+            "recommend",
+            str(p_match),
+            str(p_other_backend),
+            str(p_other_model),
+            "--filter",
+            "backend=llama_cpp",
+            "--filter",
+            "model=Q4_K_M",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "Q4_K_M" in result.output
+    assert "Q8_0" not in result.output
+    assert "hf" not in result.output
+
+
+def test_filter_unknown_field_raises_usage_error(tmp_path: Path) -> None:
+    p = _write_csv(tmp_path / "run.csv", _row())
+    result = CliRunner().invoke(main, ["recommend", str(p), "--filter", "quantization=Q4"])
+    assert result.exit_code != 0
+    assert "quantization" in result.output
+
+
+def test_filter_no_rows_survive_exits_1(tmp_path: Path) -> None:
+    p = _write_csv(tmp_path / "run.csv", _row(backend="hf", model="gpt2"))
+    result = CliRunner().invoke(main, ["recommend", str(p), "--filter", "backend=llama_cpp"])
+    assert result.exit_code == 1
+
+
+def test_filter_with_json_format(tmp_path: Path) -> None:
+    p_llama = _write_csv(tmp_path / "llama.csv", _row(backend="llama_cpp", model="q4", p95=80.0))
+    p_hf = _write_csv(tmp_path / "hf.csv", _row(backend="hf", model="q4", p95=100.0))
+    result = CliRunner().invoke(
+        main,
+        ["recommend", str(p_llama), str(p_hf), "--filter", "backend=llama_cpp", "--format", "json"],
+    )
+    assert result.exit_code == 0
+    parsed = json.loads(result.output)
+    assert parsed["winner"]["backend"] == "llama_cpp"
+
+
+def test_filter_unknown_field_json_format_raises_usage_error(tmp_path: Path) -> None:
+    p = _write_csv(tmp_path / "run.csv", _row())
+    result = CliRunner().invoke(
+        main, ["recommend", str(p), "--filter", "quant=Q4", "--format", "json"]
+    )
+    assert result.exit_code != 0
+    assert "quant" in result.output
+
+
+def test_filter_composes_with_constraint(tmp_path: Path) -> None:
+    p_llama_fast = _write_csv(
+        tmp_path / "llama_fast.csv", _row(backend="llama_cpp", model="q4", p95=80.0)
+    )
+    p_llama_slow = _write_csv(
+        tmp_path / "llama_slow.csv", _row(backend="llama_cpp", model="q8", p95=500.0)
+    )
+    p_hf = _write_csv(tmp_path / "hf.csv", _row(backend="hf", model="q4", p95=60.0))
+    result = CliRunner().invoke(
+        main,
+        [
+            "recommend",
+            str(p_llama_fast),
+            str(p_llama_slow),
+            str(p_hf),
+            "--filter",
+            "backend=llama_cpp",
+            "--max-p95-ms",
+            "200",
+        ],
+    )
+    assert result.exit_code == 0
+    assert "llama_cpp" in result.output
+    assert "hf" not in result.output

@@ -20,6 +20,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 - New `server` optional extra: `fastapi[standard]>=0.111`, `uvicorn[standard]>=0.30`,
   `huggingface-hub>=0.23`.
 
+- `llm-bench recommend --filter FIELD=PATTERN`: narrow the candidate pool before
+  constraint evaluation and Pareto selection.  Supported fields: `backend`, `model`
+  (case-insensitive substring match; repeatable; multiple filters are ANDed).  Composes
+  with all constraint flags and `--format`:
+  ```
+  llm-bench recommend results/*.csv --filter backend=llama_cpp --max-p95-ms 1000
+  llm-bench recommend results/*.csv --filter backend=llama_cpp --filter model=Q4_K_M
+  llm-bench recommend results/*.csv --filter model=Q4 --format json
+  ```
+
 - `llm-bench pareto --filter FIELD=PATTERN`: narrow the Pareto candidate pool before
   running dominance analysis.  Supported fields: `backend`, `model` (case-insensitive
   substring match; repeatable; multiple filters are ANDed).  Composes with `--format`

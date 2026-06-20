@@ -36,7 +36,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from llm_inference_benchmark.compare import RunRow, load_csv
+from llm_inference_benchmark.compare import RunRow, filter_rows, load_csv
 from llm_inference_benchmark.pareto import pareto_classify
 
 
@@ -302,10 +302,19 @@ def render_recommendation_json(result: RecommendationResult) -> str:
     return json.dumps(data, indent=2)
 
 
-def build_recommendation(paths: list[str | Path], constraints: Constraints) -> tuple[str, bool]:
-    """Load CSVs, apply constraints, render recommendation. Returns (text, has_winner)."""
+def build_recommendation(
+    paths: list[str | Path],
+    constraints: Constraints,
+    filters: list[str] | None = None,
+) -> tuple[str, bool]:
+    """Load CSVs, apply filters and constraints, render recommendation.
+
+    Returns (text, has_winner).
+    """
     if not paths:
         raise ValueError("At least one CSV path is required")
-    rows = [load_csv(p) for p in paths]
+    rows: list[RunRow] = [load_csv(p) for p in paths]
+    if filters:
+        rows = filter_rows(rows, filters)
     result = recommend(rows, constraints)
     return render_recommendation(result), result.winner is not None
