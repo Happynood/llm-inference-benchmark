@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import io
 import json
 from dataclasses import dataclass
 from pathlib import Path
@@ -294,6 +295,73 @@ def render_json(rows: list[RunRow]) -> str:
         for r in rows
     ]
     return json.dumps(data, indent=2)
+
+
+_CSV_FIELDS = [
+    "backend",
+    "model",
+    "request_count",
+    "p50_latency_ms",
+    "p95_latency_ms",
+    "tokens_per_second",
+    "decode_tokens_per_second",
+    "mean_input_tokens",
+    "mean_output_tokens",
+    "model_load_ms",
+    "p50_ttft_ms",
+    "p95_ttft_ms",
+    "peak_cpu_memory_mb",
+    "peak_cuda_memory_mb",
+    "peak_vram_memory_mb",
+    "sanity_pass_rate",
+    "task_quality_pass_rate",
+    "perplexity",
+    "judge_score",
+    "p95_latency_ms_std",
+    "tokens_per_second_std",
+]
+
+
+def render_csv(rows: list[RunRow]) -> str:
+    """Serialize RunRows to a CSV string with snake_case headers.
+
+    Absent optional metrics are written as empty cells so pandas.read_csv()
+    produces NaN automatically rather than the string "N/A".
+    """
+    buf = io.StringIO()
+    writer = csv.DictWriter(buf, fieldnames=_CSV_FIELDS, lineterminator="\n")
+    writer.writeheader()
+    for r in rows:
+        writer.writerow(
+            {
+                "backend": r.backend,
+                "model": r.model,
+                "request_count": r.request_count,
+                "p50_latency_ms": r.p50_latency_ms,
+                "p95_latency_ms": r.p95_latency_ms,
+                "tokens_per_second": r.tokens_per_second,
+                "decode_tokens_per_second": _or_empty(r.decode_tokens_per_second),
+                "mean_input_tokens": _or_empty(r.mean_input_tokens),
+                "mean_output_tokens": _or_empty(r.mean_output_tokens),
+                "model_load_ms": _or_empty(r.model_load_ms),
+                "p50_ttft_ms": _or_empty(r.p50_ttft_ms),
+                "p95_ttft_ms": _or_empty(r.p95_ttft_ms),
+                "peak_cpu_memory_mb": r.peak_cpu_memory_mb,
+                "peak_cuda_memory_mb": _or_empty(r.peak_cuda_memory_mb),
+                "peak_vram_memory_mb": _or_empty(r.peak_vram_memory_mb),
+                "sanity_pass_rate": _or_empty(r.sanity_pass_rate),
+                "task_quality_pass_rate": _or_empty(r.task_quality_pass_rate),
+                "perplexity": _or_empty(r.perplexity),
+                "judge_score": _or_empty(r.judge_score),
+                "p95_latency_ms_std": _or_empty(r.p95_latency_ms_std),
+                "tokens_per_second_std": _or_empty(r.tokens_per_second_std),
+            }
+        )
+    return buf.getvalue().rstrip("\n")
+
+
+def _or_empty(v: float | None) -> float | str:
+    return "" if v is None else v
 
 
 def build_comparison_table(paths: list[str | Path], sort_by: str = "p95") -> str:
