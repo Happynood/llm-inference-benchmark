@@ -653,8 +653,8 @@ def validate_config_cmd(
     "output_format",
     default="table",
     show_default=True,
-    type=click.Choice(["table", "json"], case_sensitive=False),
-    help="Output format: table=Markdown, json=machine-readable JSON",
+    type=click.Choice(["table", "json", "csv"], case_sensitive=False),
+    help="Output format: table=Markdown, json=machine-readable JSON, csv=spreadsheet/pandas",
 )
 @click.option(
     "--fail-on-regression",
@@ -686,10 +686,17 @@ def diff_cmd(
 
         llm-bench diff baseline.csv current.csv --fail-on-regression 5
     """
-    from llm_inference_benchmark.diff import build_diff_json, build_diff_table, find_regressions
+    from llm_inference_benchmark.diff import (
+        build_diff_csv,
+        build_diff_json,
+        build_diff_table,
+        find_regressions,
+    )
 
     if output_format == "json":
         text = build_diff_json(baseline_csv, current_csv)
+    elif output_format == "csv":
+        text = build_diff_csv(baseline_csv, current_csv)
     else:
         text = build_diff_table(baseline_csv, current_csv)
 
