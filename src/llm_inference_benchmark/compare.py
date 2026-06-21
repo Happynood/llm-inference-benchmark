@@ -31,6 +31,7 @@ _HEADERS = [
     "Load (ms)",
     "TTFT p50 (ms)",
     "TTFT p95 (ms)",
+    "TPOT p50 (ms)",
     "CPU mem (MB)",
     "CUDA mem (MB)",
     "VRAM mem (MB)",
@@ -41,8 +42,8 @@ _HEADERS = [
 ]
 
 # Indices into _HEADERS that are suppressed when every row shows "N/A".
-# Mandatory columns (0-5 and 12) are never suppressed.
-_OPTIONAL_COL_INDICES: frozenset[int] = frozenset({6, 7, 8, 9, 10, 11, 13, 14, 15, 16, 17, 18})
+# Mandatory columns (0-5 and 13) are never suppressed.
+_OPTIONAL_COL_INDICES: frozenset[int] = frozenset({6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19})
 
 
 @dataclass(frozen=True)
@@ -64,6 +65,8 @@ class RunRow:
     model_load_ms: float | None = None  # absent in pre-v0.18 CSVs → None
     p50_ttft_ms: float | None = None  # absent unless backend ran with stream=True
     p95_ttft_ms: float | None = None  # absent unless backend ran with stream=True
+    p50_tpot_ms: float | None = None  # absent unless TTFT available and output_tokens > 0
+    tpot_stddev_ms: float | None = None  # absent unless >= 2 requests had TTFT data
     p95_latency_ms_std: float | None = None  # absent unless config.repeats > 1
     tokens_per_second_std: float | None = None  # absent unless config.repeats > 1
     mean_input_tokens: float | None = None  # absent in pre-v0.22 CSVs → None
@@ -113,6 +116,8 @@ def load_csv(path: str | Path) -> RunRow:
     model_load_ms = _parse_optional_float(row, "model_load_ms", path)
     p50_ttft_ms = _parse_optional_float(row, "p50_ttft_ms", path)
     p95_ttft_ms = _parse_optional_float(row, "p95_ttft_ms", path)
+    p50_tpot_ms = _parse_optional_float(row, "p50_tpot_ms", path)
+    tpot_stddev_ms = _parse_optional_float(row, "tpot_stddev_ms", path)
     p95_std = _parse_optional_float(row, "p95_latency_ms_std", path)
     toks_std = _parse_optional_float(row, "tokens_per_second_std", path)
     mean_input_tokens = _parse_optional_float(row, "mean_input_tokens", path)
@@ -137,6 +142,8 @@ def load_csv(path: str | Path) -> RunRow:
         model_load_ms=model_load_ms,
         p50_ttft_ms=p50_ttft_ms,
         p95_ttft_ms=p95_ttft_ms,
+        p50_tpot_ms=p50_tpot_ms,
+        tpot_stddev_ms=tpot_stddev_ms,
         p95_latency_ms_std=p95_std,
         tokens_per_second_std=toks_std,
         mean_input_tokens=mean_input_tokens,
@@ -229,6 +236,7 @@ def render_table(rows: list[RunRow]) -> str:
             fmt_optional(r.model_load_ms),
             fmt_optional(r.p50_ttft_ms),
             fmt_optional(r.p95_ttft_ms),
+            fmt_optional(r.p50_tpot_ms),
             f"{r.peak_cpu_memory_mb:.1f}",
             fmt_optional(r.peak_cuda_memory_mb),
             fmt_optional(r.peak_vram_memory_mb),
@@ -282,6 +290,8 @@ def render_json(rows: list[RunRow]) -> str:
             "model_load_ms": r.model_load_ms,
             "p50_ttft_ms": r.p50_ttft_ms,
             "p95_ttft_ms": r.p95_ttft_ms,
+            "p50_tpot_ms": r.p50_tpot_ms,
+            "tpot_stddev_ms": r.tpot_stddev_ms,
             "peak_cpu_memory_mb": r.peak_cpu_memory_mb,
             "peak_cuda_memory_mb": r.peak_cuda_memory_mb,
             "peak_vram_memory_mb": r.peak_vram_memory_mb,
@@ -310,6 +320,8 @@ _CSV_FIELDS = [
     "model_load_ms",
     "p50_ttft_ms",
     "p95_ttft_ms",
+    "p50_tpot_ms",
+    "tpot_stddev_ms",
     "peak_cpu_memory_mb",
     "peak_cuda_memory_mb",
     "peak_vram_memory_mb",
@@ -346,6 +358,8 @@ def render_csv(rows: list[RunRow]) -> str:
                 "model_load_ms": _or_empty(r.model_load_ms),
                 "p50_ttft_ms": _or_empty(r.p50_ttft_ms),
                 "p95_ttft_ms": _or_empty(r.p95_ttft_ms),
+                "p50_tpot_ms": _or_empty(r.p50_tpot_ms),
+                "tpot_stddev_ms": _or_empty(r.tpot_stddev_ms),
                 "peak_cpu_memory_mb": r.peak_cpu_memory_mb,
                 "peak_cuda_memory_mb": _or_empty(r.peak_cuda_memory_mb),
                 "peak_vram_memory_mb": _or_empty(r.peak_vram_memory_mb),

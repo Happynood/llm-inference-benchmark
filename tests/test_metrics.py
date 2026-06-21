@@ -202,3 +202,46 @@ def test_percentile_sorted_empty_list_returns_zero() -> None:
 
     assert _percentile_sorted([], 50) == 0.0
     assert _percentile_sorted([], 95) == 0.0
+
+
+# ── TPOT tests ────────────────────────────────────────────────────────────────
+
+
+def test_tpot_computed_from_tpot_values() -> None:
+    # latency=100ms, ttft=20ms, output=10 tokens → tpot=(100-20)/10=8 ms/tok
+    results = [RequestMetrics(latency_ms=100.0, input_tokens=5, output_tokens=10)] * 4
+    tpot = [8.0, 9.0, 7.0, 10.0]
+    report = compute_metrics(results, backend="mock", model="t", tpot_values=tpot)
+    assert report.p50_tpot_ms is not None
+    assert report.p50_tpot_ms == pytest.approx(8.5)
+
+
+def test_tpot_stddev_computed_with_multiple_values() -> None:
+    results = [RequestMetrics(latency_ms=100.0, input_tokens=5, output_tokens=10)] * 4
+    tpot = [8.0, 9.0, 10.0, 11.0]
+    report = compute_metrics(results, backend="mock", model="t", tpot_values=tpot)
+    assert report.tpot_stddev_ms is not None
+    import statistics
+
+    assert report.tpot_stddev_ms == pytest.approx(statistics.stdev(tpot))
+
+
+def test_tpot_stddev_none_with_single_value() -> None:
+    results = [RequestMetrics(latency_ms=100.0, input_tokens=5, output_tokens=10)]
+    report = compute_metrics(results, backend="mock", model="t", tpot_values=[8.0])
+    assert report.p50_tpot_ms == pytest.approx(8.0)
+    assert report.tpot_stddev_ms is None
+
+
+def test_tpot_none_when_not_provided() -> None:
+    results = [RequestMetrics(latency_ms=100.0, input_tokens=5, output_tokens=10)]
+    report = compute_metrics(results, backend="mock", model="t")
+    assert report.p50_tpot_ms is None
+    assert report.tpot_stddev_ms is None
+
+
+def test_tpot_none_when_empty_list() -> None:
+    results = [RequestMetrics(latency_ms=100.0, input_tokens=5, output_tokens=10)]
+    report = compute_metrics(results, backend="mock", model="t", tpot_values=[])
+    assert report.p50_tpot_ms is None
+    assert report.tpot_stddev_ms is None

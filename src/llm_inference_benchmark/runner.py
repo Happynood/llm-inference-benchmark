@@ -51,10 +51,10 @@ def _resolve_prompt_sequence(prompts: list[str], n: int, seed: int | None) -> li
 
 async def _run_concurrent(
     backend: Backend, config: BenchmarkConfig, prompts: list[str]
-) -> tuple[list[RequestMetrics], list[str], list[str], float, list[float]]:
+) -> tuple[list[RequestMetrics], list[str], list[str], float, list[float], list[float]]:
     """Fire config.requests requests with up to config.concurrency in flight at once.
 
-    Returns (results, texts, prompts_used, wall_clock_elapsed_s, ttft_values).
+    Returns (results, texts, prompts_used, wall_clock_elapsed_s, ttft_values, tpot_values).
     Uses asyncio.to_thread so sync Backend.generate() calls run in the default
     thread-pool executor without blocking the event loop.
     """
@@ -83,7 +83,12 @@ async def _run_concurrent(
     results = [q[1] for q in quads]
     texts = [q[2] for q in quads]
     ttft_values = [q[3] for q in quads if q[3] is not None]
-    return results, texts, prompts_used, wall_elapsed_s, ttft_values
+    tpot_values = [
+        (q[1].latency_ms - q[3]) / q[1].output_tokens
+        for q in quads
+        if q[3] is not None and q[1].output_tokens > 0 and q[1].latency_ms > q[3]
+    ]
+    return results, texts, prompts_used, wall_elapsed_s, ttft_values, tpot_values
 
 
 def run_benchmark(
@@ -116,12 +121,13 @@ def run_benchmark(
     prompts_used: list[str] = []
     wall_clock_elapsed_s: float | None = None
     ttft_values: list[float] = []
+    tpot_values: list[float] = []
 
     with MemorySampler() as mem, NvidiaSmiSampler() as vram:
         reset_cuda_peak()
         if config.concurrency > 1:
-            results, texts, prompts_used, wall_clock_elapsed_s, ttft_values = asyncio.run(
-                _run_concurrent(backend, config, sequence)
+            results, texts, prompts_used, wall_clock_elapsed_s, ttft_values, tpot_values = (
+                asyncio.run(_run_concurrent(backend, config, sequence))
             )
         else:
             for i in range(config.requests):
@@ -138,6 +144,10 @@ def run_benchmark(
                 prompts_used.append(prompt)
                 if result.ttft_ms is not None:
                     ttft_values.append(result.ttft_ms)
+                    if result.output_tokens > 0 and result.latency_ms > result.ttft_ms:
+                        tpot_values.append(
+                            (result.latency_ms - result.ttft_ms) / result.output_tokens
+                        )
 
     task_qual: TaskQualityReport | None = None
     if config.quality_file is not None:
@@ -167,6 +177,7 @@ def run_benchmark(
         judge_score=judge_score,
         wall_clock_elapsed_s=wall_clock_elapsed_s,
         ttft_values=ttft_values or None,
+        tpot_values=tpot_values or None,
     )
 
 
