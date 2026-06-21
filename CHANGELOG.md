@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **`long-context-*` datasets work again**: `deepmind/pg19` uses a legacy loading script
+  blocked in `datasets>=2.20`.  All three `long-context-*` registry entries now use
+  `allenai/c4` (Common Crawl, English subset, public domain, no gating).  The extractor
+  logic is unchanged — the `"text"` field is identical in both datasets.
 - **Gated datasets (e.g. `lmsys-chat`) can now be pulled via the dashboard**: the server
   reads `HF_TOKEN` from the environment and forwards it to the HuggingFace `datasets` library.
   Previously the token was never passed, causing every gated-dataset pull to fail with a 403.
