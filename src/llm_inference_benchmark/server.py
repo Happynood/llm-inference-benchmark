@@ -405,7 +405,7 @@ function closeModal() {
 function toggleGpuRow() {
   var backend = document.getElementById('f-backend').value;
   document.getElementById('f-gpu-row').style.display =
-    backend === 'llama-cpp' ? '' : 'none';
+    backend === 'llama-cpp' ? 'block' : 'none';
 }
 
 function loadModels() {
