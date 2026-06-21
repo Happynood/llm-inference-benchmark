@@ -934,9 +934,7 @@ async def pareto_multi_page(ids: str = Query(..., description="Comma-separated r
     if len(id_list) < 2:
         raise HTTPException(status_code=400, detail="Provide at least 2 run IDs via ?ids=")
     placeholders = ",".join("?" * len(id_list))
-    rows = _get_db().execute(
-        f"SELECT * FROM runs WHERE id IN ({placeholders})", id_list
-    ).fetchall()
+    rows = _get_db().execute(f"SELECT * FROM runs WHERE id IN ({placeholders})", id_list).fetchall()
     if not rows:
         raise HTTPException(status_code=404, detail="No matching runs found")
     results = [_row_to_result(r) for r in rows]
