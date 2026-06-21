@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **Dashboard comparison chart is now readable**: replaced the catch-all bar chart with a
+  focused dual-axis chart (tokens/s on the left axis, TTFT p50 ms on the right axis).
+  Per-run "Pareto" links removed from the table; a **Pareto** button now appears in the
+  compare toolbar only when ≥2 runs are selected.  Clicking it opens `GET /runs/pareto?ids=…`
+  which renders the Pareto scatter for exactly those runs.
 - **Checkbox state preserved across HTMX auto-refresh**: run row checkboxes in the
   `llm-bench serve` dashboard were silently unchecked every 5 seconds when HTMX replaced
   the table body.  The UI now saves the set of checked run IDs before each swap

@@ -32,7 +32,7 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
 
@@ -395,6 +395,8 @@ _DASHBOARD_HTML = """\
   </div>
   <div style="margin-top:.75rem">
     <button class="btn btn-outline" onclick="compareSelected()">Compare Selected</button>
+    <button id="pareto-btn" class="btn btn-outline" onclick="paretoSelected()"
+            style="display:none;margin-left:.5rem">Pareto</button>
   </div>
 </section>
 
@@ -431,8 +433,18 @@ _DASHBOARD_HTML = """\
 </section>
 
 <script>
+function _updateToolbar() {
+  var checked = Array.from(document.querySelectorAll('.run-cb:checked'));
+  var pb = document.getElementById('pareto-btn');
+  if (pb) pb.style.display = checked.length >= 2 ? '' : 'none';
+}
+
 document.getElementById('select-all').addEventListener('change', function() {
   document.querySelectorAll('.run-cb').forEach(function(cb){ cb.checked = this.checked; }, this);
+  _updateToolbar();
+});
+document.body.addEventListener('change', function(evt) {
+  if (evt.target && evt.target.classList.contains('run-cb')) _updateToolbar();
 });
 
 var _checkedRuns = new Set();
@@ -453,6 +465,7 @@ document.body.addEventListener('htmx:afterSettle', function(evt) {
       sa.checked = all.length > 0 && checked.length === all.length;
       sa.indeterminate = checked.length > 0 && checked.length < all.length;
     }
+    _updateToolbar();
   }
 });
 
@@ -585,13 +598,32 @@ function compareSelected() {
   var ttfts  = cbs.map(function(cb){
     return cb.dataset.ttft ? parseFloat(cb.dataset.ttft) : null; });
   document.getElementById('chart-section').style.display = 'block';
-  var traces = [{type:'bar', name:'Tok/s', x:labels, y:toks}];
+  var traces = [
+    {type:'bar', name:'Tokens / s', x:labels, y:toks, marker:{color:'#3b82f6'}}
+  ];
   if (ttfts.some(function(v){ return v !== null; })) {
-    traces.push({type:'bar', name:'TTFT p50 (ms)', x:labels, y:ttfts});
+    traces.push({
+      type:'bar', name:'TTFT p50 (ms)', x:labels,
+      y:ttfts.map(function(v){ return v === null ? 0 : v; }),
+      marker:{color:'#f59e0b'}, yaxis:'y2'
+    });
   }
-  Plotly.newPlot('comparison-chart', traces,
-    {barmode:'group', title:'Throughput & Latency Comparison',
-     yaxis:{title:'Value'}, legend:{orientation:'h'}});
+  Plotly.newPlot('comparison-chart', traces, {
+    barmode:'group',
+    title:{text:'Throughput & Latency', font:{size:14}},
+    yaxis:{title:'Tokens / s', titlefont:{color:'#3b82f6'}, tickfont:{color:'#3b82f6'}},
+    yaxis2:{title:'TTFT p50 (ms)', titlefont:{color:'#f59e0b'}, tickfont:{color:'#f59e0b'},
+            overlaying:'y', side:'right'},
+    legend:{orientation:'h', y:-0.2},
+    margin:{t:40, b:80}
+  });
+}
+
+function paretoSelected() {
+  var cbs = Array.from(document.querySelectorAll('.run-cb:checked'));
+  if (cbs.length < 2) { alert('Select at least 2 runs for Pareto analysis.'); return; }
+  var ids = cbs.map(function(cb){ return cb.value; }).join(',');
+  window.open('/runs/pareto?ids=' + encodeURIComponent(ids), '_blank');
 }
 </script>
 </body>
@@ -634,8 +666,6 @@ def _render_runs_table_rows(results: list[RunResult]) -> str:
             f"  <td>\n"
             f'    <button class="btn btn-sm btn-outline"'
             f" onclick=\"streamLog('{rid}')\">Log</button>\n"
-            f'    <a href="/runs/{rid}/pareto.html"'
-            f' class="btn btn-sm btn-outline" style="margin-left:.25rem">Pareto</a>\n'
             f"  </td>\n"
             f"</tr>"
         )
@@ -896,3 +926,19 @@ async def pareto_page(run_id: str) -> str:
     all_rows = _get_db().execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
     results = [_row_to_result(r) for r in all_rows]
     return _render_pareto_html(run_id, results)
+
+
+@app.get("/runs/pareto", response_class=HTMLResponse)
+async def pareto_multi_page(ids: str = Query(..., description="Comma-separated run IDs")) -> str:
+    id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    if len(id_list) < 2:
+        raise HTTPException(status_code=400, detail="Provide at least 2 run IDs via ?ids=")
+    placeholders = ",".join("?" * len(id_list))
+    rows = _get_db().execute(
+        f"SELECT * FROM runs WHERE id IN ({placeholders})", id_list
+    ).fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail="No matching runs found")
+    results = [_row_to_result(r) for r in rows]
+    # Use the first selected run as the "highlight" anchor
+    return _render_pareto_html(id_list[0], results)
