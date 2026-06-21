@@ -17,6 +17,7 @@ from llm_inference_benchmark.server import (
     _now_iso,
     _pareto_mask,
     _parse_metrics_from_output,
+    _pull_errors,
     _render_pareto_html,
     _render_runs_table_rows,
     _row_to_result,
@@ -33,9 +34,11 @@ def isolated_db(tmp_path: Path) -> Generator[Path, None, None]:
     db_file = tmp_path / "test_runs.db"
     _set_db_path(db_file)
     _buffers.clear()
+    _pull_errors.clear()
     yield db_file
     _set_db_path(Path.home() / ".llm-bench" / "results.db")
     _buffers.clear()
+    _pull_errors.clear()
 
 
 @pytest.fixture
@@ -592,6 +595,7 @@ def test_render_datasets_table_cached_entry() -> None:
             "description": "Public chat",
             "cached": True,
             "samples": 42,
+            "error": None,
         }
     ]
     out = _render_datasets_table(statuses)
@@ -609,8 +613,81 @@ def test_render_datasets_table_uncached_entry() -> None:
             "description": "Function calls",
             "cached": False,
             "samples": 0,
+            "error": None,
         }
     ]
     out = _render_datasets_table(statuses)
     assert "✗" in out
     assert "—" in out
+
+
+def test_render_datasets_table_shows_error() -> None:
+    from llm_inference_benchmark.server import _render_datasets_table
+
+    statuses = [
+        {
+            "name": "lmsys-chat",
+            "description": "Chat logs",
+            "cached": False,
+            "samples": 0,
+            "error": "Connection timed out",
+        }
+    ]
+    out = _render_datasets_table(statuses)
+    assert "ds-pull-error" in out
+    assert "Pull failed:" in out
+    assert "Connection timed out" in out
+
+
+def test_render_datasets_table_no_error_when_none() -> None:
+    from llm_inference_benchmark.server import _render_datasets_table
+
+    statuses = [
+        {
+            "name": "lmsys-chat",
+            "description": "Chat logs",
+            "cached": False,
+            "samples": 0,
+            "error": None,
+        }
+    ]
+    out = _render_datasets_table(statuses)
+    assert "ds-pull-error" not in out
+    assert "Pull failed" not in out
+
+
+def test_do_pull_dataset_records_error_on_failure() -> None:
+    from llm_inference_benchmark.server import _do_pull_dataset
+
+    with patch("llm_inference_benchmark.server._datasets_mod") as mock_ds:
+        mock_ds.pull.side_effect = RuntimeError("disk full")
+        _do_pull_dataset("lmsys-chat")
+
+    assert _pull_errors.get("lmsys-chat") == "disk full"
+
+
+def test_do_pull_dataset_clears_error_on_success() -> None:
+    from llm_inference_benchmark.server import _do_pull_dataset
+
+    _pull_errors["lmsys-chat"] = "previous error"
+    with patch("llm_inference_benchmark.server._datasets_mod") as mock_ds:
+        mock_ds.pull.return_value = None
+        _do_pull_dataset("lmsys-chat")
+
+    assert "lmsys-chat" not in _pull_errors
+
+
+async def test_list_datasets_includes_error_field(client: httpx.AsyncClient) -> None:
+    _pull_errors["lmsys-chat"] = "test error"
+    resp = await client.get("/api/datasets")
+    assert resp.status_code == 200
+    entry = next(d for d in resp.json()["datasets"] if d["name"] == "lmsys-chat")
+    assert entry["error"] == "test error"
+
+
+async def test_datasets_table_fragment_shows_error(client: httpx.AsyncClient) -> None:
+    _pull_errors["lmsys-chat"] = "Network unreachable"
+    resp = await client.get("/api/ui/datasets-table")
+    assert resp.status_code == 200
+    assert "Pull failed:" in resp.text
+    assert "Network unreachable" in resp.text

@@ -60,6 +60,29 @@ For full installation options (transformers, llama.cpp, GPU), see **[docs/quicks
 
 ---
 
+## GPU Setup (NVIDIA CUDA)
+
+By default `uv sync --extra llama-cpp` installs a CPU-only build. For GPU acceleration:
+
+### Option A — Pre-built CUDA 12.1 wheel (recommended, no compiler needed)
+
+```bash
+uv pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+```
+
+### Option B — Build from source with your CUDA toolkit
+
+```bash
+CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
+```
+
+The default config sets `n_gpu_layers: -1` which offloads all transformer layers to the GPU.
+llama.cpp falls back to CPU automatically when no GPU is available, so the default is safe
+to use on CPU-only machines.
+
+---
+
 ## Backends
 
 | Backend | Install extra | GPU support | Notes |
@@ -357,9 +380,9 @@ Samples are cached in `~/.cache/llm-bench/datasets/` as JSONL.  No network
 access is needed after the initial `pull`.  The `--dataset` flag is compatible
 with all other `llm-bench` options (`--seed`, `--requests`, `--concurrency`, etc.).
 
-The `long-context-*` variants use `deepmind/pg19` (public-domain books) to produce
-passages at controlled token budgets — useful for measuring prefill latency and
-validating models with extended context windows.
+The `long-context-*` variants use `allenai/c4` (Common Crawl, English subset,
+public domain, no gating) to produce passages at controlled token budgets — useful
+for measuring prefill latency and validating models with extended context windows.
 
 ---
 
