@@ -272,6 +272,25 @@ def test_select_all_indeterminate_after_htmx_refresh(page: Page, live_server: st
     )
 
 
+def test_dataset_pull_error_shown_in_table(page: Page, live_server: str) -> None:
+    from llm_inference_benchmark.server import _pull_errors
+
+    _pull_errors["lmsys-chat"] = "Simulated network error"
+    try:
+        page.goto(live_server)
+        page.wait_for_selector("#datasets-tbody", timeout=8000)
+        # Trigger a datasets-table refresh so HTMX picks up the injected error
+        page.evaluate("htmx.trigger('#datasets-tbody', 'load')")
+        page.wait_for_function(
+            "() => document.querySelector('.ds-pull-error') !== null",
+            timeout=8000,
+        )
+        expect(page.locator(".ds-pull-error").first).to_contain_text("Pull failed:")
+        expect(page.locator(".ds-pull-error").first).to_contain_text("Simulated network error")
+    finally:
+        _pull_errors.pop("lmsys-chat", None)
+
+
 def test_gpu_layers_hidden_for_non_llama_cpp(page: Page, live_server: str) -> None:
     page.goto(live_server)
     page.wait_for_selector("#new-run-btn", timeout=8000)
