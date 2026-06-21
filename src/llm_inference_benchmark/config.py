@@ -66,6 +66,8 @@ class BenchmarkConfig(BaseModel):
     seed: int | None = None
     measure_perplexity: bool = False
     measure_judge: bool = False
+    reasoning_start_tag: str | None = None
+    reasoning_end_tag: str | None = None
     mock: MockBackendConfig = Field(default_factory=MockBackendConfig)
     hf: HFBackendConfig = Field(default_factory=HFBackendConfig)
     llama_cpp: LlamaCppBackendConfig = Field(default_factory=LlamaCppBackendConfig)
