@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **Checkbox state preserved across HTMX auto-refresh**: run row checkboxes in the
+  `llm-bench serve` dashboard were silently unchecked every 5 seconds when HTMX replaced
+  the table body.  The UI now saves the set of checked run IDs before each swap
+  (`htmx:beforeSwap`) and restores them after settle (`htmx:afterSettle`).  The
+  select-all checkbox updates to checked / indeterminate / unchecked to match.
 - **Web UI benchmark runs now produce output**: `POST /api/runs` previously launched
   `python -m llm_inference_benchmark.cli` which exits silently because the CLI module has
   no `__main__` guard.  The subprocess now invokes the installed `llm-bench` console-script
