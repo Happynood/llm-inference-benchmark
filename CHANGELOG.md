@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **`long-context-*` datasets work again**: `deepmind/pg19` uses a legacy loading script
+  blocked in `datasets>=2.20`.  All three `long-context-*` registry entries now use
+  `allenai/c4` (Common Crawl, English subset, public domain, no gating).  The extractor
+  logic is unchanged — the `"text"` field is identical in both datasets.
 - **Checkbox state preserved across HTMX auto-refresh**: run row checkboxes in the
   `llm-bench serve` dashboard were silently unchecked every 5 seconds when HTMX replaced
   the table body.  The UI now saves the set of checked run IDs before each swap
