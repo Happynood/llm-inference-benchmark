@@ -203,7 +203,7 @@ def _do_run(run_id: str, config: dict[str, Any]) -> None:
 
         try:
             proc = subprocess.Popen(
-                [sys.executable, "-m", "llm_inference_benchmark.cli", "--config", cfg_path],
+                [str(Path(sys.executable).parent / "llm-bench"), "--config", cfg_path],
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
