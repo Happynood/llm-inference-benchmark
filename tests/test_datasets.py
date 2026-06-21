@@ -11,9 +11,11 @@ from click.testing import CliRunner
 
 from llm_inference_benchmark.cli import main
 from llm_inference_benchmark.datasets import (
+    _CHARS_PER_TOKEN,
     REGISTRY,
     _extract_hermes_fn,
     _extract_lmsys_chat,
+    _make_pg19_extractor,
     cache_dir,
     list_cached,
     load_prompts,
@@ -246,12 +248,96 @@ def test_cli_run_dataset_not_cached_gives_usage_error(tmp_path: Path) -> None:
     assert "not cached" in result.output.lower() or "Error" in result.output
 
 
+# ── Unit tests: pg19 long-context extractors ──────────────────────────────────
+
+
+def _pg19_row(chars: int) -> dict[str, str]:
+    """Build a fake PG19 row with *chars* characters of text."""
+    return {"text": "word " * (chars // 5)}
+
+
+def test_pg19_extractor_returns_prompt_for_long_book() -> None:
+    extractor = _make_pg19_extractor(4_096)
+    target_chars = 4_096 * _CHARS_PER_TOKEN
+    row = _pg19_row(target_chars * 3)
+    result = extractor(row)
+    assert result is not None
+    assert result.startswith("Summarize the following passage")
+    # The passage portion should be close to the target length.
+    passage = result.split("\n\n", 1)[1]
+    assert len(passage) >= target_chars // 2
+
+
+def test_pg19_extractor_skips_short_books() -> None:
+    extractor = _make_pg19_extractor(4_096)
+    target_chars = 4_096 * _CHARS_PER_TOKEN
+    row = _pg19_row(target_chars // 4)  # well below the min_chars threshold
+    assert extractor(row) is None
+
+
+def test_pg19_extractor_skips_empty_text() -> None:
+    extractor = _make_pg19_extractor(4_096)
+    assert extractor({"text": ""}) is None
+    assert extractor({}) is None
+
+
+def test_pg19_extractor_trims_to_word_boundary() -> None:
+    extractor = _make_pg19_extractor(4_096)
+    target_chars = 4_096 * _CHARS_PER_TOKEN
+    # Create text that has spaces scattered throughout.
+    row = {"text": ("hello world " * (target_chars * 3 // 12))}
+    result = extractor(row)
+    assert result is not None
+    # The chunk should not end mid-word (last char should be a word char or newline).
+    passage = result.split("\n\n", 1)[1]
+    assert not passage.endswith(" ") or passage.rstrip()
+
+
+def test_pg19_16k_extractor_produces_longer_passage() -> None:
+    extractor_4k = _make_pg19_extractor(4_096)
+    extractor_16k = _make_pg19_extractor(16_384)
+    # A book long enough for both.
+    row = _pg19_row(16_384 * _CHARS_PER_TOKEN * 3)
+    result_4k = extractor_4k(row)
+    result_16k = extractor_16k(row)
+    assert result_4k is not None and result_16k is not None
+    assert len(result_16k) > len(result_4k)
+
+
+def test_pull_long_context_dataset(tmp_path: Path) -> None:
+    from llm_inference_benchmark.datasets import pull
+
+    target_chars = 4_096 * _CHARS_PER_TOKEN
+    # Each fake book is 3× the target length so the extractor can take a slice.
+    fake_rows = [{"text": "word " * (target_chars * 3 // 5)} for _ in range(5)]
+    mock_ds = MagicMock()
+    mock_ds.__iter__ = MagicMock(return_value=iter(fake_rows))
+    mock_load = MagicMock(return_value=mock_ds)
+
+    with (
+        patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path),
+        patch("llm_inference_benchmark.datasets.load_dataset", mock_load, create=True),
+        patch.dict("sys.modules", {"datasets": MagicMock(load_dataset=mock_load)}),
+    ):
+        out = pull("long-context-4k", max_samples=5)
+
+    assert out == tmp_path / "long-context-4k.jsonl"
+    lines = [ln for ln in out.read_text().splitlines() if ln.strip()]
+    assert len(lines) == 5
+    for line in lines:
+        obj = json.loads(line)
+        assert obj["prompt"].startswith("Summarize the following passage")
+
+
 # ── Registry sanity check ─────────────────────────────────────────────────────
 
 
 def test_registry_has_expected_entries() -> None:
     assert "lmsys-chat" in REGISTRY
     assert "hermes-fn" in REGISTRY
+    assert "long-context-4k" in REGISTRY
+    assert "long-context-16k" in REGISTRY
+    assert "long-context-64k" in REGISTRY
     for spec in REGISTRY.values():
         assert "hf_repo" in spec
         assert "extractor" in spec

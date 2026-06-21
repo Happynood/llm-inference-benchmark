@@ -339,19 +339,27 @@ Replace synthetic prompts with real-world samples from HuggingFace:
 pip install datasets
 
 # Download and cache prompt samples locally
-llm-bench datasets pull lmsys-chat    # 500 samples from lmsys/lmsys-chat-1m
-llm-bench datasets pull hermes-fn     # 200 function-calling prompts
+llm-bench datasets pull lmsys-chat        # 500 samples — real multi-turn chat
+llm-bench datasets pull hermes-fn         # 200 function-calling prompts
+llm-bench datasets pull long-context-4k   # 100 passages @ ~4k tokens  (prefill benchmark)
+llm-bench datasets pull long-context-16k  # 50 passages  @ ~16k tokens
+llm-bench datasets pull long-context-64k  # 10 passages  @ ~64k tokens
 
 # List cached datasets
 llm-bench datasets list
 
 # Run a benchmark using cached prompts instead of the config prompts_file
 llm-bench --config configs/example.yaml --dataset lmsys-chat --requests 50
+llm-bench --config configs/example.yaml --dataset long-context-4k --requests 20
 ```
 
 Samples are cached in `~/.cache/llm-bench/datasets/` as JSONL.  No network
 access is needed after the initial `pull`.  The `--dataset` flag is compatible
 with all other `llm-bench` options (`--seed`, `--requests`, `--concurrency`, etc.).
+
+The `long-context-*` variants use `deepmind/pg19` (public-domain books) to produce
+passages at controlled token budgets — useful for measuring prefill latency and
+validating models with extended context windows.
 
 ---
 
@@ -411,7 +419,7 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 - [x] Function-calling dataset — `NousResearch/hermes-function-calling-v1` (`llm-bench datasets pull hermes-fn`)
 - [x] `llm-bench datasets pull <name>` CLI — stream and cache dataset samples locally
 - [x] `llm-bench --dataset <name>` — use cached dataset as prompt source for a run
-- [ ] Long-context sampler (4 k / 16 k / 64 k tokens) — prefill-phase stress test
+- [x] Long-context sampler (4 k / 16 k / 64 k tokens) — prefill-phase stress test (`llm-bench datasets pull long-context-4k`)
 
 ### Phase 4 — Advanced Metrics
 

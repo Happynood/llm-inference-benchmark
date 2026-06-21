@@ -8,6 +8,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- Three long-context dataset variants backed by `deepmind/pg19` (public-domain books):
+  `long-context-4k` (≤100 samples, ~4 096-token passages), `long-context-16k` (≤50 samples,
+  ~16 384-token passages), and `long-context-64k` (≤10 samples, ~65 536-token passages).
+  Use them with the existing `llm-bench datasets pull` and `--dataset` flags to drive
+  prefill-latency profiling at controlled context lengths:
+  ```
+  llm-bench datasets pull long-context-4k
+  llm-bench --config cfg.yaml --dataset long-context-4k --requests 20
+  ```
+  Each passage is sliced from a PG19 book (front matter skipped), wrapped in a
+  summarisation prompt, and cached as JSONL.  Books shorter than half the target length
+  are skipped so every cached sample reaches the declared token budget.
+
 - Web UI "+ New Run" button and modal form: select model (populated via `GET /api/models`),
   backend, requests, concurrency, warmup requests, GPU layers (llama-cpp only), and extra
   YAML config.  Submits `POST /api/runs`, auto-refreshes the runs table, and starts
