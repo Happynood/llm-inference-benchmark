@@ -264,9 +264,12 @@ def test_select_all_indeterminate_after_htmx_refresh(page: Page, live_server: st
     # Check only the first run — select-all should become indeterminate
     page.locator(".run-cb").first.check()
     page.evaluate("htmx.trigger('#runs-tbody', 'load')")
-    page.wait_for_selector(".run-cb", timeout=8000)
-    indeterminate = page.evaluate("() => document.getElementById('select-all').indeterminate")
-    assert indeterminate, "select-all should be indeterminate when only some rows are checked"
+    # HTMX swap is async; wait_for_selector returns immediately if elements already exist.
+    # Use wait_for_function to poll until htmx:afterSettle has applied indeterminate state.
+    page.wait_for_function(
+        "() => !!document.getElementById('select-all')?.indeterminate",
+        timeout=8000,
+    )
 
 
 def test_gpu_layers_hidden_for_non_llama_cpp(page: Page, live_server: str) -> None:
