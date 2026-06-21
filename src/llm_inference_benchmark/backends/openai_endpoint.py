@@ -134,6 +134,7 @@ class OpenAIEndpointBackend(Backend):
                 ttft_ms: float | None = None
                 content_parts: list[str] = []
                 usage: dict | None = None
+                token_times: list[float] = []
 
                 while True:
                     raw_line = resp.readline()
@@ -152,8 +153,11 @@ class OpenAIEndpointBackend(Backend):
                     choices = chunk.get("choices") or []
                     if choices:
                         delta_content: str = choices[0].get("delta", {}).get("content") or ""
-                        if delta_content and ttft_ms is None:
-                            ttft_ms = (time.perf_counter() - start) * 1000.0
+                        if delta_content:
+                            t = time.perf_counter()
+                            token_times.append(t)
+                            if ttft_ms is None:
+                                ttft_ms = (t - start) * 1000.0
                         content_parts.append(delta_content)
                     chunk_usage = chunk.get("usage")
                     if chunk_usage:
@@ -172,10 +176,17 @@ class OpenAIEndpointBackend(Backend):
             input_tokens = len(prompt.split())
             output_tokens = len(text.split())
 
+        itl_values = (
+            [(token_times[i] - token_times[i - 1]) * 1000.0 for i in range(1, len(token_times))]
+            if len(token_times) >= 2
+            else None
+        )
+
         return GenerationResult(
             text=text,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             latency_ms=elapsed_ms,
             ttft_ms=ttft_ms,
+            itl_values=itl_values,
         )

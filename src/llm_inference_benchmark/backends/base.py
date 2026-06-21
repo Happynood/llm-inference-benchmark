@@ -11,6 +11,7 @@ class GenerationResult:
     output_tokens: int
     latency_ms: float
     ttft_ms: float | None = None
+    itl_values: list[float] | None = None
 
 
 class Backend(ABC):

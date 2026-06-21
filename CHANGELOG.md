@@ -18,6 +18,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **ITL jitter** (`itl_stddev_ms`): new metric that measures the standard deviation of
+  inter-chunk latency (ms) pooled across all streaming requests in a run.  A high value
+  indicates bursty token delivery, which degrades interactive UX even when average
+  throughput is acceptable.  Populated for `openai_endpoint` runs with `stream: true`;
+  `None` for non-streaming backends or responses that arrive in a single chunk.  Appears
+  as `itl_stddev_ms` in CSV and JSON output and as the "ITL σ (ms)" column in the
+  Markdown comparison table (column is suppressed when every row is N/A).
+
 - **Thermal throttling index** (`thermal_throttle_pct`): new metric that measures the
   percentage drop in tokens/s between the first and last 25 % of a sequential benchmark
   run.  A positive value indicates CPU/GPU frequency scaling during the run.  Populated
