@@ -525,3 +525,92 @@ def test_render_pareto_html_with_metrics(isolated_db: Path) -> None:
     out = _render_pareto_html("abc", [result])
     assert "Plotly.newPlot" in out
     assert "60.0" in out
+
+
+# ── Datasets API ──────────────────────────────────────────────────────────────
+
+
+async def test_list_datasets_returns_registry(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/api/datasets")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "datasets" in data
+    names = [d["name"] for d in data["datasets"]]
+    assert "lmsys-chat" in names
+    assert "hermes-fn" in names
+    for entry in data["datasets"]:
+        assert "name" in entry
+        assert "description" in entry
+        assert "cached" in entry
+        assert "samples" in entry
+
+
+async def test_list_datasets_cached_false_when_not_pulled(
+    client: httpx.AsyncClient, tmp_path: Path
+) -> None:
+    with patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path):
+        resp = await client.get("/api/datasets")
+    assert resp.status_code == 200
+    for entry in resp.json()["datasets"]:
+        assert entry["cached"] is False
+        assert entry["samples"] == 0
+
+
+async def test_pull_dataset_unknown_name(client: httpx.AsyncClient) -> None:
+    resp = await client.post("/api/datasets/pull", json={"name": "does-not-exist"})
+    assert resp.status_code == 422
+
+
+async def test_pull_dataset_starts_background_task(client: httpx.AsyncClient) -> None:
+    with patch("llm_inference_benchmark.server._do_pull_dataset") as mock_pull:
+        resp = await client.post("/api/datasets/pull", json={"name": "lmsys-chat"})
+    assert resp.status_code == 202
+    assert resp.json() == {"status": "started"}
+    mock_pull.assert_called_once_with("lmsys-chat")
+
+
+async def test_datasets_table_fragment_returns_html(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/api/ui/datasets-table")
+    assert resp.status_code == 200
+    assert "lmsys-chat" in resp.text
+    assert "hermes-fn" in resp.text
+
+
+def test_render_datasets_table_empty() -> None:
+    from llm_inference_benchmark.server import _render_datasets_table
+
+    out = _render_datasets_table([])
+    assert "No datasets registered" in out
+
+
+def test_render_datasets_table_cached_entry() -> None:
+    from llm_inference_benchmark.server import _render_datasets_table
+
+    statuses = [
+        {
+            "name": "wildchat",
+            "description": "Public chat",
+            "cached": True,
+            "samples": 42,
+        }
+    ]
+    out = _render_datasets_table(statuses)
+    assert "wildchat" in out
+    assert "42" in out
+    assert "✓" in out
+
+
+def test_render_datasets_table_uncached_entry() -> None:
+    from llm_inference_benchmark.server import _render_datasets_table
+
+    statuses = [
+        {
+            "name": "hermes-fn",
+            "description": "Function calls",
+            "cached": False,
+            "samples": 0,
+        }
+    ]
+    out = _render_datasets_table(statuses)
+    assert "✗" in out
+    assert "—" in out
