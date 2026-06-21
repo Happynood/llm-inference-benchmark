@@ -15,6 +15,7 @@ from llm_inference_benchmark.datasets import (
     REGISTRY,
     _extract_hermes_fn,
     _extract_lmsys_chat,
+    _extract_wildchat,
     _make_pg19_extractor,
     cache_dir,
     list_cached,
@@ -291,6 +292,66 @@ def test_pg19_extractor_trims_to_word_boundary() -> None:
     # The chunk should not end mid-word (last char should be a word char or newline).
     passage = result.split("\n\n", 1)[1]
     assert not passage.endswith(" ") or passage.rstrip()
+
+
+# ── Unit tests: wildchat extractor ────────────────────────────────────────────
+
+
+def test_extract_wildchat_returns_first_message_content() -> None:
+    row = {"conversation": [{"role": "user", "content": "Explain neural networks."}]}
+    assert _extract_wildchat(row) == "Explain neural networks."
+
+
+def test_extract_wildchat_missing_conversation_returns_none() -> None:
+    assert _extract_wildchat({}) is None
+    assert _extract_wildchat({"conversation": []}) is None
+
+
+def test_extract_wildchat_empty_content_returns_none() -> None:
+    row = {"conversation": [{"role": "user", "content": "   "}]}
+    assert _extract_wildchat(row) is None
+
+
+def test_wildchat_in_registry() -> None:
+    assert "wildchat" in REGISTRY
+    spec = REGISTRY["wildchat"]
+    assert spec["hf_repo"] == "allenai/WildChat-1M"
+    assert spec["extractor"] == "wildchat"
+
+
+# ── Unit tests: gated dataset error ──────────────────────────────────────────
+
+
+def test_pull_gated_dataset_raises_runtime_error_with_note(tmp_path: Path) -> None:
+    from llm_inference_benchmark.datasets import pull
+
+    mock_ds = MagicMock()
+    mock_ds.__iter__ = MagicMock(side_effect=Exception("403 Forbidden: gated repo"))
+    mock_load = MagicMock(return_value=mock_ds)
+
+    with (
+        patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path),
+        patch("llm_inference_benchmark.datasets.load_dataset", mock_load, create=True),
+        patch.dict("sys.modules", {"datasets": MagicMock(load_dataset=mock_load)}),
+    ):
+        with pytest.raises(RuntimeError, match="accepting terms"):
+            pull("lmsys-chat")
+
+
+def test_pull_non_gated_error_propagates(tmp_path: Path) -> None:
+    from llm_inference_benchmark.datasets import pull
+
+    mock_ds = MagicMock()
+    mock_ds.__iter__ = MagicMock(side_effect=ValueError("network timeout"))
+    mock_load = MagicMock(return_value=mock_ds)
+
+    with (
+        patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path),
+        patch("llm_inference_benchmark.datasets.load_dataset", mock_load, create=True),
+        patch.dict("sys.modules", {"datasets": MagicMock(load_dataset=mock_load)}),
+    ):
+        with pytest.raises(ValueError, match="network timeout"):
+            pull("lmsys-chat")
 
 
 def test_pg19_16k_extractor_produces_longer_passage() -> None:

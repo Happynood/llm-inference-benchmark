@@ -68,7 +68,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 - `llm-bench --dataset <name>`: use a cached dataset as the prompt source for a benchmark
   run instead of the config `prompts_file`.  Sampling is reproducible via `--seed`.
 
-- New `datasets` optional extra: `datasets>=2.0`.
+- `wildchat` dataset: `allenai/WildChat-1M` is now registered as a public real-world chat
+  dataset (no gating, no Terms of Use required).  Pull and use it like any other dataset:
+  ```
+  llm-bench datasets pull wildchat
+  llm-bench --config cfg.yaml --dataset wildchat --requests 50
+  ```
+  The extractor picks the first user turn from each conversation.
+
+- `datasets>=2.0` is now a **default dependency** installed by `uv sync` without any extras.
+  Users no longer need to run `uv pip install datasets` or pass `[datasets]` to install it.
+  The `[datasets]` optional-extras section has been removed from `pyproject.toml`.
+
+- `llm-bench datasets pull lmsys-chat` now prints a clear error message with a link to the
+  Terms of Use page when the HuggingFace API returns an access-denied response, rather than
+  surfacing the raw HTTP exception.
 
 - `llm-bench serve [--host HOST] [--port PORT]`: start a FastAPI server with a built-in
   HTMX + Plotly dashboard.  Opening `http://localhost:8080` in a browser shows a live
