@@ -245,3 +245,77 @@ def test_tpot_none_when_empty_list() -> None:
     report = compute_metrics(results, backend="mock", model="t", tpot_values=[])
     assert report.p50_tpot_ms is None
     assert report.tpot_stddev_ms is None
+
+
+# ── Thermal throttle index tests (v0.28) ──────────────────────────────────────
+
+
+from llm_inference_benchmark.metrics import _compute_thermal_throttle  # noqa: E402
+
+
+def _req(latency_ms: float, output_tokens: int = 10) -> RequestMetrics:
+    return RequestMetrics(latency_ms=latency_ms, input_tokens=5, output_tokens=output_tokens)
+
+
+def test_thermal_throttle_none_when_concurrent() -> None:
+    results = [_req(2000.0)] * 10
+    assert _compute_thermal_throttle(results, is_sequential=False) is None
+
+
+def test_thermal_throttle_none_when_fewer_than_8_requests() -> None:
+    results = [_req(2000.0)] * 7
+    assert _compute_thermal_throttle(results, is_sequential=True) is None
+
+
+def test_thermal_throttle_none_when_total_time_under_10s() -> None:
+    # 8 requests × 1000 ms = 8 s total — below 10 s threshold
+    results = [_req(1000.0)] * 8
+    assert _compute_thermal_throttle(results, is_sequential=True) is None
+
+
+def test_thermal_throttle_detects_slowdown() -> None:
+    # Early 4 requests: 1000 ms each → total 4 s → tps_early = 10/1.0 = 10 tok/s
+    # Late 4 requests: 2000 ms each → total 8 s → tps_late = 10/2.0 = 5 tok/s
+    # Total elapsed ≈ 12 s; boundary_early=3 s, boundary_late=9 s
+    results = [_req(1000.0)] * 4 + [_req(2000.0)] * 4
+    val = _compute_thermal_throttle(results, is_sequential=True)
+    assert val is not None
+    assert val > 0.0
+
+
+def test_thermal_throttle_zero_when_no_slowdown() -> None:
+    # Uniform throughput — no throttling expected
+    results = [_req(1500.0)] * 10
+    val = _compute_thermal_throttle(results, is_sequential=True)
+    assert val is not None
+    assert val == pytest.approx(0.0)
+
+
+def test_thermal_throttle_clipped_at_zero_when_faster_late() -> None:
+    # Late requests faster than early — negative would mean speedup; clipped to 0
+    results = [_req(2000.0)] * 4 + [_req(500.0)] * 6
+    val = _compute_thermal_throttle(results, is_sequential=True)
+    assert val is not None
+    assert val == pytest.approx(0.0)
+
+
+def test_compute_metrics_wires_thermal_throttle_sequential() -> None:
+    # 10 requests, total ≥ 10 s, is_sequential=True → field populated
+    results = [_req(1500.0)] * 10
+    report = compute_metrics(results, backend="mock", model="t", is_sequential=True)
+    assert report.thermal_throttle_pct is not None
+
+
+def test_compute_metrics_thermal_throttle_none_when_concurrent() -> None:
+    results = [_req(1500.0)] * 10
+    report = compute_metrics(
+        results, backend="mock", model="t", is_sequential=False, wall_clock_elapsed_s=1.0
+    )
+    assert report.thermal_throttle_pct is None
+
+
+def test_compute_metrics_thermal_throttle_default_is_sequential() -> None:
+    # Default is_sequential=True, so it should compute for long-enough runs
+    results = [_req(1500.0)] * 10
+    report = compute_metrics(results, backend="mock", model="t")
+    assert report.thermal_throttle_pct is not None
