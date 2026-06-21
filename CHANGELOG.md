@@ -9,6 +9,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **Gated datasets (e.g. `lmsys-chat`) can now be pulled via the dashboard**: the server
+  reads `HF_TOKEN` from the environment and forwards it to the HuggingFace `datasets` library.
+  Previously the token was never passed, causing every gated-dataset pull to fail with a 403.
 - **Checkbox state preserved across HTMX auto-refresh**: run row checkboxes in the
   `llm-bench serve` dashboard were silently unchecked every 5 seconds when HTMX replaced
   the table body.  The UI now saves the set of checked run IDs before each swap
