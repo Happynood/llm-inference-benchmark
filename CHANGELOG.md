@@ -8,6 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- `p50_tpot_ms` and `tpot_stddev_ms` fields in `MetricsReport`, CSV, JSON, and the
+  `llm-bench compare` table.  TPOT (time-per-output-token) is the decode-phase latency:
+  `(request_latency_ms - ttft_ms) / output_tokens`.  Both fields are `None` when TTFT
+  data is unavailable; `tpot_stddev_ms` is `None` for single-request runs.  The compare
+  table suppresses the column automatically when all rows are N/A (backward-compatible
+  with older CSVs).
+
 - `llm-bench datasets pull <name>`: download and cache real-world prompt samples from
   HuggingFace to `~/.cache/llm-bench/datasets/<name>.jsonl` (streaming, no full-dataset
   RAM load).  Supported datasets: `lmsys-chat` (up to 500 first-user-turn samples from

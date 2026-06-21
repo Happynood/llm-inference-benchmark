@@ -1110,3 +1110,71 @@ def test_compare_subcommand_format_csv_composes_with_filter() -> None:
     records = list(_csv.DictReader(io.StringIO(result.output)))
     assert len(records) == 1
     assert records[0]["backend"] == "mock"
+
+
+# ── TPOT round-trip tests ──────────────────────────────────────────────────────
+
+
+def test_load_csv_tpot_absent_is_none(tmp_path: Path) -> None:
+    p = tmp_path / "r.csv"
+    p.write_text(
+        "request_count,backend,model,p50_latency_ms,p95_latency_ms,"
+        "tokens_per_second,peak_cpu_memory_mb\n"
+        "10,mock,m,5.0,6.0,100.0,50.0\n"
+    )
+    row = load_csv(p)
+    assert row.p50_tpot_ms is None
+    assert row.tpot_stddev_ms is None
+
+
+def test_load_csv_tpot_columns_present(tmp_path: Path) -> None:
+    p = tmp_path / "r.csv"
+    p.write_text(
+        "request_count,backend,model,p50_latency_ms,p95_latency_ms,"
+        "tokens_per_second,peak_cpu_memory_mb,p50_tpot_ms,tpot_stddev_ms\n"
+        "10,mock,m,5.0,6.0,100.0,50.0,8.3,1.2\n"
+    )
+    row = load_csv(p)
+    assert row.p50_tpot_ms == pytest.approx(8.3)
+    assert row.tpot_stddev_ms == pytest.approx(1.2)
+
+
+def test_load_csv_tpot_blank_is_none(tmp_path: Path) -> None:
+    p = tmp_path / "r.csv"
+    p.write_text(
+        "request_count,backend,model,p50_latency_ms,p95_latency_ms,"
+        "tokens_per_second,peak_cpu_memory_mb,p50_tpot_ms,tpot_stddev_ms\n"
+        "10,mock,m,5.0,6.0,100.0,50.0,,\n"
+    )
+    row = load_csv(p)
+    assert row.p50_tpot_ms is None
+    assert row.tpot_stddev_ms is None
+
+
+def test_render_table_shows_tpot_column_when_data_present() -> None:
+    rows = [
+        RunRow("mock", "m", 10, 5.0, 6.0, 100.0, 50.0, None, p50_tpot_ms=8.3),
+        RunRow("llama", "q4", 10, 7.0, 8.0, 80.0, 50.0, None, p50_tpot_ms=12.1),
+    ]
+    table = render_table(rows)
+    assert "TPOT p50" in table
+    assert "8.3" in table
+    assert "12.1" in table
+
+
+def test_render_table_suppresses_tpot_column_when_all_none() -> None:
+    rows = [RunRow("mock", "m", 10, 5.0, 6.0, 100.0, 50.0, None)]
+    table = render_table(rows)
+    assert "TPOT p50" not in table
+
+
+def test_render_csv_includes_tpot_columns() -> None:
+    rows = [RunRow("mock", "m", 10, 5.0, 6.0, 100.0, 50.0, None, p50_tpot_ms=8.3)]
+    csv_str = render_csv(rows)
+    import csv as _csv
+    import io
+
+    record = list(_csv.DictReader(io.StringIO(csv_str)))[0]
+    assert "p50_tpot_ms" in record
+    assert "tpot_stddev_ms" in record
+    assert float(record["p50_tpot_ms"]) == pytest.approx(8.3)
