@@ -423,8 +423,8 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 
 ### Phase 4 — Advanced Metrics
 
-- [ ] **TTFT / TPOT separation** — explicit prefill-phase vs. decode-phase reporting
-- [ ] **Tokens / Joule** — energy efficiency via `nvidia-smi power.draw` (GPU) and RAPL (CPU)
+- [x] **TTFT / TPOT separation** — `p50_ttft_ms`, `p95_ttft_ms`, `p50_tpot_ms`, `tpot_stddev_ms` columns in CSV/JSON output
+- [x] **Tokens / Joule** — `energy_joules` and `tokens_per_joule` in CSV/JSON; GPU via `nvidia-smi power.draw`, CPU fallback via Intel RAPL
 - [ ] **Thermal throttling index** — compare tok/s at t=0 vs t=60 s to detect frequency scaling
 - [ ] **ITL variance (jitter)** — inter-token latency std-dev for streaming UX quality
 - [x] **Hardware profile report** — auto-detect CPU, RAM, GPU VRAM, OS; attach to every result (`hw_cpu`, `hw_cpu_cores`, `hw_ram_gb`, `hw_gpu`, `hw_vram_gb`, `hw_os` columns in CSV/JSON)

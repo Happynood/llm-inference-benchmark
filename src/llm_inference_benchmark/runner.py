@@ -22,6 +22,7 @@ from llm_inference_benchmark.metrics import (
     aggregate_repeat_reports,
     compute_metrics,
 )
+from llm_inference_benchmark.power import PowerSampler
 from llm_inference_benchmark.quality import compute_quality
 from llm_inference_benchmark.reasoning import reasoning_stats
 from llm_inference_benchmark.task_quality import (
@@ -127,7 +128,7 @@ def run_benchmark(
     ttft_values: list[float] = []
     tpot_values: list[float] = []
 
-    with MemorySampler() as mem, NvidiaSmiSampler() as vram:
+    with MemorySampler() as mem, NvidiaSmiSampler() as vram, PowerSampler() as power:
         reset_cuda_peak()
         if config.concurrency > 1:
             results, texts, prompts_used, wall_clock_elapsed_s, ttft_values, tpot_values = (
@@ -198,6 +199,7 @@ def run_benchmark(
         mean_reasoning_tokens=mean_r_tokens,
         mean_answer_tokens=mean_a_tokens,
         reasoning_fraction=r_fraction,
+        energy_joules=power.energy_joules,
     )
 
 
