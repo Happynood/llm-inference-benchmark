@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **Web UI benchmark runs now produce output**: `POST /api/runs` previously launched
+  `python -m llm_inference_benchmark.cli` which exits silently because the CLI module has
+  no `__main__` guard.  The subprocess now invokes the installed `llm-bench` console-script
+  entry point directly, so benchmark output streams correctly to the run log.
 - E2E tests (`tests/e2e/test_ui.py`) now show **SKIPPED** instead of ERROR when Chromium
   is not installed.  The module-level `pytestmark` calls `_chromium_available()` which
   checks whether the Playwright-managed Chromium binary exists on disk.  Install the
