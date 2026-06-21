@@ -169,7 +169,7 @@ def _dataset_statuses() -> list[dict[str, Any]]:
                 "description": spec.get("description", ""),
                 "cached": name in cached,
                 "samples": cached.get(name, 0),
-                "error": _pull_errors.get(name),
+                "error": None if name in cached else _pull_errors.get(name),
             }
         )
     return result
@@ -658,14 +658,14 @@ def _render_datasets_table(statuses: list[dict[str, Any]]) -> str:
     for ds in statuses:
         name = html.escape(ds["name"])
         desc = html.escape(ds["description"])
-        error = ds.get("error")
+        error = ds["error"]
         cached_icon = "✓" if ds["cached"] else "✗"
         cached_color = "#065f46" if ds["cached"] else "#991b1b"
         samples = str(ds["samples"]) if ds["cached"] else "—"
         error_html = (
             f'<br><span class="ds-pull-error" style="color:#b91c1c;font-size:.78rem">'
-            f"Pull failed: {html.escape(error)}</span>"
-            if error
+            f"Pull failed: {html.escape(error.replace(chr(10), ' '))}</span>"
+            if error is not None
             else ""
         )
         parts.append(

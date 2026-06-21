@@ -78,9 +78,10 @@ def live_server(tmp_path_factory: pytest.TempPathFactory) -> Generator[str, None
 @pytest.fixture(autouse=True)
 def seed_db(live_server: str) -> None:
     """Reset DB and insert two fake completed runs before each test."""
-    from llm_inference_benchmark.server import _buffers, _get_db, _now_iso
+    from llm_inference_benchmark.server import _buffers, _get_db, _now_iso, _pull_errors
 
     _buffers.clear()
+    _pull_errors.clear()
     db = _get_db()
     db.execute("DELETE FROM runs")
     db.commit()

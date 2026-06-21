@@ -595,6 +595,7 @@ def test_render_datasets_table_cached_entry() -> None:
             "description": "Public chat",
             "cached": True,
             "samples": 42,
+            "error": None,
         }
     ]
     out = _render_datasets_table(statuses)
@@ -612,6 +613,7 @@ def test_render_datasets_table_uncached_entry() -> None:
             "description": "Function calls",
             "cached": False,
             "samples": 0,
+            "error": None,
         }
     ]
     out = _render_datasets_table(statuses)
