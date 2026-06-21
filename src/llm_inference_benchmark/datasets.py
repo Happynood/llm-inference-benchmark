@@ -7,12 +7,24 @@ from typing import Any
 
 # Registry of supported dataset names → HuggingFace coordinates and extraction logic
 REGISTRY: dict[str, dict[str, Any]] = {
+    "wildchat": {
+        "hf_repo": "allenai/WildChat-1M",
+        "split": "train",
+        "max_samples": 500,
+        "extractor": "wildchat",
+        "description": "allenai/WildChat-1M — public real-world chat dataset (no gating)",
+    },
     "lmsys-chat": {
         "hf_repo": "lmsys/lmsys-chat-1m",
         "split": "train",
         "max_samples": 500,
         "extractor": "lmsys_chat",
         "description": "lmsys/lmsys-chat-1m — real multi-turn chat (first user turn)",
+        "gated_note": (
+            "Dataset 'lmsys-chat' requires accepting terms at "
+            "https://huggingface.co/datasets/lmsys/lmsys-chat-1m\n"
+            "Pass --hf-token or set HF_TOKEN, and accept terms on the HuggingFace website first."
+        ),
     },
     "hermes-fn": {
         "hf_repo": "NousResearch/hermes-function-calling-v1",
@@ -76,6 +88,15 @@ def _extract_hermes_fn(row: dict[str, Any]) -> str | None:
     return None
 
 
+def _extract_wildchat(row: dict[str, Any]) -> str | None:
+    """Return the first message content from a WildChat-1M row, or None to skip."""
+    conversation = row.get("conversation")
+    if not conversation:
+        return None
+    content = str(conversation[0].get("content", "")).strip()
+    return content or None
+
+
 # Approximate characters per token for English prose (used for pg19 slicing).
 _CHARS_PER_TOKEN = 4
 
@@ -108,6 +129,7 @@ def _make_pg19_extractor(target_tokens: int):
 
 
 _EXTRACTORS = {
+    "wildchat": _extract_wildchat,
     "lmsys_chat": _extract_lmsys_chat,
     "hermes_fn": _extract_hermes_fn,
     "pg19_4k": _make_pg19_extractor(4_096),
@@ -129,30 +151,37 @@ def pull(name: str, hf_token: str | None = None, max_samples: int | None = None)
         from datasets import load_dataset  # type: ignore[import]
     except ImportError as exc:
         raise ImportError(
-            "The 'datasets' package is required to pull datasets. "
-            "Install it with:  pip install datasets"
+            "The 'datasets' package is required to pull datasets. Run:  uv sync"
         ) from exc
 
     spec = REGISTRY[name]
     extractor = _EXTRACTORS[spec["extractor"]]
     limit = max_samples if max_samples is not None else spec["max_samples"]
     out_path = cache_dir() / f"{name}.jsonl"
+    gated_note: str | None = spec.get("gated_note")
 
     print(f"Downloading {spec['hf_repo']} (up to {limit} samples, streaming)…")
-    ds = load_dataset(
-        spec["hf_repo"],
-        split=spec["split"],
-        streaming=True,
-        token=hf_token,
-    )
+    try:
+        ds = load_dataset(
+            spec["hf_repo"],
+            split=spec["split"],
+            streaming=True,
+            token=hf_token,
+        )
 
-    samples: list[dict[str, str]] = []
-    for row in ds:
-        if len(samples) >= limit:
-            break
-        prompt = extractor(row)  # type: ignore[arg-type]
-        if prompt and len(prompt) >= 10:
-            samples.append({"prompt": prompt})
+        samples: list[dict[str, str]] = []
+        for row in ds:
+            if len(samples) >= limit:
+                break
+            prompt = extractor(row)  # type: ignore[arg-type]
+            if prompt and len(prompt) >= 10:
+                samples.append({"prompt": prompt})
+    except Exception as exc:
+        if gated_note:
+            exc_lower = str(exc).lower()
+            if any(kw in exc_lower for kw in ("gated", "403", "access", "forbidden", "restricted")):
+                raise RuntimeError(gated_note) from exc
+        raise
 
     lines = "\n".join(json.dumps(s) for s in samples)
     out_path.write_text(lines + "\n" if lines else "\n")
