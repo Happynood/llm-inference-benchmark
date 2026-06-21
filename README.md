@@ -335,15 +335,16 @@ Results are persisted in a local SQLite database at `~/.llm-bench/results.db`.
 Replace synthetic prompts with real-world samples from HuggingFace:
 
 ```bash
-# Install the datasets extra
-pip install datasets
-
 # Download and cache prompt samples locally
-llm-bench datasets pull lmsys-chat        # 500 samples — real multi-turn chat
+llm-bench datasets pull wildchat           # 500 samples — real-world chat (public)
+llm-bench datasets pull lmsys-chat        # 500 samples — real multi-turn chat (gated, HF_TOKEN required)
 llm-bench datasets pull hermes-fn         # 200 function-calling prompts
 llm-bench datasets pull long-context-4k   # 100 passages @ ~4k tokens  (prefill benchmark)
 llm-bench datasets pull long-context-16k  # 50 passages  @ ~16k tokens
 llm-bench datasets pull long-context-64k  # 10 passages  @ ~64k tokens
+llm-bench datasets pull gsm8k             # 200 grade-school math problems
+llm-bench datasets pull mmlu-pro          # 200 multi-choice knowledge questions
+llm-bench datasets pull swe-bench-pro     # 100 real-world software issue descriptions
 
 # List cached datasets
 llm-bench datasets list
@@ -420,6 +421,9 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 - [x] `llm-bench datasets pull <name>` CLI — stream and cache dataset samples locally
 - [x] `llm-bench --dataset <name>` — use cached dataset as prompt source for a run
 - [x] Long-context sampler (4 k / 16 k / 64 k tokens) — prefill-phase stress test (`llm-bench datasets pull long-context-4k`)
+- [x] `gsm8k` — grade-school math reasoning (`openai/gsm8k`)
+- [x] `mmlu-pro` — professional-level knowledge (`TIGER-Lab/MMLU-Pro`)
+- [x] `swe-bench-pro` — real-world software issue repair (`ScaleAI/SWE-bench_Pro`)
 
 ### Phase 4 — Advanced Metrics
 

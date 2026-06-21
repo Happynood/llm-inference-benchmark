@@ -28,6 +28,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   Ubuntu 24.04 Chromium binary (binary-compatible; no native 26.04 build exists yet).
 
 ### Added
+- **Three new benchmark datasets**: `gsm8k` (grade-school math, `openai/gsm8k`),
+  `mmlu-pro` (professional knowledge, `TIGER-Lab/MMLU-Pro`), and `swe-bench-pro`
+  (real-world software issues, `ScaleAI/SWE-bench_Pro`).  All are public, ungated, and
+  available via `llm-bench datasets pull <name>`.
 - **Datasets panel in Web UI**: a new section in the `llm-bench serve` dashboard lists all
   registered datasets with their cached status and sample count.  A `<select>` + **Pull**
   button triggers a background download that updates automatically via HTMX.
