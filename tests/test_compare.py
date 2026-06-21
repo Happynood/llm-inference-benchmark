@@ -1330,3 +1330,83 @@ def test_compute_metrics_hw_none_by_default() -> None:
     assert report.hw_cpu is None
     assert report.hw_gpu is None
     assert report.hw_vram_gb is None
+
+
+# ---------------------------------------------------------------------------
+# itl_stddev_ms — load_csv, render_json, render_table suppression
+# ---------------------------------------------------------------------------
+
+
+def _make_row_with_itl(itl_stddev_ms: float | None) -> RunRow:
+    return RunRow(
+        backend="mock",
+        model="t",
+        request_count=10,
+        p50_latency_ms=50.0,
+        p95_latency_ms=80.0,
+        tokens_per_second=100.0,
+        peak_cpu_memory_mb=0.0,
+        peak_cuda_memory_mb=None,
+        itl_stddev_ms=itl_stddev_ms,
+    )
+
+
+def test_load_csv_itl_stddev_absent_is_none(tmp_path: Path) -> None:
+    csv_path = tmp_path / "run.csv"
+    csv_path.write_text(
+        "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,"
+        "peak_cpu_memory_mb,backend,model\n"
+        "10,50.0,80.0,100.0,0.0,mock,t\n"
+    )
+    row = load_csv(csv_path)
+    assert row.itl_stddev_ms is None
+
+
+def test_load_csv_itl_stddev_parsed(tmp_path: Path) -> None:
+    csv_path = tmp_path / "run.csv"
+    csv_path.write_text(
+        "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,"
+        "peak_cpu_memory_mb,backend,model,itl_stddev_ms\n"
+        "10,50.0,80.0,100.0,0.0,mock,t,3.75\n"
+    )
+    row = load_csv(csv_path)
+    assert row.itl_stddev_ms == pytest.approx(3.75)
+
+
+def test_load_csv_itl_stddev_blank_is_none(tmp_path: Path) -> None:
+    csv_path = tmp_path / "run.csv"
+    csv_path.write_text(
+        "request_count,p50_latency_ms,p95_latency_ms,tokens_per_second,"
+        "peak_cpu_memory_mb,backend,model,itl_stddev_ms\n"
+        "10,50.0,80.0,100.0,0.0,mock,t,\n"
+    )
+    row = load_csv(csv_path)
+    assert row.itl_stddev_ms is None
+
+
+def test_render_json_includes_itl_stddev() -> None:
+    import json
+
+    row = _make_row_with_itl(4.5)
+    data = json.loads(render_json([row]))
+    assert data[0]["itl_stddev_ms"] == pytest.approx(4.5)
+
+
+def test_render_json_itl_stddev_none_when_absent() -> None:
+    import json
+
+    row = _make_row_with_itl(None)
+    data = json.loads(render_json([row]))
+    assert data[0]["itl_stddev_ms"] is None
+
+
+def test_render_table_itl_col_suppressed_when_all_none() -> None:
+    rows = [_make_row_with_itl(None), _make_row_with_itl(None)]
+    table = render_table(rows)
+    assert "ITL" not in table
+
+
+def test_render_table_itl_col_visible_when_present() -> None:
+    rows = [_make_row_with_itl(3.0), _make_row_with_itl(None)]
+    table = render_table(rows)
+    assert "ITL" in table

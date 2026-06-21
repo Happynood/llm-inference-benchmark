@@ -55,16 +55,19 @@ def _resolve_prompt_sequence(prompts: list[str], n: int, seed: int | None) -> li
 
 async def _run_concurrent(
     backend: Backend, config: BenchmarkConfig, prompts: list[str]
-) -> tuple[list[RequestMetrics], list[str], list[str], float, list[float], list[float]]:
+) -> tuple[
+    list[RequestMetrics], list[str], list[str], float, list[float], list[float], list[float]
+]:
     """Fire config.requests requests with up to config.concurrency in flight at once.
 
-    Returns (results, texts, prompts_used, wall_clock_elapsed_s, ttft_values, tpot_values).
+    Returns (results, texts, prompts_used, wall_clock_elapsed_s, ttft_values, tpot_values,
+    itl_values).
     Uses asyncio.to_thread so sync Backend.generate() calls run in the default
     thread-pool executor without blocking the event loop.
     """
     sem = asyncio.Semaphore(config.concurrency)
 
-    async def _one(i: int) -> tuple[str, RequestMetrics, str, float | None]:
+    async def _one(i: int) -> tuple[str, RequestMetrics, str, float | None, list[float] | None]:
         async with sem:
             prompt = prompts[i % len(prompts)]
             r = await asyncio.to_thread(backend.generate, prompt)
@@ -77,6 +80,7 @@ async def _run_concurrent(
                 ),
                 r.text,
                 r.ttft_ms,
+                r.itl_values,
             )
 
     wall_t0 = time.perf_counter()
@@ -92,7 +96,8 @@ async def _run_concurrent(
         for q in quads
         if q[3] is not None and q[1].output_tokens > 0 and q[1].latency_ms > q[3]
     ]
-    return results, texts, prompts_used, wall_elapsed_s, ttft_values, tpot_values
+    itl_values: list[float] = [v for q in quads if q[4] is not None for v in q[4]]
+    return results, texts, prompts_used, wall_elapsed_s, ttft_values, tpot_values, itl_values
 
 
 def run_benchmark(
@@ -127,13 +132,20 @@ def run_benchmark(
     wall_clock_elapsed_s: float | None = None
     ttft_values: list[float] = []
     tpot_values: list[float] = []
+    itl_values: list[float] = []
 
     with MemorySampler() as mem, NvidiaSmiSampler() as vram, PowerSampler() as power:
         reset_cuda_peak()
         if config.concurrency > 1:
-            results, texts, prompts_used, wall_clock_elapsed_s, ttft_values, tpot_values = (
-                asyncio.run(_run_concurrent(backend, config, sequence))
-            )
+            (
+                results,
+                texts,
+                prompts_used,
+                wall_clock_elapsed_s,
+                ttft_values,
+                tpot_values,
+                itl_values,
+            ) = asyncio.run(_run_concurrent(backend, config, sequence))
         else:
             for i in range(config.requests):
                 prompt = sequence[i]
@@ -153,6 +165,8 @@ def run_benchmark(
                         tpot_values.append(
                             (result.latency_ms - result.ttft_ms) / result.output_tokens
                         )
+                if result.itl_values is not None:
+                    itl_values.extend(result.itl_values)
 
     task_qual: TaskQualityReport | None = None
     if config.quality_file is not None:
@@ -195,6 +209,7 @@ def run_benchmark(
         wall_clock_elapsed_s=wall_clock_elapsed_s,
         ttft_values=ttft_values or None,
         tpot_values=tpot_values or None,
+        itl_values=itl_values or None,
         hardware=hardware,
         mean_reasoning_tokens=mean_r_tokens,
         mean_answer_tokens=mean_a_tokens,

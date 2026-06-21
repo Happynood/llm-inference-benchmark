@@ -90,6 +90,10 @@ class MetricsReport:
     # scaling / thermal throttling.  None for concurrent runs, runs shorter than
     # 10 s, or runs with fewer than 8 requests.
     thermal_throttle_pct: float | None = None
+    # ITL jitter (v0.29) — standard deviation (ms) of inter-chunk latency pooled
+    # across all streaming requests in the run.  None when fewer than 2 streaming
+    # intervals were observed (non-streaming backends or single-chunk responses).
+    itl_stddev_ms: float | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -155,6 +159,7 @@ def compute_metrics(
     wall_clock_elapsed_s: float | None = None,
     ttft_values: list[float] | None = None,
     tpot_values: list[float] | None = None,
+    itl_values: list[float] | None = None,
     hardware: HardwareProfile | None = None,
     mean_reasoning_tokens: float | None = None,
     mean_answer_tokens: float | None = None,
@@ -234,6 +239,9 @@ def compute_metrics(
             else None
         ),
         thermal_throttle_pct=_compute_thermal_throttle(results, is_sequential=is_sequential),
+        itl_stddev_ms=(
+            statistics.stdev(itl_values) if itl_values and len(itl_values) >= 2 else None
+        ),
     )
 
 
@@ -334,5 +342,6 @@ def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
         energy_joules=_median_optional([r.energy_joules for r in reports]),
         tokens_per_joule=_median_optional([r.tokens_per_joule for r in reports]),
         thermal_throttle_pct=_median_optional([r.thermal_throttle_pct for r in reports]),
+        itl_stddev_ms=_median_optional([r.itl_stddev_ms for r in reports]),
         timestamp=last.timestamp,
     )

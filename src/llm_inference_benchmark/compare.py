@@ -45,12 +45,13 @@ _HEADERS = [
     "Energy (J)",
     "Tok/J",
     "Throttle %",
+    "ITL σ (ms)",
 ]
 
 # Indices into _HEADERS that are suppressed when every row shows "N/A".
 # Mandatory columns (0-5 and 13) are never suppressed.
 _OPTIONAL_COL_INDICES: frozenset[int] = frozenset(
-    {6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25}
+    {6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26}
 )
 
 
@@ -96,6 +97,8 @@ class RunRow:
     tokens_per_joule: float | None = None
     # Thermal throttling index (v0.28) — absent for concurrent/short/small runs
     thermal_throttle_pct: float | None = None
+    # ITL jitter (v0.29) — absent when backend is non-streaming or response is a single chunk
+    itl_stddev_ms: float | None = None
 
 
 def _parse_optional_str(row: dict[str, str], key: str) -> str | None:
@@ -174,6 +177,7 @@ def load_csv(path: str | Path) -> RunRow:
     energy_joules = _parse_optional_float(row, "energy_joules", path)
     tokens_per_joule = _parse_optional_float(row, "tokens_per_joule", path)
     thermal_throttle_pct = _parse_optional_float(row, "thermal_throttle_pct", path)
+    itl_stddev_ms = _parse_optional_float(row, "itl_stddev_ms", path)
 
     return RunRow(
         backend=row["backend"],
@@ -212,6 +216,7 @@ def load_csv(path: str | Path) -> RunRow:
         energy_joules=energy_joules,
         tokens_per_joule=tokens_per_joule,
         thermal_throttle_pct=thermal_throttle_pct,
+        itl_stddev_ms=itl_stddev_ms,
     )
 
 
@@ -313,6 +318,7 @@ def render_table(rows: list[RunRow]) -> str:
             fmt_optional(r.energy_joules),
             fmt_optional(r.tokens_per_joule),
             fmt_optional(r.thermal_throttle_pct),
+            fmt_optional(r.itl_stddev_ms),
         ]
         for r in rows
     ]
@@ -382,6 +388,7 @@ def render_json(rows: list[RunRow]) -> str:
             "energy_joules": r.energy_joules,
             "tokens_per_joule": r.tokens_per_joule,
             "thermal_throttle_pct": r.thermal_throttle_pct,
+            "itl_stddev_ms": r.itl_stddev_ms,
         }
         for r in rows
     ]
@@ -424,6 +431,7 @@ _CSV_FIELDS = [
     "energy_joules",
     "tokens_per_joule",
     "thermal_throttle_pct",
+    "itl_stddev_ms",
 ]
 
 
@@ -474,6 +482,7 @@ def render_csv(rows: list[RunRow]) -> str:
                 "energy_joules": _or_empty(r.energy_joules),
                 "tokens_per_joule": _or_empty(r.tokens_per_joule),
                 "thermal_throttle_pct": _or_empty(r.thermal_throttle_pct),
+                "itl_stddev_ms": _or_empty(r.itl_stddev_ms),
             }
         )
     return buf.getvalue().rstrip("\n")

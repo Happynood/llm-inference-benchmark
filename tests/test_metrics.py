@@ -319,3 +319,26 @@ def test_compute_metrics_thermal_throttle_default_is_sequential() -> None:
     results = [_req(1500.0)] * 10
     report = compute_metrics(results, backend="mock", model="t")
     assert report.thermal_throttle_pct is not None
+
+
+def test_itl_stddev_ms_computed_from_values() -> None:
+    import statistics
+
+    itl = [5.0, 10.0, 15.0, 5.0, 10.0]
+    report = compute_metrics(_results([100.0] * 3), backend="mock", model="t", itl_values=itl)
+    assert report.itl_stddev_ms == pytest.approx(statistics.stdev(itl))
+
+
+def test_itl_stddev_ms_none_for_single_value() -> None:
+    report = compute_metrics(_results([100.0]), backend="mock", model="t", itl_values=[8.0])
+    assert report.itl_stddev_ms is None
+
+
+def test_itl_stddev_ms_none_when_not_provided() -> None:
+    report = compute_metrics(_results([100.0]), backend="mock", model="t")
+    assert report.itl_stddev_ms is None
+
+
+def test_itl_stddev_ms_none_for_empty_list() -> None:
+    report = compute_metrics(_results([100.0]), backend="mock", model="t", itl_values=[])
+    assert report.itl_stddev_ms is None
