@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **GPU acceleration now enabled by default for llama-cpp**: `n_gpu_layers` default
+  changed from `0` (CPU only) to `-1` (offload all layers; llama.cpp auto-detects GPU
+  and falls back to CPU gracefully when none is present).  `n_ctx` default raised from
+  `2048` to `4096` to match typical modern model requirements without warnings.
+  See the new **GPU Setup** section in README for CUDA wheel installation options.
 - **`long-context-*` datasets work again**: `deepmind/pg19` uses a legacy loading script
   blocked in `datasets>=2.20`.  All three `long-context-*` registry entries now use
   `allenai/c4` (Common Crawl, English subset, public domain, no gating).  The extractor

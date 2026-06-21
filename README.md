@@ -60,6 +60,29 @@ For full installation options (transformers, llama.cpp, GPU), see **[docs/quicks
 
 ---
 
+## GPU Setup (NVIDIA CUDA)
+
+By default `uv sync --extra llama-cpp` installs a CPU-only build. For GPU acceleration:
+
+### Option A — Pre-built CUDA 12.1 wheel (recommended, no compiler needed)
+
+```bash
+uv pip install llama-cpp-python \
+  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
+```
+
+### Option B — Build from source with your CUDA toolkit
+
+```bash
+CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
+```
+
+The default config sets `n_gpu_layers: -1` which offloads all transformer layers to the GPU.
+llama.cpp falls back to CPU automatically when no GPU is available, so the default is safe
+to use on CPU-only machines.
+
+---
+
 ## Backends
 
 | Backend | Install extra | GPU support | Notes |

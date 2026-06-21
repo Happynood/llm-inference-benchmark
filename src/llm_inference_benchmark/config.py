@@ -20,8 +20,8 @@ class HFBackendConfig(BaseModel):
 
 
 class LlamaCppBackendConfig(BaseModel):
-    n_ctx: int = Field(default=2048, ge=1)
-    n_gpu_layers: int = 0
+    n_ctx: int = Field(default=4096, ge=1)
+    n_gpu_layers: int = -1  # -1 = offload all layers; llama.cpp falls back to CPU gracefully
     max_tokens: int = Field(default=50, ge=1)
     temperature: float = Field(default=0.0, ge=0.0)
     n_threads: int | None = None

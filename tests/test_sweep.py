@@ -97,7 +97,7 @@ def test_apply_nested_override_llama_cpp() -> None:
     cfg = BenchmarkConfig()
     result = apply_overrides(cfg, {"llama_cpp.n_gpu_layers": 99})
     assert result.llama_cpp.n_gpu_layers == 99
-    assert cfg.llama_cpp.n_gpu_layers == 0  # original unchanged
+    assert cfg.llama_cpp.n_gpu_layers == -1  # original unchanged
 
 
 def test_apply_nested_override_mock() -> None:
