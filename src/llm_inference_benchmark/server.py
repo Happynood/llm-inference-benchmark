@@ -269,14 +269,79 @@ _DASHBOARD_HTML = """\
     .mono{font-family:ui-monospace,monospace;font-size:.82rem}
     section+section{border-top:1px solid #e2e8f0;padding-top:1rem}
     #log-section,#chart-section{display:none}
+    .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
+      z-index:100;align-items:center;justify-content:center}
+    .modal-backdrop.open{display:flex}
+    .modal{background:#fff;border-radius:.5rem;padding:1.5rem;width:100%;max-width:480px;
+      box-shadow:0 8px 32px rgba(0,0,0,.18)}
+    .modal h3{margin:0 0 1rem;font-size:1rem}
+    .form-row{margin-bottom:.75rem}
+    .form-row label{display:block;font-size:.8rem;color:#475569;margin-bottom:.25rem;
+      font-weight:500}
+    .form-row input,.form-row select,.form-row textarea{
+      width:100%;padding:.35rem .6rem;border:1px solid #cbd5e1;border-radius:.3rem;
+      font-size:.875rem;font-family:inherit}
+    .form-row textarea{resize:vertical;min-height:60px}
+    .modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem}
+    #f-gpu-row{display:none}
   </style>
 </head>
 <body>
 <h1>llm-bench</h1>
 <p style="color:#64748b;margin:.25rem 0 1.5rem">Benchmark Runs Dashboard</p>
 
+<!-- New Run modal -->
+<div class="modal-backdrop" id="run-modal" role="dialog" aria-modal="true"
+     aria-labelledby="modal-title">
+  <div class="modal">
+    <h3 id="modal-title">New Benchmark Run</h3>
+    <div class="form-row">
+      <label for="f-model">Model</label>
+      <select id="f-model"><option value="">Loading…</option></select>
+    </div>
+    <div class="form-row">
+      <label for="f-backend">Backend</label>
+      <select id="f-backend" onchange="toggleGpuRow()">
+        <option value="mock">mock</option>
+        <option value="llama-cpp">llama-cpp</option>
+        <option value="transformers">transformers</option>
+        <option value="openai">openai</option>
+        <option value="vllm">vllm</option>
+        <option value="onnx">onnx</option>
+      </select>
+    </div>
+    <div class="form-row">
+      <label for="f-requests">Requests</label>
+      <input type="number" id="f-requests" value="10" min="1">
+    </div>
+    <div class="form-row">
+      <label for="f-concurrency">Concurrency</label>
+      <input type="number" id="f-concurrency" value="1" min="1">
+    </div>
+    <div class="form-row">
+      <label for="f-warmup">Warmup requests</label>
+      <input type="number" id="f-warmup" value="2" min="0">
+    </div>
+    <div class="form-row" id="f-gpu-row">
+      <label for="f-gpu-layers">GPU layers (llama-cpp)</label>
+      <input type="number" id="f-gpu-layers" value="28" min="0">
+    </div>
+    <div class="form-row">
+      <label for="f-extra">Extra YAML (optional)</label>
+      <textarea id="f-extra" placeholder="key: value"></textarea>
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn" id="submit-btn" onclick="submitRun()">Run Benchmark</button>
+    </div>
+  </div>
+</div>
+
 <section>
-  <h2>Runs</h2>
+  <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
+    <h2 style="margin:0">Runs</h2>
+    <button class="btn" id="new-run-btn" onclick="openModal()">+ New Run</button>
+  </div>
   <div style="overflow-x:auto">
   <table>
     <thead><tr>
@@ -294,7 +359,7 @@ _DASHBOARD_HTML = """\
   </table>
   </div>
   <div style="margin-top:.75rem">
-    <button class="btn" onclick="compareSelected()">Compare Selected</button>
+    <button class="btn btn-outline" onclick="compareSelected()">Compare Selected</button>
   </div>
 </section>
 
@@ -326,6 +391,82 @@ function streamLog(runId) {
     pre.textContent += e.data + '\\n';
     pre.scrollTop = pre.scrollHeight;
   };
+}
+
+function openModal() {
+  document.getElementById('run-modal').classList.add('open');
+  loadModels();
+}
+
+function closeModal() {
+  document.getElementById('run-modal').classList.remove('open');
+}
+
+function toggleGpuRow() {
+  var backend = document.getElementById('f-backend').value;
+  document.getElementById('f-gpu-row').style.display =
+    backend === 'llama-cpp' ? 'block' : 'none';
+}
+
+function loadModels() {
+  fetch('/api/models').then(function(r){ return r.json(); }).then(function(data) {
+    var sel = document.getElementById('f-model');
+    var models = [];
+    (data.models || []).forEach(function(m){ models.push(m.path || m.id || ''); });
+    if (!models.length) { models = ['<no models found>']; }
+    sel.innerHTML = models.map(function(m){
+      return '<option value="' + m.replace(/"/g,'&quot;') + '">' + m + '</option>';
+    }).join('');
+  }).catch(function(){
+    document.getElementById('f-model').innerHTML =
+      '<option value="">(failed to load)</option>';
+  });
+}
+
+function submitRun() {
+  var model    = document.getElementById('f-model').value;
+  var backend  = document.getElementById('f-backend').value;
+  var requests = parseInt(document.getElementById('f-requests').value) || 10;
+  var conc     = parseInt(document.getElementById('f-concurrency').value) || 1;
+  var warmup   = parseInt(document.getElementById('f-warmup').value) || 0;
+  var config   = {model: model, backend: backend, requests: requests,
+                  concurrency: conc, warmup_requests: warmup};
+  if (backend === 'llama-cpp') {
+    var gpuLayers = parseInt(document.getElementById('f-gpu-layers').value);
+    if (!isNaN(gpuLayers)) { config['llama_cpp'] = {n_gpu_layers: gpuLayers}; }
+  }
+  var extraYaml = (document.getElementById('f-extra').value || '').trim();
+  if (extraYaml) {
+    try {
+      var parsed = jsyaml ? jsyaml.load(extraYaml) : null;
+      if (parsed && typeof parsed === 'object') {
+        Object.assign(config, parsed);
+      }
+    } catch(e) { /* ignore parse errors */ }
+  }
+  var btn = document.getElementById('submit-btn');
+  btn.disabled = true;
+  btn.textContent = 'Submitting…';
+  fetch('/api/runs', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({config: config})
+  }).then(function(r){
+    if (!r.ok) { throw new Error('HTTP ' + r.status); }
+    return r.json();
+  }).then(function(data) {
+    closeModal();
+    btn.disabled = false;
+    btn.textContent = 'Run Benchmark';
+    htmx.trigger('#runs-tbody', 'load');
+    if (data.run_id) {
+      setTimeout(function(){ streamLog(data.run_id); }, 500);
+    }
+  }).catch(function(err) {
+    alert('Failed to start run: ' + err.message);
+    btn.disabled = false;
+    btn.textContent = 'Run Benchmark';
+  });
 }
 
 function compareSelected() {
