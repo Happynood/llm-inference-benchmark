@@ -322,7 +322,9 @@ for each completed run.
 
 Click **+ New Run** in the dashboard to open a modal form — choose model, backend,
 concurrency, and other parameters, then submit directly from the browser without touching
-the CLI or `curl`.
+the CLI or `curl`.  A **Dataset** dropdown lists all cached real-world datasets (pulled
+via `llm-bench datasets pull <name>`); selecting one routes the run's prompts through
+that dataset instead of the config's built-in synthetic prompts.
 
 ```bash
 # Install server dependencies

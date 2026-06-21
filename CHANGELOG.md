@@ -23,6 +23,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Web UI dataset selector**: the "New Run" modal now includes a **Dataset** dropdown
+  populated with all currently-cached datasets (name + sample count).  Selecting a dataset
+  routes benchmark prompts through the corresponding real-world prompt set instead of the
+  config's synthetic prompts file.  A "Default prompts" option (always first) preserves
+  the existing behaviour when no dataset is selected.  The backend `POST /api/runs` accepts
+  an optional `dataset` field and passes `--dataset <name>` to the `llm-bench` subprocess.
+
 - **ITL jitter** (`itl_stddev_ms`): new metric that measures the standard deviation of
   inter-chunk latency (ms) pooled across all streaming requests in a run.  A high value
   indicates bursty token delivery, which degrades interactive UX even when average

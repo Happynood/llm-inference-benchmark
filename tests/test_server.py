@@ -181,7 +181,7 @@ async def test_get_run_found(client: httpx.AsyncClient, isolated_db: Path) -> No
 
 
 async def test_submit_run_returns_run_id(client: httpx.AsyncClient) -> None:
-    def _fake_do_run(run_id: str, config: dict[str, Any]) -> None:
+    def _fake_do_run(run_id: str, config: dict[str, Any], dataset: str | None = None) -> None:
         db = _get_db()
         db.execute(
             "UPDATE runs SET status='done', output='bench output', finished_at=? WHERE id=?",
@@ -197,7 +197,7 @@ async def test_submit_run_returns_run_id(client: httpx.AsyncClient) -> None:
 
 
 async def test_submit_run_status_becomes_done(client: httpx.AsyncClient) -> None:
-    def _fake_do_run(run_id: str, config: dict[str, Any]) -> None:
+    def _fake_do_run(run_id: str, config: dict[str, Any], dataset: str | None = None) -> None:
         db = _get_db()
         db.execute(
             "UPDATE runs SET status='done', output='bench output', finished_at=? WHERE id=?",
@@ -214,7 +214,7 @@ async def test_submit_run_status_becomes_done(client: httpx.AsyncClient) -> None
 
 
 async def test_submit_run_appears_in_list(client: httpx.AsyncClient) -> None:
-    def _noop(run_id: str, config: dict[str, Any]) -> None:
+    def _noop(run_id: str, config: dict[str, Any], dataset: str | None = None) -> None:
         pass
 
     with patch.object(server_mod, "_do_run", _noop):
@@ -229,7 +229,7 @@ async def test_submit_run_appears_in_list(client: httpx.AsyncClient) -> None:
 async def test_submit_run_error_status(client: httpx.AsyncClient) -> None:
     """Background task can mark run as error; API reflects that status."""
 
-    def _error_do_run(run_id: str, config: dict[str, Any]) -> None:
+    def _error_do_run(run_id: str, config: dict[str, Any], dataset: str | None = None) -> None:
         db = _get_db()
         db.execute(
             "UPDATE runs SET status='error', output='crashed', finished_at=? WHERE id=?",
@@ -691,3 +691,108 @@ async def test_datasets_table_fragment_shows_error(client: httpx.AsyncClient) ->
     assert resp.status_code == 200
     assert "Pull failed:" in resp.text
     assert "Network unreachable" in resp.text
+
+
+# ── Dataset selector in run form ──────────────────────────────────────────────
+
+
+async def test_submit_run_with_dataset_passes_to_do_run(client: httpx.AsyncClient) -> None:
+    """POST /api/runs with dataset= calls _do_run with that dataset name."""
+    captured: dict[str, Any] = {}
+
+    def _capture(run_id: str, config: dict[str, Any], dataset: str | None = None) -> None:
+        captured["dataset"] = dataset
+
+    with patch.object(server_mod, "_do_run", _capture):
+        resp = await client.post(
+            "/api/runs",
+            json={"config": {"backend": "mock"}, "dataset": "wildchat"},
+        )
+
+    assert resp.status_code == 202
+    assert captured["dataset"] == "wildchat"
+
+
+async def test_submit_run_without_dataset_defaults_none(client: httpx.AsyncClient) -> None:
+    """POST /api/runs without dataset= passes dataset=None to _do_run."""
+    captured: dict[str, Any] = {}
+
+    def _capture(run_id: str, config: dict[str, Any], dataset: str | None = None) -> None:
+        captured["dataset"] = dataset
+
+    with patch.object(server_mod, "_do_run", _capture):
+        resp = await client.post("/api/runs", json={"config": {"backend": "mock"}})
+
+    assert resp.status_code == 202
+    assert captured["dataset"] is None
+
+
+def test_do_run_passes_dataset_flag_to_subprocess(isolated_db: Path) -> None:
+    """_do_run appends --dataset <name> to the subprocess command when dataset is set."""
+    from llm_inference_benchmark.server import _do_run
+
+    db = _get_db()
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?,?,?,?)",
+        ("run-ds", "pending", '{"backend":"mock"}', _now_iso()),
+    )
+    db.commit()
+
+    captured_cmd: list[list[str]] = []
+
+    class _MockProcDs:
+        returncode = 0
+        stdout: Any = iter([])
+
+        def wait(self) -> int:
+            return 0
+
+    def _fake_popen(cmd: list[str], **_: Any) -> _MockProcDs:
+        captured_cmd.append(cmd)
+        return _MockProcDs()
+
+    with patch("llm_inference_benchmark.server.subprocess.Popen", _fake_popen):
+        _do_run("run-ds", {"backend": "mock"}, dataset="wildchat")
+
+    assert len(captured_cmd) == 1
+    cmd = captured_cmd[0]
+    assert "--dataset" in cmd
+    assert cmd[cmd.index("--dataset") + 1] == "wildchat"
+
+
+def test_do_run_no_dataset_flag_when_none(isolated_db: Path) -> None:
+    """_do_run does not add --dataset when dataset is None."""
+    from llm_inference_benchmark.server import _do_run
+
+    db = _get_db()
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?,?,?,?)",
+        ("run-nods", "pending", '{"backend":"mock"}', _now_iso()),
+    )
+    db.commit()
+
+    captured_cmd: list[list[str]] = []
+
+    class _MockProcNone:
+        returncode = 0
+        stdout: Any = iter([])
+
+        def wait(self) -> int:
+            return 0
+
+    def _fake_popen(cmd: list[str], **_: Any) -> _MockProcNone:
+        captured_cmd.append(cmd)
+        return _MockProcNone()
+
+    with patch("llm_inference_benchmark.server.subprocess.Popen", _fake_popen):
+        _do_run("run-nods", {"backend": "mock"}, dataset=None)
+
+    assert "--dataset" not in captured_cmd[0]
+
+
+async def test_dashboard_contains_dataset_selector(client: httpx.AsyncClient) -> None:
+    """The dashboard HTML includes the dataset selector element for the run form."""
+    resp = await client.get("/")
+    assert resp.status_code == 200
+    assert "f-dataset" in resp.text
+    assert "Default prompts" in resp.text
