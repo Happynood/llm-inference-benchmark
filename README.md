@@ -380,9 +380,9 @@ Samples are cached in `~/.cache/llm-bench/datasets/` as JSONL.  No network
 access is needed after the initial `pull`.  The `--dataset` flag is compatible
 with all other `llm-bench` options (`--seed`, `--requests`, `--concurrency`, etc.).
 
-The `long-context-*` variants use `deepmind/pg19` (public-domain books) to produce
-passages at controlled token budgets — useful for measuring prefill latency and
-validating models with extended context windows.
+The `long-context-*` variants use `allenai/c4` (Common Crawl, English subset,
+public domain, no gating) to produce passages at controlled token budgets — useful
+for measuring prefill latency and validating models with extended context windows.
 
 ---
 

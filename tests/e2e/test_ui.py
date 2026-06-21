@@ -78,9 +78,10 @@ def live_server(tmp_path_factory: pytest.TempPathFactory) -> Generator[str, None
 @pytest.fixture(autouse=True)
 def seed_db(live_server: str) -> None:
     """Reset DB and insert two fake completed runs before each test."""
-    from llm_inference_benchmark.server import _buffers, _get_db, _now_iso
+    from llm_inference_benchmark.server import _buffers, _get_db, _now_iso, _pull_errors
 
     _buffers.clear()
+    _pull_errors.clear()
     db = _get_db()
     db.execute("DELETE FROM runs")
     db.commit()
@@ -270,6 +271,25 @@ def test_select_all_indeterminate_after_htmx_refresh(page: Page, live_server: st
         "() => !!document.getElementById('select-all')?.indeterminate",
         timeout=8000,
     )
+
+
+def test_dataset_pull_error_shown_in_table(page: Page, live_server: str) -> None:
+    from llm_inference_benchmark.server import _pull_errors
+
+    _pull_errors["lmsys-chat"] = "Simulated network error"
+    try:
+        page.goto(live_server)
+        page.wait_for_selector("#datasets-tbody", timeout=8000)
+        # Trigger a datasets-table refresh so HTMX picks up the injected error
+        page.evaluate("htmx.trigger('#datasets-tbody', 'load')")
+        page.wait_for_function(
+            "() => document.querySelector('.ds-pull-error') !== null",
+            timeout=8000,
+        )
+        expect(page.locator(".ds-pull-error").first).to_contain_text("Pull failed:")
+        expect(page.locator(".ds-pull-error").first).to_contain_text("Simulated network error")
+    finally:
+        _pull_errors.pop("lmsys-chat", None)
 
 
 def test_gpu_layers_hidden_for_non_llama_cpp(page: Page, live_server: str) -> None:
