@@ -7,15 +7,15 @@
 #   1. Set onnx.export: true to auto-export a HF CausalLM model on first run.
 #   2. Use a pre-exported model directory or HF Hub ID with ONNX files.
 #
-# Example models with pre-built ONNX files:
-#   optimum-internal-testing/tiny-random-GPT2Model  (testing)
+# Example models:
+#   gpt2                                              (public, no authentication required)
 #   microsoft/Phi-3-mini-4k-instruct-onnx            (production, large)
 #
 # Run:
 #   uv run llm-bench --config configs/onnx-example.yaml --output results/onnx.csv
 
 backend: onnx
-model: optimum-internal-testing/tiny-random-GPT2Model
+model: gpt2
 requests: 20
 warmup_requests: 2
 prompts_file: data/prompts/smoke.txt
