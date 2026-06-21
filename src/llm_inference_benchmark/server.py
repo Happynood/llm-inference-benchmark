@@ -4,10 +4,13 @@ Exposes the following endpoints:
   GET  /                              dashboard (HTML)
   GET  /api/health
   GET  /api/models
+  GET  /api/datasets
+  POST /api/datasets/pull
   GET  /api/runs
   POST /api/runs
   GET  /api/runs/{run_id}
   GET  /api/runs/{run_id}/stream      Server-Sent Events
+  GET  /api/ui/datasets-table         HTMX HTML fragment
   GET  /api/ui/runs-table             HTMX HTML fragment
   GET  /runs/{run_id}/pareto.html     interactive Plotly scatter page
 """
@@ -32,6 +35,8 @@ from typing import Any
 from fastapi import BackgroundTasks, FastAPI, HTTPException
 from fastapi.responses import HTMLResponse, StreamingResponse
 from pydantic import BaseModel
+
+from llm_inference_benchmark import datasets as _datasets_mod
 
 # ── Database ─────────────────────────────────────────────────────────────────
 
@@ -97,6 +102,10 @@ class RunSubmitted(BaseModel):
     run_id: str
 
 
+class DatasetPullRequest(BaseModel):
+    name: str
+
+
 class RunResult(BaseModel):
     run_id: str
     status: str
@@ -141,6 +150,31 @@ def _discover_models() -> list[dict[str, str]]:
                 results.append({"type": "hf", "name": model_name, "path": str(d)})
 
     return results
+
+
+# ── Dataset helpers ───────────────────────────────────────────────────────────
+
+
+def _dataset_statuses() -> list[dict[str, Any]]:
+    cached = dict(_datasets_mod.list_cached())
+    result: list[dict[str, Any]] = []
+    for name, spec in _datasets_mod.REGISTRY.items():
+        result.append(
+            {
+                "name": name,
+                "description": spec.get("description", ""),
+                "cached": name in cached,
+                "samples": cached.get(name, 0),
+            }
+        )
+    return result
+
+
+def _do_pull_dataset(name: str) -> None:
+    try:
+        _datasets_mod.pull(name)
+    except Exception:
+        pass
 
 
 # ── Background benchmark runner ───────────────────────────────────────────────
@@ -284,6 +318,7 @@ _DASHBOARD_HTML = """\
     .form-row textarea{resize:vertical;min-height:60px}
     .modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem}
     #f-gpu-row{display:none}
+    .ds-select{padding:.3rem .6rem;border:1px solid #cbd5e1;border-radius:.3rem;font-size:.875rem}
   </style>
 </head>
 <body>
@@ -360,6 +395,28 @@ _DASHBOARD_HTML = """\
   </div>
   <div style="margin-top:.75rem">
     <button class="btn btn-outline" onclick="compareSelected()">Compare Selected</button>
+  </div>
+</section>
+
+<section>
+  <h2>Datasets</h2>
+  <div style="overflow-x:auto">
+  <table>
+    <thead><tr>
+      <th>Name</th><th>Description</th><th>Cached</th><th>Samples</th>
+    </tr></thead>
+    <tbody id="datasets-tbody"
+           hx-get="/api/ui/datasets-table"
+           hx-trigger="load, every 10s"
+           hx-swap="innerHTML">
+      <tr><td colspan="4" style="color:#94a3b8;padding:1.5rem .75rem">Loading…</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <div style="display:flex;align-items:center;gap:.5rem;margin-top:.75rem">
+    <select id="dataset-select" class="ds-select"></select>
+    <button class="btn" onclick="pullDataset()">Pull</button>
+    <span id="pull-status" style="font-size:.8rem;color:#64748b"></span>
   </div>
 </section>
 
@@ -469,6 +526,36 @@ function submitRun() {
   });
 }
 
+function loadDatasetNames() {
+  fetch('/api/datasets').then(function(r){ return r.json(); }).then(function(data) {
+    var sel = document.getElementById('dataset-select');
+    sel.innerHTML = (data.datasets || []).map(function(d){
+      return '<option value="' + d.name.replace(/"/g,'&quot;') + '">' + d.name + '</option>';
+    }).join('');
+  }).catch(function(){});
+}
+loadDatasetNames();
+
+function pullDataset() {
+  var name = document.getElementById('dataset-select').value;
+  if (!name) return;
+  var statusEl = document.getElementById('pull-status');
+  statusEl.textContent = 'Starting pull…';
+  fetch('/api/datasets/pull', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: name})
+  }).then(function(r){
+    if (!r.ok) { throw new Error('HTTP ' + r.status); }
+    return r.json();
+  }).then(function(){
+    statusEl.textContent = 'Pull started — table will refresh automatically.';
+    htmx.trigger('#datasets-tbody', 'load');
+  }).catch(function(err){
+    statusEl.textContent = 'Error: ' + err.message;
+  });
+}
+
 function compareSelected() {
   var cbs = Array.from(document.querySelectorAll('.run-cb:checked'));
   if (cbs.length < 2) { alert('Select at least 2 runs to compare.'); return; }
@@ -529,6 +616,30 @@ def _render_runs_table_rows(results: list[RunResult]) -> str:
             f'    <a href="/runs/{rid}/pareto.html"'
             f' class="btn btn-sm btn-outline" style="margin-left:.25rem">Pareto</a>\n'
             f"  </td>\n"
+            f"</tr>"
+        )
+    return "\n".join(parts)
+
+
+def _render_datasets_table(statuses: list[dict[str, Any]]) -> str:
+    if not statuses:
+        return (
+            '<tr><td colspan="4" style="color:#94a3b8;padding:1.5rem .75rem">'
+            "No datasets registered.</td></tr>"
+        )
+    parts: list[str] = []
+    for ds in statuses:
+        name = html.escape(ds["name"])
+        desc = html.escape(ds["description"])
+        cached_icon = "✓" if ds["cached"] else "✗"
+        cached_color = "#065f46" if ds["cached"] else "#991b1b"
+        samples = str(ds["samples"]) if ds["cached"] else "—"
+        parts.append(
+            f"<tr>\n"
+            f'  <td class="mono">{name}</td>\n'
+            f'  <td style="color:#64748b;font-size:.82rem">{desc}</td>\n'
+            f'  <td style="color:{cached_color};font-weight:600">{cached_icon}</td>\n'
+            f"  <td>{samples}</td>\n"
             f"</tr>"
         )
     return "\n".join(parts)
@@ -654,6 +765,26 @@ async def health() -> dict[str, str]:
 @app.get("/api/models")
 async def list_models() -> dict[str, list[dict[str, str]]]:
     return {"models": _discover_models()}
+
+
+@app.get("/api/datasets")
+async def list_datasets() -> dict[str, list[dict[str, Any]]]:
+    return {"datasets": _dataset_statuses()}
+
+
+@app.post("/api/datasets/pull", status_code=202)
+async def pull_dataset(
+    body: DatasetPullRequest, background_tasks: BackgroundTasks
+) -> dict[str, str]:
+    if body.name not in _datasets_mod.REGISTRY:
+        raise HTTPException(status_code=422, detail=f"Unknown dataset {body.name!r}")
+    background_tasks.add_task(_do_pull_dataset, body.name)
+    return {"status": "started"}
+
+
+@app.get("/api/ui/datasets-table", response_class=HTMLResponse)
+async def datasets_table_fragment() -> str:
+    return _render_datasets_table(_dataset_statuses())
 
 
 @app.get("/api/runs")
