@@ -165,12 +165,7 @@ def _extract_mmlu_pro(row: dict[str, Any]) -> str | None:
 
 
 def _extract_swe_bench_pro(row: dict[str, Any]) -> str | None:
-    text = (
-        row.get("problem_statement")
-        or row.get("text")
-        or row.get("body")
-        or ""
-    )
+    text = row.get("problem_statement") or row.get("text") or row.get("body") or ""
     text = str(text).strip()
     if len(text) < 50:
         return None
