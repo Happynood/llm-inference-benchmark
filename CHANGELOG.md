@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **Dataset pull errors now surfaced in the dashboard**: when a background dataset pull
+  fails (network error, disk full, etc.), the error message is stored per-dataset and
+  displayed inline in the Datasets table as "Pull failed: <reason>".  Previously the
+  exception was silently discarded and the table showed no indication of failure.
+  A successful retry clears the error.
 - **Checkbox state preserved across HTMX auto-refresh**: run row checkboxes in the
   `llm-bench serve` dashboard were silently unchecked every 5 seconds when HTMX replaced
   the table body.  The UI now saves the set of checked run IDs before each swap

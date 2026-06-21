@@ -85,6 +85,10 @@ def _get_db() -> sqlite3.Connection:
 
 _buffers: dict[str, list[str]] = {}
 
+# ── Dataset pull error store (keyed by dataset name) ─────────────────────────
+
+_pull_errors: dict[str, str] = {}
+
 
 # ── FastAPI app ───────────────────────────────────────────────────────────────
 
@@ -165,6 +169,7 @@ def _dataset_statuses() -> list[dict[str, Any]]:
                 "description": spec.get("description", ""),
                 "cached": name in cached,
                 "samples": cached.get(name, 0),
+                "error": None if name in cached else _pull_errors.get(name),
             }
         )
     return result
@@ -173,8 +178,9 @@ def _dataset_statuses() -> list[dict[str, Any]]:
 def _do_pull_dataset(name: str) -> None:
     try:
         _datasets_mod.pull(name)
-    except Exception:
-        pass
+        _pull_errors.pop(name, None)
+    except Exception as exc:
+        _pull_errors[name] = str(exc) or type(exc).__name__
 
 
 # ── Background benchmark runner ───────────────────────────────────────────────
@@ -652,13 +658,20 @@ def _render_datasets_table(statuses: list[dict[str, Any]]) -> str:
     for ds in statuses:
         name = html.escape(ds["name"])
         desc = html.escape(ds["description"])
+        error = ds["error"]
         cached_icon = "✓" if ds["cached"] else "✗"
         cached_color = "#065f46" if ds["cached"] else "#991b1b"
         samples = str(ds["samples"]) if ds["cached"] else "—"
+        error_html = (
+            f'<br><span class="ds-pull-error" style="color:#b91c1c;font-size:.78rem">'
+            f"Pull failed: {html.escape(error.replace(chr(10), ' '))}</span>"
+            if error is not None
+            else ""
+        )
         parts.append(
             f"<tr>\n"
             f'  <td class="mono">{name}</td>\n'
-            f'  <td style="color:#64748b;font-size:.82rem">{desc}</td>\n'
+            f'  <td style="color:#64748b;font-size:.82rem">{desc}{error_html}</td>\n'
             f'  <td style="color:{cached_color};font-weight:600">{cached_icon}</td>\n'
             f"  <td>{samples}</td>\n"
             f"</tr>"
