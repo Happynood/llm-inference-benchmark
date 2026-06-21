@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **Thermal throttling index** (`thermal_throttle_pct`): new metric that measures the
+  percentage drop in tokens/s between the first and last 25 % of a sequential benchmark
+  run.  A positive value indicates CPU/GPU frequency scaling during the run.  Populated
+  automatically for sequential runs with ≥ 8 requests and ≥ 10 s elapsed time; `None`
+  otherwise (concurrent runs, short runs).  Appears in CSV output, JSON output, and the
+  Markdown comparison table under the "Throttle %" column.
+
 ### Fixed
 
 - **Per-run Pareto links restored in the runs table**: each row in the dashboard now shows

@@ -44,12 +44,13 @@ _HEADERS = [
     "Think %",
     "Energy (J)",
     "Tok/J",
+    "Throttle %",
 ]
 
 # Indices into _HEADERS that are suppressed when every row shows "N/A".
 # Mandatory columns (0-5 and 13) are never suppressed.
 _OPTIONAL_COL_INDICES: frozenset[int] = frozenset(
-    {6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24}
+    {6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25}
 )
 
 
@@ -93,6 +94,8 @@ class RunRow:
     # Energy efficiency (v0.27) — absent when GPU/CPU power measurement unavailable
     energy_joules: float | None = None
     tokens_per_joule: float | None = None
+    # Thermal throttling index (v0.28) — absent for concurrent/short/small runs
+    thermal_throttle_pct: float | None = None
 
 
 def _parse_optional_str(row: dict[str, str], key: str) -> str | None:
@@ -170,6 +173,7 @@ def load_csv(path: str | Path) -> RunRow:
     reasoning_fraction = _parse_optional_float(row, "reasoning_fraction", path)
     energy_joules = _parse_optional_float(row, "energy_joules", path)
     tokens_per_joule = _parse_optional_float(row, "tokens_per_joule", path)
+    thermal_throttle_pct = _parse_optional_float(row, "thermal_throttle_pct", path)
 
     return RunRow(
         backend=row["backend"],
@@ -207,6 +211,7 @@ def load_csv(path: str | Path) -> RunRow:
         reasoning_fraction=reasoning_fraction,
         energy_joules=energy_joules,
         tokens_per_joule=tokens_per_joule,
+        thermal_throttle_pct=thermal_throttle_pct,
     )
 
 
@@ -307,6 +312,7 @@ def render_table(rows: list[RunRow]) -> str:
             fmt_rate(r.reasoning_fraction),
             fmt_optional(r.energy_joules),
             fmt_optional(r.tokens_per_joule),
+            fmt_optional(r.thermal_throttle_pct),
         ]
         for r in rows
     ]
@@ -375,6 +381,7 @@ def render_json(rows: list[RunRow]) -> str:
             "reasoning_fraction": r.reasoning_fraction,
             "energy_joules": r.energy_joules,
             "tokens_per_joule": r.tokens_per_joule,
+            "thermal_throttle_pct": r.thermal_throttle_pct,
         }
         for r in rows
     ]
@@ -416,6 +423,7 @@ _CSV_FIELDS = [
     "reasoning_fraction",
     "energy_joules",
     "tokens_per_joule",
+    "thermal_throttle_pct",
 ]
 
 
@@ -465,6 +473,7 @@ def render_csv(rows: list[RunRow]) -> str:
                 "reasoning_fraction": _or_empty(r.reasoning_fraction),
                 "energy_joules": _or_empty(r.energy_joules),
                 "tokens_per_joule": _or_empty(r.tokens_per_joule),
+                "thermal_throttle_pct": _or_empty(r.thermal_throttle_pct),
             }
         )
     return buf.getvalue().rstrip("\n")

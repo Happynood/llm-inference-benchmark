@@ -200,6 +200,7 @@ def run_benchmark(
         mean_answer_tokens=mean_a_tokens,
         reasoning_fraction=r_fraction,
         energy_joules=power.energy_joules,
+        is_sequential=config.concurrency == 1,
     )
 
 

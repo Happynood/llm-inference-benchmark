@@ -452,7 +452,7 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 
 - [x] **TTFT / TPOT separation** — `p50_ttft_ms`, `p95_ttft_ms`, `p50_tpot_ms`, `tpot_stddev_ms` columns in CSV/JSON output
 - [x] **Tokens / Joule** — `energy_joules` and `tokens_per_joule` in CSV/JSON; GPU via `nvidia-smi power.draw`, CPU fallback via Intel RAPL
-- [ ] **Thermal throttling index** — compare tok/s at t=0 vs t=60 s to detect frequency scaling
+- [x] **Thermal throttling index** — `thermal_throttle_pct` in CSV/JSON; measures tok/s drop between first and last 25 % of a sequential run to detect CPU/GPU frequency scaling
 - [ ] **ITL variance (jitter)** — inter-token latency std-dev for streaming UX quality
 - [x] **Hardware profile report** — auto-detect CPU, RAM, GPU VRAM, OS; attach to every result (`hw_cpu`, `hw_cpu_cores`, `hw_ram_gb`, `hw_gpu`, `hw_vram_gb`, `hw_os` columns in CSV/JSON)
 - [x] **Reasoning token parser** — `reasoning_start_tag` / `reasoning_end_tag` config fields; `mean_reasoning_tokens`, `mean_answer_tokens`, `reasoning_fraction` in CSV/JSON output

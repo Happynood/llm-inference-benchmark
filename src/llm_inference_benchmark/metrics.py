@@ -85,7 +85,58 @@ class MetricsReport:
     # only (warmup excluded).
     energy_joules: float | None = None
     tokens_per_joule: float | None = None
+    # Thermal throttling index (v0.28) — percentage drop in tok/s from the first
+    # 25 % of elapsed time to the last 25 %.  Positive values indicate frequency
+    # scaling / thermal throttling.  None for concurrent runs, runs shorter than
+    # 10 s, or runs with fewer than 8 requests.
+    thermal_throttle_pct: float | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
+
+
+def _compute_thermal_throttle(
+    results: list[RequestMetrics],
+    *,
+    is_sequential: bool,
+) -> float | None:
+    """Compare tok/s in first vs last 25 % of sequential wall time.
+
+    Returns the percentage drop (positive = throttling, 0 = stable/faster).
+    Returns None when: concurrent run, fewer than 8 requests, or total
+    elapsed time under 10 s.
+    """
+    if not is_sequential or len(results) < 8:
+        return None
+
+    cum_s: list[float] = []
+    t = 0.0
+    for r in results:
+        t += r.latency_ms / 1000.0
+        cum_s.append(t)
+
+    total_s = cum_s[-1]
+    if total_s < 10.0:
+        return None
+
+    boundary_early = total_s * 0.25
+    boundary_late = total_s * 0.75
+
+    early_tokens = sum(
+        r.output_tokens for r, end in zip(results, cum_s) if end <= boundary_early
+    )
+    late_tokens = sum(
+        r.output_tokens for r, end in zip(results, cum_s) if end >= boundary_late
+    )
+
+    if boundary_early <= 0 or early_tokens == 0:
+        return None
+    late_time = total_s - boundary_late
+    if late_time <= 0:
+        return None
+
+    tps_early = early_tokens / boundary_early
+    tps_late = late_tokens / late_time
+    pct = (tps_early - tps_late) / tps_early * 100.0
+    return round(max(0.0, pct), 2)
 
 
 def compute_metrics(
@@ -109,6 +160,7 @@ def compute_metrics(
     mean_answer_tokens: float | None = None,
     reasoning_fraction: float | None = None,
     energy_joules: float | None = None,
+    is_sequential: bool = True,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -181,6 +233,7 @@ def compute_metrics(
             if energy_joules is not None and energy_joules > 0 and total_output_tokens > 0
             else None
         ),
+        thermal_throttle_pct=_compute_thermal_throttle(results, is_sequential=is_sequential),
     )
 
 
@@ -280,5 +333,6 @@ def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
         reasoning_fraction=_median_optional([r.reasoning_fraction for r in reports]),
         energy_joules=_median_optional([r.energy_joules for r in reports]),
         tokens_per_joule=_median_optional([r.tokens_per_joule for r in reports]),
+        thermal_throttle_pct=_median_optional([r.thermal_throttle_pct for r in reports]),
         timestamp=last.timestamp,
     )
