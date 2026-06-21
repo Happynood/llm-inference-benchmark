@@ -80,6 +80,11 @@ class MetricsReport:
     mean_reasoning_tokens: float | None = None
     mean_answer_tokens: float | None = None
     reasoning_fraction: float | None = None
+    # Energy efficiency (v0.27) — populated when GPU (nvidia-smi) or CPU (RAPL)
+    # power measurement is available.  energy_joules covers the benchmark window
+    # only (warmup excluded).
+    energy_joules: float | None = None
+    tokens_per_joule: float | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -103,6 +108,7 @@ def compute_metrics(
     mean_reasoning_tokens: float | None = None,
     mean_answer_tokens: float | None = None,
     reasoning_fraction: float | None = None,
+    energy_joules: float | None = None,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -169,6 +175,12 @@ def compute_metrics(
         mean_reasoning_tokens=mean_reasoning_tokens,
         mean_answer_tokens=mean_answer_tokens,
         reasoning_fraction=reasoning_fraction,
+        energy_joules=energy_joules,
+        tokens_per_joule=(
+            total_output_tokens / energy_joules
+            if energy_joules is not None and energy_joules > 0 and total_output_tokens > 0
+            else None
+        ),
     )
 
 
@@ -266,5 +278,7 @@ def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
         mean_reasoning_tokens=_median_optional([r.mean_reasoning_tokens for r in reports]),
         mean_answer_tokens=_median_optional([r.mean_answer_tokens for r in reports]),
         reasoning_fraction=_median_optional([r.reasoning_fraction for r in reports]),
+        energy_joules=_median_optional([r.energy_joules for r in reports]),
+        tokens_per_joule=_median_optional([r.tokens_per_joule for r in reports]),
         timestamp=last.timestamp,
     )

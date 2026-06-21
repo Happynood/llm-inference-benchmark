@@ -40,6 +40,8 @@
 | `mean_reasoning_tokens` | tokens | Mean estimated tokens inside `<think>…</think>` per request; blank unless `reasoning_start_tag` / `reasoning_end_tag` are set |
 | `mean_answer_tokens` | tokens | Mean estimated tokens outside the reasoning block per request; blank unless reasoning tags are set |
 | `reasoning_fraction` | ratio [0, 1] | Mean fraction of output tokens attributed to reasoning; blank unless reasoning tags are set |
+| `energy_joules` | J | Energy consumed during the benchmark window (excluding warmup). Source: `nvidia-smi power.draw` (GPU) or Intel RAPL `/sys/class/powercap/intel-rapl:0/energy_uj` (CPU fallback); blank when neither is available |
+| `tokens_per_joule` | tok/J | `total_output_tokens / energy_joules`; blank when energy measurement is unavailable |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
 
 ## Memory Measurement

@@ -8,6 +8,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- Tokens-per-joule energy efficiency metric.  During the benchmark window (warmup excluded),
+  energy is sampled from `nvidia-smi power.draw` (GPU, polled every 500 ms) with Intel RAPL
+  `/sys/class/powercap/intel-rapl:0/energy_uj` as the CPU fallback.  Two new columns appear
+  in result CSV and JSON: `energy_joules` and `tokens_per_joule`.  Both are blank when
+  neither energy source is readable.  `llm-bench compare` renders them in the table,
+  suppressed when all rows show N/A.  Older CSVs without these columns load without errors.
+
 - Reasoning token parser for thinking-model outputs (`<think>…</think>` or custom tags).
   Set `reasoning_start_tag` and `reasoning_end_tag` in the benchmark config to split each
   completion into a reasoning portion and a final-answer portion.  Three new columns appear
