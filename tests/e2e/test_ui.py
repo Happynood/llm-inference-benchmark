@@ -18,6 +18,24 @@ import httpx
 import pytest
 from playwright.sync_api import Dialog, Page, expect
 
+
+def _chromium_available() -> bool:
+    try:
+        import os
+
+        from playwright.sync_api import sync_playwright
+
+        with sync_playwright() as p:
+            return os.path.isfile(p.chromium.executable_path)
+    except Exception:
+        return False
+
+
+pytestmark = pytest.mark.skipif(
+    not _chromium_available(),
+    reason="Chromium not available (run: playwright install chromium)",
+)
+
 # ── Server fixture ─────────────────────────────────────────────────────────────
 
 

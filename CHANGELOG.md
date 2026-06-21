@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+
+- E2E tests (`tests/e2e/test_ui.py`) now show **SKIPPED** instead of ERROR when Chromium
+  is not installed.  The module-level `pytestmark` calls `_chromium_available()` which
+  checks whether the Playwright-managed Chromium binary exists on disk.  Install the
+  browser with `playwright install chromium` to re-enable the suite.
+
 ### Added
 - Tokens-per-joule energy efficiency metric.  During the benchmark window (warmup excluded),
   energy is sampled from `nvidia-smi power.draw` (GPU, polled every 500 ms) with Intel RAPL
