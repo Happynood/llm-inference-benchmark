@@ -9,10 +9,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **Per-run Pareto links restored in the runs table**: each row in the dashboard now shows
+  a **Pareto** link that navigates to `/runs/{id}/pareto.html`.  The toolbar Pareto button
+  (for multi-run comparison) introduced in #215 is unchanged.
 - **Dashboard comparison chart is now readable**: replaced the catch-all bar chart with a
   focused dual-axis chart (tokens/s on the left axis, TTFT p50 ms on the right axis).
-  Per-run "Pareto" links removed from the table; a **Pareto** button now appears in the
-  compare toolbar only when ≥2 runs are selected.  Clicking it opens `GET /runs/pareto?ids=…`
+  A **Pareto** button appears in the compare toolbar only when ≥2 runs are selected.  Clicking it opens `GET /runs/pareto?ids=…`
   which renders the Pareto scatter for exactly those runs.
 - **GPU acceleration now enabled by default for llama-cpp**: `n_gpu_layers` default
   changed from `0` (CPU only) to `-1` (offload all layers; llama.cpp auto-detects GPU

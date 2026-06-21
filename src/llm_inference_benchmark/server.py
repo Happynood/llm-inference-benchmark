@@ -675,6 +675,8 @@ def _render_runs_table_rows(results: list[RunResult]) -> str:
             f"  <td>\n"
             f'    <button class="btn btn-sm btn-outline"'
             f" onclick=\"streamLog('{rid}')\">Log</button>\n"
+            f'    <a href="/runs/{rid}/pareto.html"'
+            f' class="btn btn-sm btn-outline">Pareto</a>\n'
             f"  </td>\n"
             f"</tr>"
         )
