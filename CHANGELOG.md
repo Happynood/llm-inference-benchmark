@@ -13,8 +13,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   is not installed.  The module-level `pytestmark` calls `_chromium_available()` which
   checks whether the Playwright-managed Chromium binary exists on disk.  Install the
   browser with `playwright install chromium` to re-enable the suite.
+- E2E CI and local `make test-e2e` now pass on Ubuntu 26.04: the `e2e` GitHub Actions
+  job and the new `make install-playwright` target both set
+  `PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64` so that Playwright downloads the
+  Ubuntu 24.04 Chromium binary (binary-compatible; no native 26.04 build exists yet).
 
 ### Added
+- `make install-playwright` — installs the Playwright Chromium browser with the Ubuntu 24.04
+  platform override pre-applied.  Required on Ubuntu 26.04; harmless on other platforms.
+- `make test-e2e` — runs the E2E Playwright test suite (`tests/e2e/`).
+- README **Running E2E tests** section with platform-specific install instructions.
+
+### Added (prior)
 - Tokens-per-joule energy efficiency metric.  During the benchmark window (warmup excluded),
   energy is sampled from `nvidia-smi power.draw` (GPU, polled every 500 ms) with Intel RAPL
   `/sys/class/powercap/intel-rapl:0/energy_uj` as the CPU fallback.  Two new columns appear

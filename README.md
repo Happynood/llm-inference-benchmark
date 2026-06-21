@@ -444,6 +444,37 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 
 ---
 
+## Running E2E tests
+
+The end-to-end test suite drives a real Chromium browser against `llm-bench serve`.
+Playwright must download its own Chromium binary before the tests can run.
+
+**Ubuntu 26.04** — Playwright does not yet ship a native Ubuntu 26.04 binary.
+Use the Ubuntu 24.04 build (binary-compatible):
+
+```bash
+make install-playwright   # sets PLAYWRIGHT_HOST_PLATFORM_OVERRIDE automatically
+make test-e2e
+```
+
+Or manually:
+
+```bash
+PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 uv run playwright install chromium
+uv run pytest tests/e2e/ -v
+```
+
+On **macOS / other Linux** distributions where Playwright ships a native binary, the override is not needed:
+
+```bash
+uv run playwright install chromium
+uv run pytest tests/e2e/ -v
+```
+
+> If Chromium is not installed the E2E tests are automatically **skipped** (not errored) so the rest of the test suite continues to pass.
+
+---
+
 ## Contributing
 
 See **[CONTRIBUTING.md](CONTRIBUTING.md)** for development setup, test instructions, and PR guidelines.

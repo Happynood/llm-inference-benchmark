@@ -1,5 +1,6 @@
 .PHONY: install install-hf install-llama-cpp install-llama-cpp-cuda install-llama-cpp-prebuilt \
-        test test-hf lint format typecheck \
+        install-playwright \
+        test test-hf test-e2e lint format typecheck \
         run run-hf run-gpu run-matrix \
         run-llama-cpp-cpu run-llama-cpp-gpu \
         run-quant-compare \
@@ -27,6 +28,11 @@ install-llama-cpp-prebuilt:
 	  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
 	uv pip install nvidia-cublas-cu12 nvidia-cuda-runtime-cu12
 
+# On Ubuntu 26.04, Playwright does not ship a native Chromium binary yet.
+# Pinning to the Ubuntu 24.04 build is the supported workaround.
+install-playwright:
+	PLAYWRIGHT_HOST_PLATFORM_OVERRIDE=ubuntu24.04-x64 uv run playwright install chromium
+
 
 # ── Quality checks ───────────────────────────────────────────────────────────
 
@@ -35,6 +41,9 @@ test:
 
 test-hf:
 	uv run pytest -v -m integration
+
+test-e2e:
+	uv run pytest tests/e2e/ -v
 
 lint:
 	uv run ruff check .
