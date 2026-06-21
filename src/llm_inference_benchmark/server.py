@@ -176,8 +176,11 @@ def _dataset_statuses() -> list[dict[str, Any]]:
 
 
 def _do_pull_dataset(name: str) -> None:
+    import os
+
+    hf_token = os.environ.get("HF_TOKEN") or None
     try:
-        _datasets_mod.pull(name)
+        _datasets_mod.pull(name, hf_token=hf_token)
         _pull_errors.pop(name, None)
     except Exception as exc:
         _pull_errors[name] = str(exc) or type(exc).__name__

@@ -9,6 +9,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **Gated datasets (e.g. `lmsys-chat`) can now be pulled via the dashboard**: the server
+  reads `HF_TOKEN` from the environment and forwards it to the HuggingFace `datasets` library.
+  Previously the token was never passed, causing every gated-dataset pull to fail with a 403.
 - **Dataset pull errors now surfaced in the dashboard**: when a background dataset pull
   fails (network error, disk full, etc.), the error message is stored per-dataset and
   displayed inline in the Datasets table as "Pull failed: <reason>".  Previously the
