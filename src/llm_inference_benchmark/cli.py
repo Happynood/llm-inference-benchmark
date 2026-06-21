@@ -1469,11 +1469,13 @@ def datasets_group() -> None:
 def datasets_pull(name: str, max_samples: int | None, hf_token: str | None) -> None:
     """Download and cache a real-world prompt dataset.
 
-    Supported names: lmsys-chat, hermes-fn
+    Supported names: lmsys-chat, hermes-fn,
+    long-context-4k, long-context-16k, long-context-64k
 
     Example:
 
         llm-bench datasets pull lmsys-chat
+        llm-bench datasets pull long-context-4k
     """
     from llm_inference_benchmark.datasets import REGISTRY, pull
 
