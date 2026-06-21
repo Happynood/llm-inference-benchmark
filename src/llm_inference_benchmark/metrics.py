@@ -74,6 +74,12 @@ class MetricsReport:
     hw_gpu: str | None = None
     hw_vram_gb: float | None = None
     hw_os: str | None = None
+    # Reasoning token parser (v0.26) — populated when reasoning_start_tag /
+    # reasoning_end_tag are set in the config.  Token counts are estimated from
+    # the char-length fraction of backend-reported output_tokens.
+    mean_reasoning_tokens: float | None = None
+    mean_answer_tokens: float | None = None
+    reasoning_fraction: float | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -94,6 +100,9 @@ def compute_metrics(
     ttft_values: list[float] | None = None,
     tpot_values: list[float] | None = None,
     hardware: HardwareProfile | None = None,
+    mean_reasoning_tokens: float | None = None,
+    mean_answer_tokens: float | None = None,
+    reasoning_fraction: float | None = None,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -157,6 +166,9 @@ def compute_metrics(
         hw_gpu=hardware.gpu if hardware is not None else None,
         hw_vram_gb=hardware.vram_gb if hardware is not None else None,
         hw_os=hardware.os if hardware is not None else None,
+        mean_reasoning_tokens=mean_reasoning_tokens,
+        mean_answer_tokens=mean_answer_tokens,
+        reasoning_fraction=reasoning_fraction,
     )
 
 
@@ -251,5 +263,8 @@ def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
         hw_gpu=first.hw_gpu,
         hw_vram_gb=first.hw_vram_gb,
         hw_os=first.hw_os,
+        mean_reasoning_tokens=_median_optional([r.mean_reasoning_tokens for r in reports]),
+        mean_answer_tokens=_median_optional([r.mean_answer_tokens for r in reports]),
+        reasoning_fraction=_median_optional([r.reasoning_fraction for r in reports]),
         timestamp=last.timestamp,
     )

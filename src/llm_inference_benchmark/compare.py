@@ -39,11 +39,16 @@ _HEADERS = [
     "Task Q %",
     "PPL",
     "Judge",
+    "Think tok",
+    "Answer tok",
+    "Think %",
 ]
 
 # Indices into _HEADERS that are suppressed when every row shows "N/A".
 # Mandatory columns (0-5 and 13) are never suppressed.
-_OPTIONAL_COL_INDICES: frozenset[int] = frozenset({6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19})
+_OPTIONAL_COL_INDICES: frozenset[int] = frozenset(
+    {6, 7, 8, 9, 10, 11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22}
+)
 
 
 @dataclass(frozen=True)
@@ -79,6 +84,10 @@ class RunRow:
     hw_gpu: str | None = None
     hw_vram_gb: float | None = None
     hw_os: str | None = None
+    # Reasoning token parser (v0.26) — absent when reasoning tags not configured
+    mean_reasoning_tokens: float | None = None
+    mean_answer_tokens: float | None = None
+    reasoning_fraction: float | None = None
 
 
 def _parse_optional_str(row: dict[str, str], key: str) -> str | None:
@@ -151,6 +160,9 @@ def load_csv(path: str | Path) -> RunRow:
     hw_gpu = _parse_optional_str(row, "hw_gpu")
     hw_vram_gb = _parse_optional_float(row, "hw_vram_gb", path)
     hw_os = _parse_optional_str(row, "hw_os")
+    mean_reasoning_tokens = _parse_optional_float(row, "mean_reasoning_tokens", path)
+    mean_answer_tokens = _parse_optional_float(row, "mean_answer_tokens", path)
+    reasoning_fraction = _parse_optional_float(row, "reasoning_fraction", path)
 
     return RunRow(
         backend=row["backend"],
@@ -183,6 +195,9 @@ def load_csv(path: str | Path) -> RunRow:
         hw_gpu=hw_gpu,
         hw_vram_gb=hw_vram_gb,
         hw_os=hw_os,
+        mean_reasoning_tokens=mean_reasoning_tokens,
+        mean_answer_tokens=mean_answer_tokens,
+        reasoning_fraction=reasoning_fraction,
     )
 
 
@@ -278,6 +293,9 @@ def render_table(rows: list[RunRow]) -> str:
             fmt_rate(r.task_quality_pass_rate),
             fmt_ppl(r.perplexity),
             fmt_rate(r.judge_score),
+            fmt_optional(r.mean_reasoning_tokens),
+            fmt_optional(r.mean_answer_tokens),
+            fmt_rate(r.reasoning_fraction),
         ]
         for r in rows
     ]
@@ -341,6 +359,9 @@ def render_json(rows: list[RunRow]) -> str:
             "hw_gpu": r.hw_gpu,
             "hw_vram_gb": r.hw_vram_gb,
             "hw_os": r.hw_os,
+            "mean_reasoning_tokens": r.mean_reasoning_tokens,
+            "mean_answer_tokens": r.mean_answer_tokens,
+            "reasoning_fraction": r.reasoning_fraction,
         }
         for r in rows
     ]
@@ -377,6 +398,9 @@ _CSV_FIELDS = [
     "hw_gpu",
     "hw_vram_gb",
     "hw_os",
+    "mean_reasoning_tokens",
+    "mean_answer_tokens",
+    "reasoning_fraction",
 ]
 
 
@@ -421,6 +445,9 @@ def render_csv(rows: list[RunRow]) -> str:
                 "hw_gpu": r.hw_gpu or "",
                 "hw_vram_gb": r.hw_vram_gb if r.hw_vram_gb is not None else "",
                 "hw_os": r.hw_os or "",
+                "mean_reasoning_tokens": _or_empty(r.mean_reasoning_tokens),
+                "mean_answer_tokens": _or_empty(r.mean_answer_tokens),
+                "reasoning_fraction": _or_empty(r.reasoning_fraction),
             }
         )
     return buf.getvalue().rstrip("\n")

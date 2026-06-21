@@ -428,7 +428,7 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 - [ ] **Thermal throttling index** — compare tok/s at t=0 vs t=60 s to detect frequency scaling
 - [ ] **ITL variance (jitter)** — inter-token latency std-dev for streaming UX quality
 - [x] **Hardware profile report** — auto-detect CPU, RAM, GPU VRAM, OS; attach to every result (`hw_cpu`, `hw_cpu_cores`, `hw_ram_gb`, `hw_gpu`, `hw_vram_gb`, `hw_os` columns in CSV/JSON)
-- [ ] **Reasoning token parser** — separate `<think>…</think>` metrics for DeepSeek-R1 / QwQ
+- [x] **Reasoning token parser** — `reasoning_start_tag` / `reasoning_end_tag` config fields; `mean_reasoning_tokens`, `mean_answer_tokens`, `reasoning_fraction` in CSV/JSON output
 
 ### Phase 5 — Concurrency & Engine Agnosticism
 

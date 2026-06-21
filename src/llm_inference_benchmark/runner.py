@@ -23,6 +23,7 @@ from llm_inference_benchmark.metrics import (
     compute_metrics,
 )
 from llm_inference_benchmark.quality import compute_quality
+from llm_inference_benchmark.reasoning import reasoning_stats
 from llm_inference_benchmark.task_quality import (
     TaskQualityReport,
     compute_task_quality,
@@ -165,6 +166,18 @@ def run_benchmark(
     if config.measure_judge:
         judge_score = backend.compute_judge_score(prompts_used, texts)
 
+    mean_r_tokens: float | None = None
+    mean_a_tokens: float | None = None
+    r_fraction: float | None = None
+    if config.reasoning_start_tag and config.reasoning_end_tag:
+        output_token_counts = [r.output_tokens for r in results]
+        mean_r_tokens, mean_a_tokens, r_fraction = reasoning_stats(
+            texts,
+            output_token_counts,
+            config.reasoning_start_tag,
+            config.reasoning_end_tag,
+        )
+
     return compute_metrics(
         results,
         backend=backend.name,
@@ -182,6 +195,9 @@ def run_benchmark(
         ttft_values=ttft_values or None,
         tpot_values=tpot_values or None,
         hardware=hardware,
+        mean_reasoning_tokens=mean_r_tokens,
+        mean_answer_tokens=mean_a_tokens,
+        reasoning_fraction=r_fraction,
     )
 
 

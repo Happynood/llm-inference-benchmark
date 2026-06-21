@@ -37,6 +37,9 @@
 | `hw_gpu` | string | GPU name from `nvidia-smi`; blank on CPU-only machines |
 | `hw_vram_gb` | GB | Total VRAM from `nvidia-smi`, rounded to one decimal; blank on CPU-only machines |
 | `hw_os` | string | OS string from `platform.platform()` |
+| `mean_reasoning_tokens` | tokens | Mean estimated tokens inside `<think>…</think>` per request; blank unless `reasoning_start_tag` / `reasoning_end_tag` are set |
+| `mean_answer_tokens` | tokens | Mean estimated tokens outside the reasoning block per request; blank unless reasoning tags are set |
+| `reasoning_fraction` | ratio [0, 1] | Mean fraction of output tokens attributed to reasoning; blank unless reasoning tags are set |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
 
 ## Memory Measurement

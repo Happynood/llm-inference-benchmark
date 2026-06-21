@@ -8,6 +8,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- Reasoning token parser for thinking-model outputs (`<think>…</think>` or custom tags).
+  Set `reasoning_start_tag` and `reasoning_end_tag` in the benchmark config to split each
+  completion into a reasoning portion and a final-answer portion.  Three new columns appear
+  in result CSV and JSON output: `mean_reasoning_tokens`, `mean_answer_tokens`, and
+  `reasoning_fraction` (fraction of output tokens estimated as reasoning).  Token counts
+  are estimated from char-length fractions so no tokenizer dependency is added.
+  `llm-bench compare` renders the new columns in the Markdown table; columns are suppressed
+  when all runs show N/A (consistent with other optional columns).  Older CSVs without
+  these columns load without errors.
+
 - Hardware profile auto-detect: six new `hw_*` columns (`hw_cpu`, `hw_cpu_cores`,
   `hw_ram_gb`, `hw_gpu`, `hw_vram_gb`, `hw_os`) are embedded in every result CSV row
   and JSON object.  Detection uses `psutil` (CPU cores, RAM) and a single `nvidia-smi`
