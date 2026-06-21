@@ -297,6 +297,10 @@ Plotly).  Open `http://localhost:8080` to see a live runs table, per-run log str
 a bar-chart comparison for selected runs, and a Pareto chart (p95 latency vs throughput)
 for each completed run.
 
+Click **+ New Run** in the dashboard to open a modal form — choose model, backend,
+concurrency, and other parameters, then submit directly from the browser without touching
+the CLI or `curl`.
+
 ```bash
 # Install server dependencies
 uv pip install 'llm-inference-benchmark[server]'

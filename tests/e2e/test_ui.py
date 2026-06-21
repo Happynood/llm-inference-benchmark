@@ -188,3 +188,53 @@ def test_dashboard_link_on_pareto_page(page: Page, live_server: str) -> None:
     assert first_href is not None
     page.goto(live_server + first_href)
     expect(page.locator("a:has-text('Dashboard')")).to_be_visible()
+
+
+def test_new_run_button_is_visible(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.wait_for_selector("#new-run-btn", timeout=8000)
+    expect(page.locator("#new-run-btn")).to_be_visible()
+    expect(page.locator("#new-run-btn")).to_contain_text("New Run")
+
+
+def test_new_run_modal_opens_on_click(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.wait_for_selector("#new-run-btn", timeout=8000)
+    # Modal should be hidden initially
+    expect(page.locator("#run-modal")).not_to_have_class("open")
+    page.locator("#new-run-btn").click()
+    expect(page.locator("#run-modal")).to_have_class("modal-backdrop open")
+
+
+def test_new_run_modal_closes_on_cancel(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.wait_for_selector("#new-run-btn", timeout=8000)
+    page.locator("#new-run-btn").click()
+    expect(page.locator("#run-modal")).to_have_class("modal-backdrop open")
+    page.locator("button:has-text('Cancel')").click()
+    expect(page.locator("#run-modal")).not_to_have_class("open")
+
+
+def test_new_run_modal_has_required_fields(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.wait_for_selector("#new-run-btn", timeout=8000)
+    page.locator("#new-run-btn").click()
+    expect(page.locator("#f-model")).to_be_visible()
+    expect(page.locator("#f-backend")).to_be_visible()
+    expect(page.locator("#f-requests")).to_be_visible()
+    expect(page.locator("#f-concurrency")).to_be_visible()
+    expect(page.locator("#f-warmup")).to_be_visible()
+
+
+def test_gpu_layers_hidden_for_non_llama_cpp(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.wait_for_selector("#new-run-btn", timeout=8000)
+    page.locator("#new-run-btn").click()
+    # Default backend is 'mock' — GPU layers row must be hidden
+    expect(page.locator("#f-gpu-row")).to_be_hidden()
+    # Switch to llama-cpp — GPU layers row must appear
+    page.locator("#f-backend").select_option("llama-cpp")
+    expect(page.locator("#f-gpu-row")).to_be_visible()
+    # Switch back — hidden again
+    page.locator("#f-backend").select_option("mock")
+    expect(page.locator("#f-gpu-row")).to_be_hidden()
