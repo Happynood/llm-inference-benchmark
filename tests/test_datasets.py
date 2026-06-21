@@ -13,8 +13,11 @@ from llm_inference_benchmark.cli import main
 from llm_inference_benchmark.datasets import (
     _CHARS_PER_TOKEN,
     REGISTRY,
+    _extract_gsm8k,
     _extract_hermes_fn,
     _extract_lmsys_chat,
+    _extract_mmlu_pro,
+    _extract_swe_bench_pro,
     _extract_wildchat,
     _make_long_context_extractor,
     cache_dir,
@@ -390,6 +393,81 @@ def test_pull_long_context_dataset(tmp_path: Path) -> None:
         assert obj["prompt"].startswith("Summarize the following passage")
 
 
+# ── Unit tests: gsm8k extractor ───────────────────────────────────────────────
+
+
+def test_extract_gsm8k_returns_solve_prompt() -> None:
+    row = {"question": "James has 3 apples. He buys 5 more. How many does he have?"}
+    result = _extract_gsm8k(row)
+    assert result is not None
+    assert result.startswith("Solve step by step:")
+    assert "apples" in result
+
+
+def test_extract_gsm8k_skips_empty_question() -> None:
+    assert _extract_gsm8k({}) is None
+    assert _extract_gsm8k({"question": "   "}) is None
+
+
+# ── Unit tests: mmlu_pro extractor ────────────────────────────────────────────
+
+
+def test_extract_mmlu_pro_with_options() -> None:
+    row = {
+        "question": "Which organelle produces ATP?",
+        "options": ["Nucleus", "Mitochondria", "Ribosome", "Golgi"],
+    }
+    result = _extract_mmlu_pro(row)
+    assert result is not None
+    assert "Which organelle" in result
+    assert "A. Nucleus" in result
+    assert "Answer:" in result
+
+
+def test_extract_mmlu_pro_without_options() -> None:
+    row = {"question": "What is the speed of light?", "options": []}
+    result = _extract_mmlu_pro(row)
+    assert result is not None
+    assert "Answer:" in result
+    assert "A." not in result
+
+
+def test_extract_mmlu_pro_skips_empty_question() -> None:
+    assert _extract_mmlu_pro({}) is None
+    assert _extract_mmlu_pro({"question": ""}) is None
+
+
+# ── Unit tests: swe_bench_pro extractor ───────────────────────────────────────
+
+
+def test_extract_swe_bench_pro_returns_fix_prompt() -> None:
+    text = "x" * 100 + " some issue description here"
+    row = {"problem_statement": text}
+    result = _extract_swe_bench_pro(row)
+    assert result is not None
+    assert result.startswith("Analyze this software issue")
+
+
+def test_extract_swe_bench_pro_falls_back_to_text_field() -> None:
+    text = "b" * 100
+    row = {"text": text}
+    result = _extract_swe_bench_pro(row)
+    assert result is not None
+
+
+def test_extract_swe_bench_pro_truncates_long_text() -> None:
+    text = "word " * 1000  # ~5000 chars
+    row = {"problem_statement": text}
+    result = _extract_swe_bench_pro(row)
+    assert result is not None
+    assert len(result) < 2200  # header + truncated body
+
+
+def test_extract_swe_bench_pro_skips_short_text() -> None:
+    assert _extract_swe_bench_pro({}) is None
+    assert _extract_swe_bench_pro({"problem_statement": "short"}) is None
+
+
 # ── Registry sanity check ─────────────────────────────────────────────────────
 
 
@@ -399,6 +477,9 @@ def test_registry_has_expected_entries() -> None:
     assert "long-context-4k" in REGISTRY
     assert "long-context-16k" in REGISTRY
     assert "long-context-64k" in REGISTRY
+    assert "gsm8k" in REGISTRY
+    assert "mmlu-pro" in REGISTRY
+    assert "swe-bench-pro" in REGISTRY
     for spec in REGISTRY.values():
         assert "hf_repo" in spec
         assert "extractor" in spec

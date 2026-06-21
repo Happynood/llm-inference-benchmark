@@ -57,6 +57,28 @@ REGISTRY: dict[str, dict[str, Any]] = {
         "extractor": "c4_64k",
         "description": "allenai/c4 (en) — ~64k-token passages for prefill latency profiling",
     },
+    "gsm8k": {
+        "hf_repo": "openai/gsm8k",
+        "hf_config": "main",
+        "split": "train",
+        "max_samples": 200,
+        "extractor": "gsm8k",
+        "description": "openai/gsm8k — grade-school math word problems",
+    },
+    "mmlu-pro": {
+        "hf_repo": "TIGER-Lab/MMLU-Pro",
+        "split": "test",
+        "max_samples": 200,
+        "extractor": "mmlu_pro",
+        "description": "TIGER-Lab/MMLU-Pro — multi-choice knowledge benchmark (professional-level)",
+    },
+    "swe-bench-pro": {
+        "hf_repo": "ScaleAI/SWE-bench_Pro",
+        "split": "train",
+        "max_samples": 100,
+        "extractor": "swe_bench_pro",
+        "description": "ScaleAI/SWE-bench_Pro — real-world GitHub issue repair tasks",
+    },
 }
 
 
@@ -131,6 +153,30 @@ def _make_long_context_extractor(target_tokens: int):
     return _extract
 
 
+def _extract_gsm8k(row: dict[str, Any]) -> str | None:
+    q = str(row.get("question", "")).strip()
+    return f"Solve step by step: {q}" if q else None
+
+
+def _extract_mmlu_pro(row: dict[str, Any]) -> str | None:
+    q = str(row.get("question", "")).strip()
+    options = row.get("options", [])
+    if not q:
+        return None
+    opts = "\n".join(f"  {chr(65 + i)}. {o}" for i, o in enumerate(options))
+    return f"Question: {q}\n{opts}\nAnswer:" if opts else f"Question: {q}\nAnswer:"
+
+
+def _extract_swe_bench_pro(row: dict[str, Any]) -> str | None:
+    text = row.get("problem_statement") or row.get("text") or row.get("body") or ""
+    text = str(text).strip()
+    if len(text) < 50:
+        return None
+    if len(text) > 2000:
+        text = text[:2000].rsplit(" ", 1)[0] + " …"
+    return f"Analyze this software issue and suggest a fix:\n\n{text}"
+
+
 _EXTRACTORS = {
     "wildchat": _extract_wildchat,
     "lmsys_chat": _extract_lmsys_chat,
@@ -138,6 +184,9 @@ _EXTRACTORS = {
     "c4_4k": _make_long_context_extractor(4_096),
     "c4_16k": _make_long_context_extractor(16_384),
     "c4_64k": _make_long_context_extractor(65_536),
+    "gsm8k": _extract_gsm8k,
+    "mmlu_pro": _extract_mmlu_pro,
+    "swe_bench_pro": _extract_swe_bench_pro,
 }
 
 
