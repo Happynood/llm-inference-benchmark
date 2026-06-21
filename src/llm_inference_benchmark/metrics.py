@@ -121,10 +121,10 @@ def _compute_thermal_throttle(
     boundary_late = total_s * 0.75
 
     early_tokens = sum(
-        r.output_tokens for r, end in zip(results, cum_s) if end <= boundary_early
+        r.output_tokens for r, end in zip(results, cum_s, strict=False) if end <= boundary_early
     )
     late_tokens = sum(
-        r.output_tokens for r, end in zip(results, cum_s) if end >= boundary_late
+        r.output_tokens for r, end in zip(results, cum_s, strict=False) if end >= boundary_late
     )
 
     if boundary_early <= 0 or early_tokens == 0:

@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+
+- **Output directory is created automatically**: running `llm-bench --output results/bench.csv`
+  no longer fails with `FileNotFoundError` when the parent directory (`results/`) does not
+  exist.  All commands that accept `--output` or `--manifest` now call
+  `mkdir(parents=True, exist_ok=True)` before writing, matching the existing behaviour of
+  `matrix` and `pipeline`.  Affected commands: main benchmark, `compare`, `pareto`,
+  `recommend`, `diff`.
+
 ### Added
 
 - **Thermal throttling index** (`thermal_throttle_pct`): new metric that measures the

@@ -625,3 +625,26 @@ def test_compare_help_includes_ttft_sort_option() -> None:
     result = CliRunner().invoke(main, ["compare", "--help"])
     assert result.exit_code == 0, result.output
     assert "ttft" in result.output
+
+
+# ---------------------------------------------------------------------------
+# Auto-mkdir: --output and --manifest create missing parent directories
+# ---------------------------------------------------------------------------
+
+
+def test_output_csv_auto_creates_parent_dir(tmp_config: Path, tmp_path: Path) -> None:
+    out = tmp_path / "new_subdir" / "deep" / "bench.csv"
+    assert not out.parent.exists()
+    result = CliRunner().invoke(main, ["--config", str(tmp_config), "--output", str(out)])
+    assert result.exit_code == 0, result.output
+    assert out.exists()
+
+
+def test_output_json_auto_creates_parent_dir(tmp_config: Path, tmp_path: Path) -> None:
+    out = tmp_path / "new_subdir" / "results.json"
+    assert not out.parent.exists()
+    result = CliRunner().invoke(
+        main, ["--config", str(tmp_config), "--format", "json", "--output", str(out)]
+    )
+    assert result.exit_code == 0, result.output
+    assert out.exists()

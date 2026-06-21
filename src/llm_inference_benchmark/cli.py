@@ -217,11 +217,13 @@ def main(
     if output_format == "json":
         text = json.dumps(asdict(report))
         if output_path:
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             Path(output_path).write_text(text + "\n")
         else:
             click.echo(text)
     else:
         if output_path:
+            Path(output_path).parent.mkdir(parents=True, exist_ok=True)
             row = {k: ("" if v is None else v) for k, v in asdict(report).items()}
             with open(output_path, "w", newline="") as f:
                 writer = csv.DictWriter(f, fieldnames=list(row.keys()))
@@ -232,6 +234,7 @@ def main(
     if manifest_path:
         from llm_inference_benchmark.manifest import collect_manifest, write_manifest
 
+        Path(manifest_path).parent.mkdir(parents=True, exist_ok=True)
         manifest = collect_manifest(config_path, cfg)
         write_manifest(manifest, manifest_path)
         click.echo(f"Manifest written to {manifest_path}")
@@ -332,6 +335,7 @@ def compare_cmd(
         text = render_table(rows)
 
     if output_path:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_text(text + "\n")
         click.echo(f"Output written to {output_path}")
     else:
@@ -406,6 +410,7 @@ def pareto_cmd(
         text = render_pareto_table(classified)
 
     if output_path:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_text(text + "\n")
         click.echo(f"Pareto output written to {output_path}")
     else:
@@ -533,6 +538,7 @@ def recommend_cmd(
             raise click.UsageError(str(exc)) from exc
 
     if output_path:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_text(text + "\n")
         click.echo(f"Recommendation written to {output_path}")
     else:
@@ -771,6 +777,7 @@ def diff_cmd(
         text = build_diff_table(baseline_csv, current_csv)
 
     if output_path:
+        Path(output_path).parent.mkdir(parents=True, exist_ok=True)
         Path(output_path).write_text(text + "\n")
         click.echo(f"Diff written to {output_path}")
     else:
