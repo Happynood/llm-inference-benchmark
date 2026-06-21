@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+
+- E2E tests (`tests/e2e/test_ui.py`) now show **SKIPPED** instead of ERROR when Chromium
+  is not installed.  The module-level `pytestmark` calls `_chromium_available()` which
+  checks whether the Playwright-managed Chromium binary exists on disk.  Install the
+  browser with `playwright install chromium` to re-enable the suite.
+
 ### Added
 - Reasoning token parser for thinking-model outputs (`<think>…</think>` or custom tags).
   Set `reasoning_start_tag` and `reasoning_end_tag` in the benchmark config to split each
