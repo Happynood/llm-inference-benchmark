@@ -435,6 +435,27 @@ document.getElementById('select-all').addEventListener('change', function() {
   document.querySelectorAll('.run-cb').forEach(function(cb){ cb.checked = this.checked; }, this);
 });
 
+var _checkedRuns = new Set();
+document.body.addEventListener('htmx:beforeSwap', function(evt) {
+  if (evt.detail.target && evt.detail.target.id === 'runs-tbody') {
+    _checkedRuns = new Set(
+      Array.from(document.querySelectorAll('.run-cb:checked')).map(function(cb){ return cb.value; })
+    );
+  }
+});
+document.body.addEventListener('htmx:afterSettle', function(evt) {
+  if (evt.detail.target && evt.detail.target.id === 'runs-tbody') {
+    var all = document.querySelectorAll('.run-cb');
+    all.forEach(function(cb){ cb.checked = _checkedRuns.has(cb.value); });
+    var checked = Array.from(all).filter(function(cb){ return cb.checked; });
+    var sa = document.getElementById('select-all');
+    if (sa) {
+      sa.checked = all.length > 0 && checked.length === all.length;
+      sa.indeterminate = checked.length > 0 && checked.length < all.length;
+    }
+  }
+});
+
 var _sse = null;
 function streamLog(runId) {
   if (_sse) { _sse.close(); }

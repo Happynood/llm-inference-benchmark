@@ -244,6 +244,34 @@ def test_new_run_modal_has_required_fields(page: Page, live_server: str) -> None
     expect(page.locator("#f-warmup")).to_be_visible()
 
 
+def test_checkbox_preserved_across_htmx_refresh(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.wait_for_selector(".run-cb", timeout=8000)
+    first_cb = page.locator(".run-cb").first
+    first_value = first_cb.get_attribute("value")
+    first_cb.check()
+    assert first_cb.is_checked()
+    # Trigger HTMX refresh without waiting 5 s
+    page.evaluate("htmx.trigger('#runs-tbody', 'load')")
+    page.wait_for_selector(".run-cb", timeout=8000)
+    restored = page.locator(f'.run-cb[value="{first_value}"]')
+    expect(restored).to_be_checked()
+
+
+def test_select_all_indeterminate_after_htmx_refresh(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.wait_for_selector(".run-cb", timeout=8000)
+    # Check only the first run — select-all should become indeterminate
+    page.locator(".run-cb").first.check()
+    page.evaluate("htmx.trigger('#runs-tbody', 'load')")
+    # HTMX swap is async; wait_for_selector returns immediately if elements already exist.
+    # Use wait_for_function to poll until htmx:afterSettle has applied indeterminate state.
+    page.wait_for_function(
+        "() => !!document.getElementById('select-all')?.indeterminate",
+        timeout=8000,
+    )
+
+
 def test_gpu_layers_hidden_for_non_llama_cpp(page: Page, live_server: str) -> None:
     page.goto(live_server)
     page.wait_for_selector("#new-run-btn", timeout=8000)
