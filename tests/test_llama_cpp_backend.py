@@ -145,8 +145,8 @@ def test_constructor_defaults() -> None:
     ):
         llama_cpp_mod.LlamaCppBackend(model_path=_FAKE_MODEL)
         kw = cls.call_args.kwargs
-        assert kw["n_ctx"] == 2048
-        assert kw["n_gpu_layers"] == 0
+        assert kw["n_ctx"] == 4096
+        assert kw["n_gpu_layers"] == -1
         assert kw["verbose"] is False
         assert "n_threads" not in kw
 
@@ -306,8 +306,8 @@ def test_llama_cpp_backend_config_defaults() -> None:
     from llm_inference_benchmark.config import LlamaCppBackendConfig
 
     cfg = LlamaCppBackendConfig()
-    assert cfg.n_ctx == 2048
-    assert cfg.n_gpu_layers == 0
+    assert cfg.n_ctx == 4096
+    assert cfg.n_gpu_layers == -1
     assert cfg.max_tokens == 50
     assert cfg.temperature == 0.0
     assert cfg.n_threads is None
