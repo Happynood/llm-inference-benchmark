@@ -1178,3 +1178,155 @@ def test_render_csv_includes_tpot_columns() -> None:
     assert "p50_tpot_ms" in record
     assert "tpot_stddev_ms" in record
     assert float(record["p50_tpot_ms"]) == pytest.approx(8.3)
+
+
+# ── Hardware profile columns ───────────────────────────────────────────────────
+
+
+def test_render_csv_includes_hw_columns() -> None:
+    row = RunRow(
+        "mock",
+        "m",
+        10,
+        5.0,
+        6.0,
+        100.0,
+        50.0,
+        None,
+        hw_cpu="Intel Core i7",
+        hw_cpu_cores=8,
+        hw_ram_gb=31.3,
+        hw_gpu="NVIDIA GeForce RTX 3050",
+        hw_vram_gb=4.0,
+        hw_os="Linux-7.0.0",
+    )
+    csv_str = render_csv([row])
+    import csv as _csv
+    import io
+
+    record = list(_csv.DictReader(io.StringIO(csv_str)))[0]
+    assert record["hw_cpu"] == "Intel Core i7"
+    assert record["hw_cpu_cores"] == "8"
+    assert float(record["hw_ram_gb"]) == pytest.approx(31.3)
+    assert record["hw_gpu"] == "NVIDIA GeForce RTX 3050"
+    assert float(record["hw_vram_gb"]) == pytest.approx(4.0)
+    assert record["hw_os"] == "Linux-7.0.0"
+
+
+def test_render_csv_hw_columns_empty_when_none() -> None:
+    row = RunRow("mock", "m", 10, 5.0, 6.0, 100.0, 50.0, None)
+    csv_str = render_csv([row])
+    import csv as _csv
+    import io
+
+    record = list(_csv.DictReader(io.StringIO(csv_str)))[0]
+    assert record["hw_cpu"] == ""
+    assert record["hw_gpu"] == ""
+    assert record["hw_vram_gb"] == ""
+
+
+def test_render_json_includes_hw_fields() -> None:
+    import json
+
+    row = RunRow(
+        "mock",
+        "m",
+        10,
+        5.0,
+        6.0,
+        100.0,
+        50.0,
+        None,
+        hw_cpu="AMD Ryzen 7",
+        hw_cpu_cores=8,
+        hw_ram_gb=16.0,
+        hw_gpu=None,
+        hw_vram_gb=None,
+        hw_os="Linux",
+    )
+    parsed = json.loads(render_json([row]))
+    assert len(parsed) == 1
+    obj = parsed[0]
+    assert obj["hw_cpu"] == "AMD Ryzen 7"
+    assert obj["hw_cpu_cores"] == 8
+    assert obj["hw_ram_gb"] == pytest.approx(16.0)
+    assert obj["hw_gpu"] is None
+    assert obj["hw_vram_gb"] is None
+    assert obj["hw_os"] == "Linux"
+
+
+def test_load_csv_round_trips_hw_columns(tmp_path: Path) -> None:
+    row = RunRow(
+        "mock",
+        "m",
+        5,
+        10.0,
+        12.0,
+        50.0,
+        100.0,
+        None,
+        hw_cpu="AMD Ryzen 7 5800X",
+        hw_cpu_cores=8,
+        hw_ram_gb=31.3,
+        hw_gpu="NVIDIA GeForce RTX 3050",
+        hw_vram_gb=4.0,
+        hw_os="Linux-7.0.0",
+    )
+    p = tmp_path / "hw_test.csv"
+    p.write_text(render_csv([row]))
+    loaded = load_csv(p)
+    assert loaded.hw_cpu == "AMD Ryzen 7 5800X"
+    assert loaded.hw_cpu_cores == 8
+    assert loaded.hw_ram_gb == pytest.approx(31.3)
+    assert loaded.hw_gpu == "NVIDIA GeForce RTX 3050"
+    assert loaded.hw_vram_gb == pytest.approx(4.0)
+    assert loaded.hw_os == "Linux-7.0.0"
+
+
+def test_load_csv_hw_columns_absent_returns_none(tmp_path: Path) -> None:
+    """Older CSVs without hw_* columns must still load successfully."""
+    old_csv = (
+        "backend,model,request_count,p50_latency_ms,p95_latency_ms,"
+        "tokens_per_second,peak_cpu_memory_mb\n"
+        "mock,m,5,10.0,12.0,50.0,100.0\n"
+    )
+    p = tmp_path / "old.csv"
+    p.write_text(old_csv)
+    loaded = load_csv(p)
+    assert loaded.hw_cpu is None
+    assert loaded.hw_gpu is None
+    assert loaded.hw_vram_gb is None
+
+
+def test_compute_metrics_includes_hw_fields() -> None:
+    from llm_inference_benchmark.hardware import HardwareProfile
+    from llm_inference_benchmark.metrics import RequestMetrics, compute_metrics
+
+    hw = HardwareProfile(
+        cpu="Intel Core i7",
+        cpu_cores=8,
+        ram_gb=16.0,
+        gpu="NVIDIA GeForce RTX 3050",
+        vram_gb=4.0,
+        os="Linux",
+    )
+    results = [RequestMetrics(latency_ms=10.0, input_tokens=5, output_tokens=10)]
+    report = compute_metrics(results, backend="mock", model="t", hardware=hw)
+
+    assert report.hw_cpu == "Intel Core i7"
+    assert report.hw_cpu_cores == 8
+    assert report.hw_ram_gb == pytest.approx(16.0)
+    assert report.hw_gpu == "NVIDIA GeForce RTX 3050"
+    assert report.hw_vram_gb == pytest.approx(4.0)
+    assert report.hw_os == "Linux"
+
+
+def test_compute_metrics_hw_none_by_default() -> None:
+    from llm_inference_benchmark.metrics import RequestMetrics, compute_metrics
+
+    results = [RequestMetrics(latency_ms=10.0, input_tokens=5, output_tokens=10)]
+    report = compute_metrics(results, backend="mock", model="t")
+
+    assert report.hw_cpu is None
+    assert report.hw_gpu is None
+    assert report.hw_vram_gb is None

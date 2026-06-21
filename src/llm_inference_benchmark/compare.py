@@ -72,6 +72,28 @@ class RunRow:
     mean_input_tokens: float | None = None  # absent in pre-v0.22 CSVs → None
     mean_output_tokens: float | None = None  # absent in pre-v0.22 CSVs → None
     decode_tokens_per_second: float | None = None  # absent in pre-v0.22 CSVs or zero-output runs
+    # Hardware profile (v0.25) — absent in pre-v0.25 CSVs → None
+    hw_cpu: str | None = None
+    hw_cpu_cores: int | None = None
+    hw_ram_gb: float | None = None
+    hw_gpu: str | None = None
+    hw_vram_gb: float | None = None
+    hw_os: str | None = None
+
+
+def _parse_optional_str(row: dict[str, str], key: str) -> str | None:
+    raw = row.get(key, "").strip()
+    return raw if raw else None
+
+
+def _parse_optional_int(row: dict[str, str], key: str, path: str | Path) -> int | None:
+    raw = row.get(key, "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError as exc:
+        raise ValueError(f"{path}: invalid {key} value: {raw!r}") from exc
 
 
 def _parse_optional_float(row: dict[str, str], key: str, path: str | Path) -> float | None:
@@ -123,6 +145,12 @@ def load_csv(path: str | Path) -> RunRow:
     mean_input_tokens = _parse_optional_float(row, "mean_input_tokens", path)
     mean_output_tokens = _parse_optional_float(row, "mean_output_tokens", path)
     decode_tps = _parse_optional_float(row, "decode_tokens_per_second", path)
+    hw_cpu = _parse_optional_str(row, "hw_cpu")
+    hw_cpu_cores = _parse_optional_int(row, "hw_cpu_cores", path)
+    hw_ram_gb = _parse_optional_float(row, "hw_ram_gb", path)
+    hw_gpu = _parse_optional_str(row, "hw_gpu")
+    hw_vram_gb = _parse_optional_float(row, "hw_vram_gb", path)
+    hw_os = _parse_optional_str(row, "hw_os")
 
     return RunRow(
         backend=row["backend"],
@@ -149,6 +177,12 @@ def load_csv(path: str | Path) -> RunRow:
         mean_input_tokens=mean_input_tokens,
         mean_output_tokens=mean_output_tokens,
         decode_tokens_per_second=decode_tps,
+        hw_cpu=hw_cpu,
+        hw_cpu_cores=hw_cpu_cores,
+        hw_ram_gb=hw_ram_gb,
+        hw_gpu=hw_gpu,
+        hw_vram_gb=hw_vram_gb,
+        hw_os=hw_os,
     )
 
 
@@ -301,6 +335,12 @@ def render_json(rows: list[RunRow]) -> str:
             "judge_score": r.judge_score,
             "p95_latency_ms_std": r.p95_latency_ms_std,
             "tokens_per_second_std": r.tokens_per_second_std,
+            "hw_cpu": r.hw_cpu,
+            "hw_cpu_cores": r.hw_cpu_cores,
+            "hw_ram_gb": r.hw_ram_gb,
+            "hw_gpu": r.hw_gpu,
+            "hw_vram_gb": r.hw_vram_gb,
+            "hw_os": r.hw_os,
         }
         for r in rows
     ]
@@ -331,6 +371,12 @@ _CSV_FIELDS = [
     "judge_score",
     "p95_latency_ms_std",
     "tokens_per_second_std",
+    "hw_cpu",
+    "hw_cpu_cores",
+    "hw_ram_gb",
+    "hw_gpu",
+    "hw_vram_gb",
+    "hw_os",
 ]
 
 
@@ -369,6 +415,12 @@ def render_csv(rows: list[RunRow]) -> str:
                 "judge_score": _or_empty(r.judge_score),
                 "p95_latency_ms_std": _or_empty(r.p95_latency_ms_std),
                 "tokens_per_second_std": _or_empty(r.tokens_per_second_std),
+                "hw_cpu": r.hw_cpu or "",
+                "hw_cpu_cores": r.hw_cpu_cores if r.hw_cpu_cores is not None else "",
+                "hw_ram_gb": r.hw_ram_gb if r.hw_ram_gb is not None else "",
+                "hw_gpu": r.hw_gpu or "",
+                "hw_vram_gb": r.hw_vram_gb if r.hw_vram_gb is not None else "",
+                "hw_os": r.hw_os or "",
             }
         )
     return buf.getvalue().rstrip("\n")
