@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **ONNX example config now works without authentication**: `configs/onnx-example.yaml`
+  previously used `optimum-internal-testing/tiny-random-GPT2Model`, a private model that
+  returns 401 Unauthorized for most users on first run.  Changed `model:` to `gpt2`
+  (public, no token required).
+
 - **Output directory is created automatically**: running `llm-bench --output results/bench.csv`
   no longer fails with `FileNotFoundError` when the parent directory (`results/`) does not
   exist.  All commands that accept `--output` or `--manifest` now call
@@ -27,9 +32,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   Markdown comparison table (column is suppressed when every row is N/A).
 
 - **Thermal throttling index** (`thermal_throttle_pct`): new metric that measures the
-  percentage drop in tokens/s between the first and last 25 % of a sequential benchmark
+  percentage drop in tokens/s between the first and last 25 % of a sequential benchmark
   run.  A positive value indicates CPU/GPU frequency scaling during the run.  Populated
-  automatically for sequential runs with ≥ 8 requests and ≥ 10 s elapsed time; `None`
+  automatically for sequential runs with ≥ 8 requests and ≥ 10 s elapsed time; `None`
   otherwise (concurrent runs, short runs).  Appears in CSV output, JSON output, and the
   Markdown comparison table under the "Throttle %" column.
 
@@ -120,8 +125,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   detection fails.  Older CSVs without these columns load without errors.
 
 - Three long-context dataset variants backed by `deepmind/pg19` (public-domain books):
-  `long-context-4k` (≤100 samples, ~4 096-token passages), `long-context-16k` (≤50 samples,
-  ~16 384-token passages), and `long-context-64k` (≤10 samples, ~65 536-token passages).
+  `long-context-4k` (≤100 samples, ~4 096-token passages), `long-context-16k` (≤50 samples,
+  ~16 384-token passages), and `long-context-64k` (≤10 samples, ~65 536-token passages).
   Use them with the existing `llm-bench datasets pull` and `--dataset` flags to drive
   prefill-latency profiling at controlled context lengths:
   ```
