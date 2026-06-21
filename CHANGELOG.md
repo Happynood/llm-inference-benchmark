@@ -8,6 +8,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 ## [Unreleased]
 
 ### Added
+- Hardware profile auto-detect: six new `hw_*` columns (`hw_cpu`, `hw_cpu_cores`,
+  `hw_ram_gb`, `hw_gpu`, `hw_vram_gb`, `hw_os`) are embedded in every result CSV row
+  and JSON object.  Detection uses `psutil` (CPU cores, RAM) and a single `nvidia-smi`
+  call (GPU name, VRAM); all fields fall back gracefully on CPU-only machines or when
+  detection fails.  Older CSVs without these columns load without errors.
+
 - Three long-context dataset variants backed by `deepmind/pg19` (public-domain books):
   `long-context-4k` (≤100 samples, ~4 096-token passages), `long-context-16k` (≤50 samples,
   ~16 384-token passages), and `long-context-64k` (≤10 samples, ~65 536-token passages).

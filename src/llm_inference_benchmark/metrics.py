@@ -4,6 +4,7 @@ import statistics
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 
+from llm_inference_benchmark.hardware import HardwareProfile
 from llm_inference_benchmark.quality import QualityReport
 from llm_inference_benchmark.task_quality import TaskQualityReport
 
@@ -65,6 +66,14 @@ class MetricsReport:
     mean_input_tokens: float = 0.0
     mean_output_tokens: float = 0.0
     decode_tokens_per_second: float | None = None
+    # Hardware profile (v0.25) — compact snapshot of the machine that ran the benchmark.
+    # All fields default to None so existing test code that omits them still compiles.
+    hw_cpu: str | None = None
+    hw_cpu_cores: int | None = None
+    hw_ram_gb: float | None = None
+    hw_gpu: str | None = None
+    hw_vram_gb: float | None = None
+    hw_os: str | None = None
     timestamp: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
@@ -84,6 +93,7 @@ def compute_metrics(
     wall_clock_elapsed_s: float | None = None,
     ttft_values: list[float] | None = None,
     tpot_values: list[float] | None = None,
+    hardware: HardwareProfile | None = None,
 ) -> MetricsReport:
     """Aggregate raw per-request results into a MetricsReport."""
     if not results:
@@ -141,6 +151,12 @@ def compute_metrics(
             if total_output_tokens > 0 and total_latency_s > 0
             else None
         ),
+        hw_cpu=hardware.cpu if hardware is not None else None,
+        hw_cpu_cores=hardware.cpu_cores if hardware is not None else None,
+        hw_ram_gb=hardware.ram_gb if hardware is not None else None,
+        hw_gpu=hardware.gpu if hardware is not None else None,
+        hw_vram_gb=hardware.vram_gb if hardware is not None else None,
+        hw_os=hardware.os if hardware is not None else None,
     )
 
 
@@ -229,5 +245,11 @@ def aggregate_repeat_reports(reports: list[MetricsReport]) -> MetricsReport:
         repeats=n,
         p95_latency_ms_std=statistics.stdev(p95s),
         tokens_per_second_std=statistics.stdev(toks),
+        hw_cpu=first.hw_cpu,
+        hw_cpu_cores=first.hw_cpu_cores,
+        hw_ram_gb=first.hw_ram_gb,
+        hw_gpu=first.hw_gpu,
+        hw_vram_gb=first.hw_vram_gb,
+        hw_os=first.hw_os,
         timestamp=last.timestamp,
     )

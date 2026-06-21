@@ -8,6 +8,8 @@ from pathlib import Path
 
 from llm_inference_benchmark.backends.base import Backend
 from llm_inference_benchmark.config import BenchmarkConfig
+from llm_inference_benchmark.hardware import HardwareProfile
+from llm_inference_benchmark.hardware import detect as detect_hardware
 from llm_inference_benchmark.memory import (
     MemorySampler,
     NvidiaSmiSampler,
@@ -96,6 +98,7 @@ def run_benchmark(
     config: BenchmarkConfig,
     prompts: list[str],
     model_load_ms: float | None = None,
+    hardware: HardwareProfile | None = None,
 ) -> MetricsReport:
     """Run warmup + benchmark loop and return aggregated metrics including peak memory.
 
@@ -178,6 +181,7 @@ def run_benchmark(
         wall_clock_elapsed_s=wall_clock_elapsed_s,
         ttft_values=ttft_values or None,
         tpot_values=tpot_values or None,
+        hardware=hardware,
     )
 
 
@@ -198,8 +202,9 @@ def run_repeated(
     report's p50/p95/tok/s are the median across repeats; p95_latency_ms_std and
     tokens_per_second_std are sample standard deviations (n-1 denominator).
     """
+    hw = detect_hardware()
     if config.repeats == 1:
-        return run_benchmark(backend, config, prompts, model_load_ms=model_load_ms)
+        return run_benchmark(backend, config, prompts, model_load_ms=model_load_ms, hardware=hw)
 
     single_reports: list[MetricsReport] = []
     for i in range(config.repeats):
@@ -208,6 +213,7 @@ def run_repeated(
             config,
             prompts,
             model_load_ms=model_load_ms if i == 0 else None,
+            hardware=hw,
         )
         single_reports.append(r)
     return aggregate_repeat_reports(single_reports)

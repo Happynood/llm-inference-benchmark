@@ -427,7 +427,7 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 - [ ] **Tokens / Joule** — energy efficiency via `nvidia-smi power.draw` (GPU) and RAPL (CPU)
 - [ ] **Thermal throttling index** — compare tok/s at t=0 vs t=60 s to detect frequency scaling
 - [ ] **ITL variance (jitter)** — inter-token latency std-dev for streaming UX quality
-- [ ] **Hardware profile report** — auto-detect CPU, RAM, GPU VRAM, OS; attach to every result
+- [x] **Hardware profile report** — auto-detect CPU, RAM, GPU VRAM, OS; attach to every result (`hw_cpu`, `hw_cpu_cores`, `hw_ram_gb`, `hw_gpu`, `hw_vram_gb`, `hw_os` columns in CSV/JSON)
 - [ ] **Reasoning token parser** — separate `<think>…</think>` metrics for DeepSeek-R1 / QwQ
 
 ### Phase 5 — Concurrency & Engine Agnosticism

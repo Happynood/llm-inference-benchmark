@@ -31,6 +31,12 @@
 | `mean_input_tokens` | tokens | Mean input token count per request across the benchmark run |
 | `mean_output_tokens` | tokens | Mean output token count per request across the benchmark run |
 | `decode_tokens_per_second` | tok/s | Output tokens divided by total latency. Equal to `tokens_per_second` under sequential execution. Blank when no output tokens were produced. |
+| `hw_cpu` | string | CPU model name from `/proc/cpuinfo` (Linux) or `platform.processor()` |
+| `hw_cpu_cores` | int | Physical core count from `psutil.cpu_count(logical=False)`; blank when unavailable |
+| `hw_ram_gb` | GB | Total system RAM from `psutil.virtual_memory().total`, rounded to one decimal |
+| `hw_gpu` | string | GPU name from `nvidia-smi`; blank on CPU-only machines |
+| `hw_vram_gb` | GB | Total VRAM from `nvidia-smi`, rounded to one decimal; blank on CPU-only machines |
+| `hw_os` | string | OS string from `platform.platform()` |
 | `timestamp` | ISO 8601 | UTC timestamp when the run completed |
 
 ## Memory Measurement
