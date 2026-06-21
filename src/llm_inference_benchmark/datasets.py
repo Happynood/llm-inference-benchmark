@@ -34,25 +34,28 @@ REGISTRY: dict[str, dict[str, Any]] = {
         "description": "NousResearch/hermes-function-calling-v1 — function-calling prompts",
     },
     "long-context-4k": {
-        "hf_repo": "deepmind/pg19",
+        "hf_repo": "allenai/c4",
+        "hf_config": "en",
         "split": "train",
         "max_samples": 100,
-        "extractor": "pg19_4k",
-        "description": "deepmind/pg19 — ~4k-token passages for prefill latency profiling",
+        "extractor": "c4_4k",
+        "description": "allenai/c4 (en) — ~4k-token passages for prefill latency profiling",
     },
     "long-context-16k": {
-        "hf_repo": "deepmind/pg19",
+        "hf_repo": "allenai/c4",
+        "hf_config": "en",
         "split": "train",
         "max_samples": 50,
-        "extractor": "pg19_16k",
-        "description": "deepmind/pg19 — ~16k-token passages for prefill latency profiling",
+        "extractor": "c4_16k",
+        "description": "allenai/c4 (en) — ~16k-token passages for prefill latency profiling",
     },
     "long-context-64k": {
-        "hf_repo": "deepmind/pg19",
+        "hf_repo": "allenai/c4",
+        "hf_config": "en",
         "split": "train",
         "max_samples": 10,
-        "extractor": "pg19_64k",
-        "description": "deepmind/pg19 — ~64k-token passages for prefill latency profiling",
+        "extractor": "c4_64k",
+        "description": "allenai/c4 (en) — ~64k-token passages for prefill latency profiling",
     },
     "gsm8k": {
         "hf_repo": "openai/gsm8k",
@@ -123,11 +126,11 @@ def _extract_wildchat(row: dict[str, Any]) -> str | None:
 _CHARS_PER_TOKEN = 4
 
 
-def _make_pg19_extractor(target_tokens: int):
-    """Return an extractor that slices a ~*target_tokens*-token passage from a PG19 book.
+def _make_long_context_extractor(target_tokens: int):
+    """Return an extractor that slices a ~*target_tokens*-token passage from a long text.
 
-    Books shorter than half the target are skipped (return None).
-    The slice starts after the first ~5 % of text to avoid title/TOC pages.
+    Rows shorter than half the target are skipped (return None).
+    The slice starts after the first ~5 % of text to avoid headers/boilerplate.
     """
     target_chars = target_tokens * _CHARS_PER_TOKEN
     min_chars = target_chars // 2
@@ -178,9 +181,9 @@ _EXTRACTORS = {
     "wildchat": _extract_wildchat,
     "lmsys_chat": _extract_lmsys_chat,
     "hermes_fn": _extract_hermes_fn,
-    "pg19_4k": _make_pg19_extractor(4_096),
-    "pg19_16k": _make_pg19_extractor(16_384),
-    "pg19_64k": _make_pg19_extractor(65_536),
+    "c4_4k": _make_long_context_extractor(4_096),
+    "c4_16k": _make_long_context_extractor(16_384),
+    "c4_64k": _make_long_context_extractor(65_536),
     "gsm8k": _extract_gsm8k,
     "mmlu_pro": _extract_mmlu_pro,
     "swe_bench_pro": _extract_swe_bench_pro,

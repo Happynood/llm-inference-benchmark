@@ -19,7 +19,7 @@ from llm_inference_benchmark.datasets import (
     _extract_mmlu_pro,
     _extract_swe_bench_pro,
     _extract_wildchat,
-    _make_pg19_extractor,
+    _make_long_context_extractor,
     cache_dir,
     list_cached,
     load_prompts,
@@ -252,18 +252,18 @@ def test_cli_run_dataset_not_cached_gives_usage_error(tmp_path: Path) -> None:
     assert "not cached" in result.output.lower() or "Error" in result.output
 
 
-# ── Unit tests: pg19 long-context extractors ──────────────────────────────────
+# ── Unit tests: long-context extractors ──────────────────────────────────────
 
 
-def _pg19_row(chars: int) -> dict[str, str]:
-    """Build a fake PG19 row with *chars* characters of text."""
+def _long_context_row(chars: int) -> dict[str, str]:
+    """Build a fake long-context row with *chars* characters of text."""
     return {"text": "word " * (chars // 5)}
 
 
-def test_pg19_extractor_returns_prompt_for_long_book() -> None:
-    extractor = _make_pg19_extractor(4_096)
+def test_long_context_extractor_returns_prompt_for_long_text() -> None:
+    extractor = _make_long_context_extractor(4_096)
     target_chars = 4_096 * _CHARS_PER_TOKEN
-    row = _pg19_row(target_chars * 3)
+    row = _long_context_row(target_chars * 3)
     result = extractor(row)
     assert result is not None
     assert result.startswith("Summarize the following passage")
@@ -272,21 +272,21 @@ def test_pg19_extractor_returns_prompt_for_long_book() -> None:
     assert len(passage) >= target_chars // 2
 
 
-def test_pg19_extractor_skips_short_books() -> None:
-    extractor = _make_pg19_extractor(4_096)
+def test_long_context_extractor_skips_short_text() -> None:
+    extractor = _make_long_context_extractor(4_096)
     target_chars = 4_096 * _CHARS_PER_TOKEN
-    row = _pg19_row(target_chars // 4)  # well below the min_chars threshold
+    row = _long_context_row(target_chars // 4)  # well below the min_chars threshold
     assert extractor(row) is None
 
 
-def test_pg19_extractor_skips_empty_text() -> None:
-    extractor = _make_pg19_extractor(4_096)
+def test_long_context_extractor_skips_empty_text() -> None:
+    extractor = _make_long_context_extractor(4_096)
     assert extractor({"text": ""}) is None
     assert extractor({}) is None
 
 
-def test_pg19_extractor_trims_to_word_boundary() -> None:
-    extractor = _make_pg19_extractor(4_096)
+def test_long_context_extractor_trims_to_word_boundary() -> None:
+    extractor = _make_long_context_extractor(4_096)
     target_chars = 4_096 * _CHARS_PER_TOKEN
     # Create text that has spaces scattered throughout.
     row = {"text": ("hello world " * (target_chars * 3 // 12))}
@@ -357,11 +357,11 @@ def test_pull_non_gated_error_propagates(tmp_path: Path) -> None:
             pull("lmsys-chat")
 
 
-def test_pg19_16k_extractor_produces_longer_passage() -> None:
-    extractor_4k = _make_pg19_extractor(4_096)
-    extractor_16k = _make_pg19_extractor(16_384)
-    # A book long enough for both.
-    row = _pg19_row(16_384 * _CHARS_PER_TOKEN * 3)
+def test_long_context_16k_extractor_produces_longer_passage() -> None:
+    extractor_4k = _make_long_context_extractor(4_096)
+    extractor_16k = _make_long_context_extractor(16_384)
+    # A row long enough for both.
+    row = _long_context_row(16_384 * _CHARS_PER_TOKEN * 3)
     result_4k = extractor_4k(row)
     result_16k = extractor_16k(row)
     assert result_4k is not None and result_16k is not None
@@ -372,7 +372,7 @@ def test_pull_long_context_dataset(tmp_path: Path) -> None:
     from llm_inference_benchmark.datasets import pull
 
     target_chars = 4_096 * _CHARS_PER_TOKEN
-    # Each fake book is 3× the target length so the extractor can take a slice.
+    # Each fake row is 3× the target length so the extractor can take a slice.
     fake_rows = [{"text": "word " * (target_chars * 3 // 5)} for _ in range(5)]
     mock_ds = MagicMock()
     mock_ds.__iter__ = MagicMock(return_value=iter(fake_rows))

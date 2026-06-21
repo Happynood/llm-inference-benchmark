@@ -59,8 +59,8 @@ class LlamaCppBackend(Backend):
     def __init__(
         self,
         model_path: str,
-        n_ctx: int = 2048,
-        n_gpu_layers: int = 0,
+        n_ctx: int = 4096,
+        n_gpu_layers: int = -1,
         max_tokens: int = 50,
         temperature: float = 0.0,
         n_threads: int | None = None,
@@ -71,8 +71,11 @@ class LlamaCppBackend(Backend):
         if not _AVAILABLE or Llama is None:
             raise ImportError(
                 "llama-cpp backend requires optional deps:\n"
-                "  uv sync --extra llama-cpp\n"
-                "For GPU (CUDA):\n"
+                "  uv sync --extra llama-cpp\n\n"
+                "For NVIDIA GPU (CUDA), install the pre-built CUDA wheel instead:\n"
+                "  pip install llama-cpp-python "
+                "--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121\n\n"
+                "Or build from source with CUDA:\n"
                 '  CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp'
             )
 
