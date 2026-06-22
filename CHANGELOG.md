@@ -23,6 +23,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **GPU backend requirements documented**: the `## GPU Setup` section in `README.md` and
+  `docs/quickstart.md` now includes dedicated sub-sections for the **vLLM** and **ONNX
+  Runtime** backends.  Key points documented: vLLM is Linux-only and has no CPU fallback;
+  the default `--extra onnx` install uses the CPU build of ONNX Runtime and GPU
+  acceleration requires replacing it with `onnxruntime-gpu` plus setting `device: cuda`
+  in the config; neither backend requires `nvcc` or the CUDA toolkit.
+
 - **Web UI model dropdown shortened labels**: the **Model** dropdown in the "New Run" modal
   now shows a human-readable short name instead of the raw model path.  The org prefix is
   stripped for HuggingFace models (e.g. `meta-llama/Llama-3.2-1B-Instruct` →
