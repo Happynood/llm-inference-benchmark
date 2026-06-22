@@ -9,6 +9,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **`llm-bench sweep` command**: ramp `concurrency` across a comma-separated range and
+  emit a throughput-vs-latency curve in a single CSV.  Each level produces a row with
+  `concurrency`, `throughput_rps`, `p50_latency_ms`, `p95_latency_ms`, `tokens_per_second`,
+  and the full per-run metric columns.  `--max-p95-ms` stops the sweep early (exit 1) when
+  p95 latency exceeds the threshold.  A knee-point summary table is printed on completion.
+
+      llm-bench sweep --config configs/example.yaml --concurrency-range 1,2,4,8
+      llm-bench sweep --config configs/example.yaml --concurrency-range 1,2,4,8 --max-p95-ms 5000
+
 - **`GET /api/capabilities` endpoint**: reports runtime backend capability flags.
   Currently exposes `llama_cpp_gpu: bool`, reflecting whether the installed
   `llama-cpp-python` wheel was compiled with CUDA support.

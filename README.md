@@ -153,6 +153,7 @@ llm-bench compare   FILE [FILE...]                     # Markdown comparison tab
 llm-bench pareto    FILE [FILE...]                     # Pareto classification
 llm-bench recommend FILE [FILE...] [CONSTRAINTS]       # best config under constraints
 llm-bench matrix    --config MATRIX_YAML               # multi-run sweep
+llm-bench sweep     --config YAML --concurrency-range 1,2,4,8  # throughput-vs-latency ramp
 llm-bench serve     [--host HOST] [--port PORT]        # start Web API server
 llm-bench profiles                                     # list built-in workload profiles
 llm-bench validate-config --config YAML                # validate config without running
@@ -514,7 +515,7 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 
 ### Phase 5 — Concurrency & Engine Agnosticism
 
-- [ ] **`llm-bench sweep`** — auto-ramp concurrency until p95 latency exceeds threshold; plot throughput vs. latency curve
+- [x] **`llm-bench sweep`** — auto-ramp concurrency until p95 latency exceeds threshold; emit throughput-vs-latency curve as a combined CSV with one row per level
 - [ ] **Open-loop load mode** — constant-arrival-rate requests (not closed-loop sequential)
 - [x] **`--base-url` / `--api-key` global flags** — test any OpenAI-compatible server (LM Studio, Jan, Ollama, vLLM remote) without a config file
 

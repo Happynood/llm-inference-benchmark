@@ -1454,6 +1454,175 @@ def pipeline_cmd(
         sys.exit(1)
 
 
+@main.command("sweep")
+@click.option(
+    "--config",
+    "config_path",
+    required=True,
+    type=click.Path(exists=True),
+    help="Base YAML config file. concurrency is overridden at each step.",
+)
+@click.option(
+    "--concurrency-range",
+    "concurrency_range",
+    required=True,
+    help="Comma-separated concurrency levels, e.g. 1,2,4,8",
+)
+@click.option(
+    "--max-p95-ms",
+    "max_p95_ms",
+    default=None,
+    type=float,
+    help="Stop early when p95 latency exceeds this threshold (ms)",
+)
+@click.option(
+    "--requests",
+    "requests_override",
+    default=None,
+    type=int,
+    help="Number of benchmark requests per level (overrides config)",
+)
+@click.option(
+    "--output",
+    "output_path",
+    default="sweep_results.csv",
+    show_default=True,
+    help="Path for combined sweep CSV",
+)
+def sweep_cmd(
+    config_path: str,
+    concurrency_range: str,
+    max_p95_ms: float | None,
+    requests_override: int | None,
+    output_path: str,
+) -> None:
+    """Ramp concurrency and emit a throughput-vs-latency curve.
+
+    Run the benchmark at each concurrency level listed in --concurrency-range,
+    writing one combined CSV with a row per level.  Stops early when p95 latency
+    exceeds --max-p95-ms; exits with code 1 in that case.
+
+    Example:
+
+        llm-bench sweep --config configs/example.yaml --concurrency-range 1,2,4,8
+        llm-bench sweep --config configs/example.yaml --concurrency-range 1,2,4,8 --max-p95-ms 5000
+    """
+    try:
+        levels = [int(x.strip()) for x in concurrency_range.split(",") if x.strip()]
+    except ValueError:
+        raise click.UsageError(
+            "--concurrency-range must be comma-separated integers, e.g. 1,2,4,8"
+        ) from None
+    if not levels:
+        raise click.UsageError("--concurrency-range must contain at least one value")
+    for lvl in levels:
+        if lvl < 1:
+            raise click.UsageError("All concurrency values must be >= 1")
+
+    base_cfg = load_config(config_path)
+    if requests_override is not None:
+        base_cfg = base_cfg.model_copy(update={"requests": requests_override})
+
+    click.echo(f"Sweep: {len(levels)} level(s) → {output_path}")
+    click.echo(f"  Config: {config_path}  Model: {base_cfg.model}  Backend: {base_cfg.backend}")
+    click.echo(f"  Requests per level: {base_cfg.requests}")
+    if max_p95_ms is not None:
+        click.echo(f"  Max p95: {max_p95_ms:.0f} ms")
+    click.echo("")
+
+    _t0 = time.perf_counter()
+    backend = _build_backend(base_cfg)
+    model_load_ms = (time.perf_counter() - _t0) * 1000.0
+    prompts = load_prompts(base_cfg.resolve_prompts_file())
+
+    # Each row: (concurrency, throughput_rps, report)
+    sweep_rows: list[tuple[int, float, Any]] = []
+    threshold_breached = False
+
+    try:
+        for idx, concurrency in enumerate(levels, 1):
+            cfg = base_cfg.model_copy(update={"concurrency": concurrency})
+            click.echo(f"[{idx}/{len(levels)}] concurrency={concurrency}  requests={cfg.requests}")
+
+            report = run_repeated(
+                backend,
+                cfg,
+                prompts,
+                model_load_ms=model_load_ms if idx == 1 else None,
+            )
+
+            # throughput_rps = request_count / wall_elapsed_s
+            # tokens_per_second = total_output_tokens / wall_elapsed_s
+            # mean_output_tokens = total_output_tokens / request_count
+            # → throughput_rps = tokens_per_second / mean_output_tokens
+            if report.mean_output_tokens > 0:
+                throughput_rps = report.tokens_per_second / report.mean_output_tokens
+            else:
+                throughput_rps = 0.0
+
+            sweep_rows.append((concurrency, throughput_rps, report))
+
+            click.echo(
+                f"  p50={report.p50_latency_ms:.1f} ms  p95={report.p95_latency_ms:.1f} ms"
+                f"  tok/s={report.tokens_per_second:.1f}  rps={throughput_rps:.3f}"
+            )
+
+            if max_p95_ms is not None and report.p95_latency_ms > max_p95_ms:
+                click.echo(
+                    f"  WARNING: p95 {report.p95_latency_ms:.1f} ms exceeds"
+                    f" {max_p95_ms:.0f} ms — stopping sweep.",
+                    err=True,
+                )
+                threshold_breached = True
+                break
+    finally:
+        del backend
+        gc.collect()
+
+    if not sweep_rows:
+        raise click.ClickException("No sweep levels completed.")
+
+    # Write combined CSV
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    first_report_dict = {k: ("" if v is None else v) for k, v in asdict(sweep_rows[0][2]).items()}
+    fieldnames = ["concurrency", "throughput_rps", *first_report_dict.keys()]
+    with open(out, "w", newline="") as f:
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        for concurrency, throughput_rps, report in sweep_rows:
+            row = {
+                "concurrency": concurrency,
+                "throughput_rps": round(throughput_rps, 4),
+                **{k: ("" if v is None else v) for k, v in asdict(report).items()},
+            }
+            writer.writerow(row)
+    click.echo(f"\nSweep results written to {out}")
+
+    # Summary table — knee point = highest rps among completed levels
+    best_idx = max(range(len(sweep_rows)), key=lambda i: sweep_rows[i][1])
+    click.echo("\n=== Sweep Summary ===")
+    header = f"{'Concurrency':>12}  {'RPS':>8}  {'p50 ms':>8}  {'p95 ms':>8}  {'tok/s':>8}"
+    click.echo(header)
+    click.echo("-" * len(header))
+    for i, (concurrency, throughput_rps, report) in enumerate(sweep_rows):
+        marker = "  <- knee" if i == best_idx else ""
+        click.echo(
+            f"{concurrency:>12}  {throughput_rps:>8.3f}  {report.p50_latency_ms:>8.1f}"
+            f"  {report.p95_latency_ms:>8.1f}  {report.tokens_per_second:>8.1f}{marker}"
+        )
+
+    best_concurrency, best_rps, best_report = sweep_rows[best_idx]
+    click.echo(
+        f"\nKnee point: concurrency={best_concurrency}"
+        f"  rps={best_rps:.3f}"
+        f"  p95={best_report.p95_latency_ms:.1f} ms"
+    )
+
+    if threshold_breached:
+        sys.exit(1)
+
+
 @main.command("serve")
 @click.option("--host", default="127.0.0.1", show_default=True, help="Bind host")
 @click.option("--port", default=8080, show_default=True, type=int, help="Bind port")
