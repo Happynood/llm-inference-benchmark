@@ -16,7 +16,7 @@ from collections.abc import Generator
 
 import httpx
 import pytest
-from playwright.sync_api import Dialog, Page, expect
+from playwright.sync_api import Page, expect
 
 
 def _chromium_available() -> bool:
@@ -122,13 +122,13 @@ def seed_db(live_server: str) -> None:
 
 def test_dashboard_loads(page: Page, live_server: str) -> None:
     page.goto(live_server)
-    expect(page.locator("h1")).to_contain_text("llm-bench")
+    expect(page.locator(".brand")).to_contain_text("llm-bench")
 
 
 def test_runs_table_shows_two_rows(page: Page, live_server: str) -> None:
     page.goto(live_server)
-    page.wait_for_selector(".run-cb", timeout=8000)
-    rows = page.locator(".run-cb").count()
+    page.wait_for_selector(".run-card", timeout=8000)
+    rows = page.locator(".run-card").count()
     assert rows == 2
 
 
@@ -140,47 +140,43 @@ def test_runs_table_shows_status_badges(page: Page, live_server: str) -> None:
 
 def test_runs_table_shows_throughput(page: Page, live_server: str) -> None:
     page.goto(live_server)
-    page.wait_for_selector(".run-cb", timeout=8000)
-    # First seeded run has 120.5 tok/s → displayed as "120.5"
-    expect(page.locator("#runs-tbody")).to_contain_text("120.5")
+    page.wait_for_selector(".run-card", timeout=8000)
+    # First seeded run has 120.5 tok/s → displayed in sidebar card meta
+    expect(page.locator("#run-list")).to_contain_text("120.5")
 
 
 def test_log_button_shows_log_section(page: Page, live_server: str) -> None:
     page.goto(live_server)
-    page.wait_for_selector("button:has-text('Log')", timeout=8000)
-    page.locator("button:has-text('Log')").first.click()
-    expect(page.locator("#log-section")).to_be_visible()
-    expect(page.locator("#log-run-id")).to_be_visible()
+    page.wait_for_selector(".run-card", timeout=8000)
+    # Click a run card to load the detail panel with the log output
+    page.locator(".run-card").first.click()
+    page.wait_for_selector(".log-section", timeout=8000)
+    expect(page.locator(".log-section")).to_be_visible()
+    expect(page.locator("#log-output")).to_be_visible()
 
 
-def test_compare_without_selection_shows_alert(page: Page, live_server: str) -> None:
+def test_run_card_click_shows_detail_panel(page: Page, live_server: str) -> None:
     page.goto(live_server)
-    page.wait_for_selector(".run-cb", timeout=8000)
-    dismissed: list[str] = []
-
-    def _handle_dialog(d: Dialog) -> None:
-        dismissed.append(d.message)
-        d.dismiss()
-
-    page.on("dialog", _handle_dialog)
-    page.locator("button:has-text('Compare Selected')").click()
-    page.wait_for_timeout(500)
-    assert any("2" in msg or "least" in msg.lower() for msg in dismissed)
+    page.wait_for_selector(".run-card", timeout=8000)
+    page.locator(".run-card").first.click()
+    page.wait_for_selector("#detail-inner", timeout=8000)
+    expect(page.locator("#detail-inner")).to_be_visible()
 
 
-def test_compare_chart_renders_with_two_runs(page: Page, live_server: str) -> None:
+def test_run_detail_has_delete_button(page: Page, live_server: str) -> None:
     page.goto(live_server)
-    page.wait_for_selector("#select-all", timeout=8000)
-    page.locator("#select-all").click()
-    page.locator("button:has-text('Compare Selected')").click()
-    expect(page.locator("#chart-section")).to_be_visible()
-    expect(page.locator("#comparison-chart")).to_be_visible()
+    page.wait_for_selector(".run-card", timeout=8000)
+    page.locator(".run-card").first.click()
+    page.wait_for_selector("#detail-inner", timeout=8000)
+    expect(page.locator("button:has-text('Delete')")).to_be_visible()
 
 
 def test_pareto_page_loads(page: Page, live_server: str) -> None:
     page.goto(live_server)
-    page.wait_for_selector("a:has-text('Pareto')", timeout=8000)
-    first_href = page.locator("a:has-text('Pareto')").first.get_attribute("href")
+    page.wait_for_selector(".run-card", timeout=8000)
+    page.locator(".run-card").first.click()
+    page.wait_for_selector("a:has-text('Pareto Chart')", timeout=8000)
+    first_href = page.locator("a:has-text('Pareto Chart')").first.get_attribute("href")
     assert first_href is not None and "/pareto.html" in first_href
     page.goto(live_server + first_href)
     expect(page.locator("h2")).to_contain_text("Pareto")
@@ -189,8 +185,10 @@ def test_pareto_page_loads(page: Page, live_server: str) -> None:
 
 def test_pareto_page_has_plotly_chart(page: Page, live_server: str) -> None:
     page.goto(live_server)
-    page.wait_for_selector("a:has-text('Pareto')", timeout=8000)
-    first_href = page.locator("a:has-text('Pareto')").first.get_attribute("href")
+    page.wait_for_selector(".run-card", timeout=8000)
+    page.locator(".run-card").first.click()
+    page.wait_for_selector("a:has-text('Pareto Chart')", timeout=8000)
+    first_href = page.locator("a:has-text('Pareto Chart')").first.get_attribute("href")
     assert first_href is not None
     page.goto(live_server + first_href)
     page.wait_for_function(
@@ -202,8 +200,10 @@ def test_pareto_page_has_plotly_chart(page: Page, live_server: str) -> None:
 
 def test_dashboard_link_on_pareto_page(page: Page, live_server: str) -> None:
     page.goto(live_server)
-    page.wait_for_selector("a:has-text('Pareto')", timeout=8000)
-    first_href = page.locator("a:has-text('Pareto')").first.get_attribute("href")
+    page.wait_for_selector(".run-card", timeout=8000)
+    page.locator(".run-card").first.click()
+    page.wait_for_selector("a:has-text('Pareto Chart')", timeout=8000)
+    first_href = page.locator("a:has-text('Pareto Chart')").first.get_attribute("href")
     assert first_href is not None
     page.goto(live_server + first_href)
     expect(page.locator("a:has-text('Dashboard')")).to_be_visible()
@@ -219,19 +219,19 @@ def test_new_run_button_is_visible(page: Page, live_server: str) -> None:
 def test_new_run_modal_opens_on_click(page: Page, live_server: str) -> None:
     page.goto(live_server)
     page.wait_for_selector("#new-run-btn", timeout=8000)
-    # Modal should be hidden initially
-    expect(page.locator("#run-modal")).not_to_have_class("open")
+    # Modal is hidden initially via the HTML hidden attribute
+    expect(page.locator("#modal-overlay")).to_be_hidden()
     page.locator("#new-run-btn").click()
-    expect(page.locator("#run-modal")).to_have_class("modal-backdrop open")
+    expect(page.locator("#modal-overlay")).to_be_visible()
 
 
 def test_new_run_modal_closes_on_cancel(page: Page, live_server: str) -> None:
     page.goto(live_server)
     page.wait_for_selector("#new-run-btn", timeout=8000)
     page.locator("#new-run-btn").click()
-    expect(page.locator("#run-modal")).to_have_class("modal-backdrop open")
+    expect(page.locator("#modal-overlay")).to_be_visible()
     page.locator("button:has-text('Cancel')").click()
-    expect(page.locator("#run-modal")).not_to_have_class("open")
+    expect(page.locator("#modal-overlay")).to_be_hidden()
 
 
 def test_new_run_modal_has_required_fields(page: Page, live_server: str) -> None:
@@ -245,32 +245,36 @@ def test_new_run_modal_has_required_fields(page: Page, live_server: str) -> None
     expect(page.locator("#f-warmup")).to_be_visible()
 
 
-def test_checkbox_preserved_across_htmx_refresh(page: Page, live_server: str) -> None:
+def test_run_card_stays_selected_after_htmx_refresh(page: Page, live_server: str) -> None:
     page.goto(live_server)
-    page.wait_for_selector(".run-cb", timeout=8000)
-    first_cb = page.locator(".run-cb").first
-    first_value = first_cb.get_attribute("value")
-    first_cb.check()
-    assert first_cb.is_checked()
-    # Trigger HTMX refresh without waiting 5 s
-    page.evaluate("htmx.trigger('#runs-tbody', 'load')")
-    page.wait_for_selector(".run-cb", timeout=8000)
-    restored = page.locator(f'.run-cb[value="{first_value}"]')
-    expect(restored).to_be_checked()
-
-
-def test_select_all_indeterminate_after_htmx_refresh(page: Page, live_server: str) -> None:
-    page.goto(live_server)
-    page.wait_for_selector(".run-cb", timeout=8000)
-    # Check only the first run — select-all should become indeterminate
-    page.locator(".run-cb").first.check()
-    page.evaluate("htmx.trigger('#runs-tbody', 'load')")
-    # HTMX swap is async; wait_for_selector returns immediately if elements already exist.
-    # Use wait_for_function to poll until htmx:afterSettle has applied indeterminate state.
+    page.wait_for_selector(".run-card", timeout=8000)
+    first_card = page.locator(".run-card").first
+    first_run_id = first_card.get_attribute("data-run-id")
+    first_card.click()
+    # Confirm selected class was applied
     page.wait_for_function(
-        "() => !!document.getElementById('select-all')?.indeterminate",
+        f"() => !!document.querySelector('.run-card[data-run-id=\"{first_run_id}\"]')"
+        f"?.classList.contains('selected')",
+        timeout=4000,
+    )
+    # Trigger HTMX refresh without waiting 3 s
+    page.evaluate("htmx.trigger('#run-list', 'load')")
+    page.wait_for_selector(".run-card", timeout=8000)
+    # After re-render, the card must still carry the selected class
+    page.wait_for_function(
+        f"() => !!document.querySelector('.run-card[data-run-id=\"{first_run_id}\"]')"
+        f"?.classList.contains('selected')",
         timeout=8000,
     )
+
+
+def test_detail_panel_loads_after_card_click(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.wait_for_selector(".run-card", timeout=8000)
+    page.locator(".run-card").first.click()
+    # HTMX loads the run detail fragment; detail-inner is rendered by the server
+    page.wait_for_selector("#detail-inner", timeout=8000)
+    expect(page.locator("#detail-inner")).to_be_visible()
 
 
 def test_dataset_pull_error_shown_in_table(page: Page, live_server: str) -> None:
@@ -280,7 +284,8 @@ def test_dataset_pull_error_shown_in_table(page: Page, live_server: str) -> None
     try:
         page.goto(live_server)
         page.wait_for_selector("#datasets-tbody", timeout=8000)
-        # Trigger a datasets-table refresh so HTMX picks up the injected error
+        # Switch to Datasets tab, then trigger a refresh so HTMX picks up the injected error
+        page.evaluate("showTab('datasets')")
         page.evaluate("htmx.trigger('#datasets-tbody', 'load')")
         page.wait_for_function(
             "() => document.querySelector('.ds-pull-error') !== null",
@@ -296,11 +301,11 @@ def test_gpu_layers_hidden_for_non_llama_cpp(page: Page, live_server: str) -> No
     page.goto(live_server)
     page.wait_for_selector("#new-run-btn", timeout=8000)
     page.locator("#new-run-btn").click()
-    # Default backend is 'mock' — GPU layers row must be hidden
-    expect(page.locator("#f-gpu-row")).to_be_hidden()
-    # Switch to llama-cpp — GPU layers row must appear
+    # Default backend is 'mock' — GPU layers field must not be present
+    expect(page.locator("#f-llama-gpu")).to_have_count(0)
+    # Switch to llama-cpp — GPU layers field appears in backend-fields
     page.locator("#f-backend").select_option("llama-cpp")
-    expect(page.locator("#f-gpu-row")).to_be_visible()
-    # Switch back — hidden again
+    expect(page.locator("#f-llama-gpu")).to_be_visible()
+    # Switch back to mock — field disappears again
     page.locator("#f-backend").select_option("mock")
-    expect(page.locator("#f-gpu-row")).to_be_hidden()
+    expect(page.locator("#f-llama-gpu")).to_have_count(0)
