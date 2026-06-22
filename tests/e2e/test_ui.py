@@ -283,9 +283,9 @@ def test_dataset_pull_error_shown_in_table(page: Page, live_server: str) -> None
     _pull_errors["lmsys-chat"] = "Simulated network error"
     try:
         page.goto(live_server)
-        page.wait_for_selector("#datasets-tbody", timeout=8000)
-        # Switch to Datasets tab, then trigger a refresh so HTMX picks up the injected error
+        # Switch to Datasets tab first (it is hidden by default) then trigger refresh
         page.evaluate("showTab('datasets')")
+        page.wait_for_selector("#datasets-tbody", timeout=8000)
         page.evaluate("htmx.trigger('#datasets-tbody', 'load')")
         page.wait_for_function(
             "() => document.querySelector('.ds-pull-error') !== null",
