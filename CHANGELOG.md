@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **`GET /api/capabilities` endpoint**: reports runtime backend capability flags.
+  Currently exposes `llama_cpp_gpu: bool`, reflecting whether the installed
+  `llama-cpp-python` wheel was compiled with CUDA support.
+
 - **Live dashboard with SSE log streaming**: the dashboard now uses a two-panel layout
   (sidebar run cards + main detail panel).  While a benchmark is running, log lines stream
   live into the detail panel via Server-Sent Events; metrics and hardware info appear
@@ -43,6 +47,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   is visible directly in the output.
 
 ### Fixed
+
+- **llama-cpp GPU offload warning in the UI**: when the user selects the
+  **llama-cpp** backend in the New Run modal, the UI now fetches `/api/capabilities`
+  and — if GPU offload is unavailable — displays a visible warning explaining that
+  the model will run on CPU regardless of the GPU Layers value, along with the
+  commands to reinstall with CUDA support.  Previously the benchmark silently ran
+  on CPU with no indication in the UI, even when GPU Layers was set to `-1`.
 
 - **Transformers backend no longer errors on HuggingFace models**: the "New Run" modal
   was passing the local cache directory path (e.g.

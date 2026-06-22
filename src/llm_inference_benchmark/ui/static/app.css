@@ -207,6 +207,8 @@ button { cursor: pointer; font-family: inherit; }
 
 .fieldset { border: 1px solid var(--border); border-radius: var(--radius); padding: .75rem; margin-bottom: .75rem; }
 .fieldset legend { font-size: .75rem; font-weight: 600; color: var(--text-muted); padding: 0 .35rem; text-transform: uppercase; letter-spacing: .05em; }
+.gpu-warning { margin-top: .5rem; padding: .6rem .75rem; border-radius: var(--radius); background: #431407; border: 1px solid #92400e; color: #fde68a; font-size: .78rem; line-height: 1.5; }
+.gpu-warning code { background: rgba(0,0,0,.3); border-radius: 3px; padding: .1em .35em; font-size: .85em; }
 
 /* ── Modal ────────────────────────────────────────────────────────────────── */
 .modal-overlay {
