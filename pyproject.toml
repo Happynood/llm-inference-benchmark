@@ -32,6 +32,13 @@ onnx = [
 vllm = [
     "vllm>=0.4",
 ]
+all-backends = [
+    "transformers>=4.40",
+    "torch>=2.0",
+    "llama-cpp-python>=0.2",
+    "optimum[onnxruntime]>=1.17",
+    "vllm>=0.4",
+]
 server = [
     "fastapi[standard]>=0.111",
     "uvicorn[standard]>=0.30",
