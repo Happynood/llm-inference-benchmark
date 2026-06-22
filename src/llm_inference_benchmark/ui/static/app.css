@@ -98,6 +98,7 @@ button { cursor: pointer; font-family: inherit; }
   padding: .6rem .9rem; border-top: 1px solid var(--border);
   background: var(--accent-bg);
 }
+.compare-bar[hidden] { display: none; }
 .compare-count { font-size: .82rem; flex: 1; color: var(--accent); font-weight: 500; }
 
 .run-empty { padding: 1.5rem .9rem; color: var(--text-dim); font-size: .82rem; text-align: center; }

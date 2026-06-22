@@ -16,7 +16,7 @@ from collections.abc import Generator
 
 import httpx
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import BrowserContext, Page, expect
 
 
 def _chromium_available() -> bool:
@@ -35,6 +35,33 @@ pytestmark = pytest.mark.skipif(
     not _chromium_available(),
     reason="Chromium not available (run: playwright install chromium)",
 )
+
+# ── Plotly CDN stub ────────────────────────────────────────────────────────────
+
+_PLOTLY_STUB = (
+    "window.Plotly={"
+    "newPlot:function(el){"
+    "var c=typeof el==='string'?document.getElementById(el):el;"
+    "if(!c)return;"
+    "var s=document.createElementNS('http://www.w3.org/2000/svg','svg');"
+    "s.setAttribute('class','main-svg');"
+    "c.appendChild(s);"
+    "}"
+    "};"
+)
+
+
+@pytest.fixture(autouse=True)
+def stub_plotly_cdn(context: BrowserContext) -> None:
+    """Intercept Plotly CDN requests to avoid external network dependency in tests."""
+    context.route(
+        "**plotly*",
+        lambda route: route.fulfill(
+            body=_PLOTLY_STUB,
+            content_type="application/javascript",
+        ),
+    )
+
 
 # ── Server fixture ─────────────────────────────────────────────────────────────
 
@@ -278,21 +305,29 @@ def test_detail_panel_loads_after_card_click(page: Page, live_server: str) -> No
 
 
 def test_dataset_pull_error_shown_in_table(page: Page, live_server: str) -> None:
+    from unittest.mock import patch
+
+    from llm_inference_benchmark import datasets as _datasets_mod
     from llm_inference_benchmark.server import _pull_errors
 
     _pull_errors["lmsys-chat"] = "Simulated network error"
     try:
-        page.goto(live_server)
-        # Switch to Datasets tab first (it is hidden by default) then trigger refresh
-        page.evaluate("showTab('datasets')")
-        page.wait_for_selector("#datasets-tbody", timeout=8000)
-        page.evaluate("htmx.trigger('#datasets-tbody', 'load')")
-        page.wait_for_function(
-            "() => document.querySelector('.ds-pull-error') !== null",
-            timeout=8000,
-        )
-        expect(page.locator(".ds-pull-error").first).to_contain_text("Pull failed:")
-        expect(page.locator(".ds-pull-error").first).to_contain_text("Simulated network error")
+        # Patch list_cached so lmsys-chat appears uncached regardless of local state,
+        # allowing the pull error to be surfaced in the UI.
+        with patch.object(_datasets_mod, "list_cached", return_value=[]):
+            page.goto(live_server)
+            page.evaluate("showTab('datasets')")
+            page.wait_for_selector("#datasets-tbody", timeout=8000)
+            page.evaluate(
+                "htmx.ajax('GET', '/api/ui/datasets-table',"
+                " {target: '#datasets-tbody', swap: 'innerHTML'})"
+            )
+            page.wait_for_function(
+                "() => document.querySelector('.ds-pull-error') !== null",
+                timeout=8000,
+            )
+            expect(page.locator(".ds-pull-error").first).to_contain_text("Pull failed:")
+            expect(page.locator(".ds-pull-error").first).to_contain_text("Simulated network error")
     finally:
         _pull_errors.pop("lmsys-chat", None)
 
