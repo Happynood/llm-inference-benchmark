@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **Web UI run deletion**: each row in the dashboard now has a **Delete** button.
+  Clicking it confirms with the user and calls `DELETE /api/runs/{run_id}`, then
+  refreshes the table.  Deleting a run that is still `pending` or `running` returns
+  `409 Conflict` and shows an alert instead.  Completed and errored runs are
+  removed from the database immediately.
+
 ### Fixed
 
 - **ONNX example config now works without authentication**: `configs/onnx-example.yaml`
