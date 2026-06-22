@@ -695,6 +695,19 @@ async def health() -> dict[str, str]:
     return {"status": "ok"}
 
 
+@app.get("/api/capabilities")
+async def capabilities() -> dict[str, bool]:
+    """Return runtime capability flags for optional backends."""
+    llama_gpu = False
+    try:
+        from llama_cpp import llama_supports_gpu_offload  # type: ignore[import-untyped]
+
+        llama_gpu = bool(llama_supports_gpu_offload())
+    except Exception:
+        pass
+    return {"llama_cpp_gpu": llama_gpu}
+
+
 @app.get("/api/models")
 async def list_models() -> dict[str, list[dict[str, str]]]:
     return {"models": _discover_models()}

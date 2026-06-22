@@ -57,6 +57,14 @@ async def test_health(client: httpx.AsyncClient) -> None:
     assert resp.json() == {"status": "ok"}
 
 
+async def test_capabilities_returns_llama_cpp_gpu_flag(client: httpx.AsyncClient) -> None:
+    resp = await client.get("/api/capabilities")
+    assert resp.status_code == 200
+    data = resp.json()
+    assert "llama_cpp_gpu" in data
+    assert isinstance(data["llama_cpp_gpu"], bool)
+
+
 # ── Models ────────────────────────────────────────────────────────────────────
 
 

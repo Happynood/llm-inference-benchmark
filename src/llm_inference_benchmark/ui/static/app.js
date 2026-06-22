@@ -223,6 +223,30 @@ function onModelChange() {
 function onBackendChange() {
   const backend = document.getElementById('f-backend').value;
   renderBackendFields(backend);
+  if (backend === 'llama-cpp') {
+    fetch('/api/capabilities').then(function(r) { return r.json(); }).then(function(caps) {
+      if (!caps.llama_cpp_gpu) {
+        appendLlamaCppGpuWarning();
+      }
+    }).catch(function() {});
+  }
+}
+
+function appendLlamaCppGpuWarning() {
+  const container = document.getElementById('backend-fields');
+  if (!container || container.querySelector('.gpu-warning')) return;
+  const warn = document.createElement('div');
+  warn.className = 'gpu-warning';
+  warn.innerHTML =
+    '<strong>GPU offload unavailable.</strong> ' +
+    'The installed llama-cpp-python was built without CUDA support — ' +
+    'the model will run on CPU regardless of the GPU Layers setting. ' +
+    'To enable GPU acceleration, reinstall with CUDA: ' +
+    '<code>pip install llama-cpp-python ' +
+    '--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121</code>' +
+    ' or build from source: ' +
+    '<code>CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp</code>';
+  container.appendChild(warn);
 }
 
 function renderBackendFields(backend) {
