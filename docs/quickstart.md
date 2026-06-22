@@ -98,6 +98,62 @@ If you have the CUDA toolkit installed (`nvcc` on PATH), build from source inste
 make install-llama-cpp-cuda
 ```
 
+## vLLM backend (GPU, Linux only)
+
+vLLM provides high-throughput offline inference using its in-process LLM API.
+
+**Prerequisites:**
+- Linux — vLLM is not supported on Windows or macOS.
+- CUDA-capable GPU. CPU inference is not available.
+- CUDA driver ≥ 12.1 (`nvidia-smi` must report CUDA Version ≥ 12.1). No `nvcc` or CUDA toolkit needed.
+
+```bash
+uv sync --extra vllm
+# Edit your config: set backend: vllm and model: <HuggingFace model id>
+uv run llm-bench --config configs/vllm.yaml --output results/vllm.csv
+```
+
+Minimal config example:
+```yaml
+backend: vllm
+model: meta-llama/Llama-3.2-3B-Instruct
+requests: 20
+warmup_requests: 2
+prompts_file: data/prompts/smoke.txt
+```
+
+## ONNX backend (GPU, CUDA)
+
+The default install uses the CPU build of ONNX Runtime. For GPU acceleration, replace it with
+the GPU variant after syncing:
+
+```bash
+uv sync --extra onnx
+uv pip install onnxruntime-gpu   # replaces CPU onnxruntime; CUDA 12 compatible
+```
+
+No `nvcc` or CUDA toolkit is required — only the CUDA driver and CUDA runtime libraries.
+
+Set `device: cuda` in your config's `onnx:` section:
+
+```yaml
+backend: onnx
+model: gpt2
+requests: 20
+warmup_requests: 2
+prompts_file: data/prompts/smoke.txt
+
+onnx:
+  max_new_tokens: 50
+  device: cuda       # use CUDAExecutionProvider
+  export: true       # auto-export from HF on first run
+```
+
+Run:
+```bash
+uv run llm-bench --config configs/onnx-example.yaml --output results/onnx-gpu.csv
+```
+
 ## OpenAI-compatible endpoint
 
 ```bash

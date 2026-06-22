@@ -62,16 +62,18 @@ For full installation options (transformers, llama.cpp, GPU), see **[docs/quicks
 
 ## GPU Setup (NVIDIA CUDA)
 
+### llama.cpp (GGUF)
+
 By default `uv sync --extra llama-cpp` installs a CPU-only build. For GPU acceleration:
 
-### Option A — Pre-built CUDA 12.1 wheel (recommended, no compiler needed)
+**Option A — Pre-built CUDA wheel (recommended, no compiler needed):**
 
 ```bash
 uv pip install llama-cpp-python \
   --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121
 ```
 
-### Option B — Build from source with your CUDA toolkit
+**Option B — Build from source with your CUDA toolkit:**
 
 ```bash
 CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
@@ -81,6 +83,39 @@ The default config sets `n_gpu_layers: -1` which offloads all transformer layers
 llama.cpp falls back to CPU automatically when no GPU is available, so the default is safe
 to use on CPU-only machines.
 
+### vLLM
+
+| Requirement | Detail |
+|---|---|
+| Platform | **Linux only** — Windows and macOS are not supported by vLLM |
+| GPU | CUDA-capable GPU required; CPU inference is not available |
+| CUDA driver | ≥ 12.1 (`nvidia-smi` must report CUDA Version ≥ 12.1) |
+| `nvcc` / toolkit | Not required — pre-built CUDA wheels are installed automatically |
+
+```bash
+uv sync --extra vllm
+```
+
+Set `backend: vllm` and point `model:` at any HuggingFace model ID in your config.
+
+### ONNX Runtime (GPU)
+
+The default `uv sync --extra onnx` installs the **CPU** build of ONNX Runtime.
+For GPU acceleration, swap in the GPU build after syncing:
+
+```bash
+uv sync --extra onnx
+uv pip install onnxruntime-gpu   # replaces CPU onnxruntime; CUDA 12 compatible
+```
+
+No `nvcc` or CUDA toolkit is required — only the CUDA driver and runtime libraries.
+Then set `device: cuda` (or `cuda:0`) under the `onnx:` key in your config:
+
+```yaml
+onnx:
+  device: cuda
+```
+
 ---
 
 ## Backends
@@ -88,11 +123,11 @@ to use on CPU-only machines.
 | Backend | Install extra | GPU support | Notes |
 |---|---|---|---|
 | `mock` | — | — | Deterministic CI backend, no model |
-| `transformers` | `--extra transformers` | CUDA | HuggingFace `AutoModelForCausalLM` |
-| `llama-cpp` | `--extra llama-cpp` | CUDA (pre-built wheel) | GGUF quantized inference |
+| `transformers` | `--extra transformers` | CUDA | HuggingFace `AutoModelForCausalLM`; set `hf.device: cuda` |
+| `llama-cpp` | `--extra llama-cpp` | CUDA (pre-built wheel, no nvcc) | GGUF quantized inference |
 | `openai` | — | server-side | Any `/v1/chat/completions`-compatible server |
-| `onnx` | `--extra onnx` | CUDA (via ORT provider) | ONNX Runtime via Optimum; supports INT8/FP16 export |
-| `vllm` | `--extra vllm` | CUDA | High-throughput serving via vLLM engine (requires `vllm>=0.4`) |
+| `onnx` | `--extra onnx` | CUDA (requires `onnxruntime-gpu`; set `device: cuda`) | ONNX Runtime via Optimum; supports INT8/FP16 export |
+| `vllm` | `--extra vllm` | CUDA — **Linux only**, no CPU fallback | High-throughput serving via vLLM engine (requires `vllm>=0.4`) |
 
 ---
 
