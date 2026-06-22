@@ -15,6 +15,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   `status`, timestamps, and all numeric metrics.  Missing metrics appear as empty strings.
   The endpoint returns `404` for unknown runs and `409` for runs that have not finished.
 
+- **Multi-run comparison from the dashboard**: each run card in the sidebar now has a
+  checkbox.  Checking ≥ 2 cards reveals a **Compare N runs** button in the sidebar footer
+  that opens the interactive Pareto scatter page (`/runs/pareto?ids=…`) in a new tab for
+  a side-by-side throughput-vs-latency view.  Checkbox state is preserved across the
+  automatic 3-second run-list refresh so selections survive polling.
+
 - **`llm-bench sweep` command**: ramp `concurrency` across a comma-separated range and
   emit a throughput-vs-latency curve in a single CSV.  Each level produces a row with
   `concurrency`, `throughput_rps`, `p50_latency_ms`, `p95_latency_ms`, `tokens_per_second`,
