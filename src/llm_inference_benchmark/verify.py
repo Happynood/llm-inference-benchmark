@@ -26,16 +26,26 @@ def _probe_mock() -> BackendProbe:
         return BackendProbe(backend="mock", status="FAIL", latency_ms=None, reason=str(exc))
 
 
+_INSTALL_HINT: dict[str, str] = {
+    "transformers": "uv sync --extra transformers",
+    "llama-cpp": "uv sync --extra llama-cpp",
+    "onnx": "uv sync --extra onnx",
+    "vllm": "uv sync --extra vllm",
+}
+
+
 def _probe_import(backend_name: str, modules: list[str]) -> BackendProbe:
     for mod in modules:
         try:
             __import__(mod)
         except ImportError:
+            hint = _INSTALL_HINT.get(backend_name, "")
+            reason = f"missing: {mod}" + (f" — install: {hint}" if hint else "")
             return BackendProbe(
                 backend=backend_name,
                 status="SKIP",
                 latency_ms=None,
-                reason=f"missing: {mod}",
+                reason=reason,
             )
         except Exception as exc:  # noqa: BLE001
             return BackendProbe(

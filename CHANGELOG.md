@@ -15,6 +15,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   `409 Conflict` and shows an alert instead.  Completed and errored runs are
   removed from the database immediately.
 
+- **`all-backends` extra**: install all local inference backends in one command —
+  `uv sync --extra all-backends` — instead of juggling multiple `--extra` flags.
+  Resolves an apparent conflict where `uv sync --extra llama-cpp` would remove ONNX
+  packages installed by a prior `uv sync --extra onnx` (and vice-versa).
+
+### Changed
+
+- **`llm-bench verify` SKIP notes now include the install command** for each missing
+  backend, e.g. `missing: llama_cpp — install: uv sync --extra llama-cpp`, so the fix
+  is visible directly in the output.
+
 ### Fixed
 
 - **ONNX example config now works without authentication**: `configs/onnx-example.yaml`

@@ -133,6 +133,16 @@ onnx:
 | `onnx` | `--extra onnx` | CUDA (requires `onnxruntime-gpu`; set `device: cuda`) | ONNX Runtime via Optimum; supports INT8/FP16 export |
 | `vllm` | `--extra vllm` | CUDA — **Linux only**, no CPU fallback | High-throughput serving via vLLM engine (requires `vllm>=0.4`) |
 
+To install all local backends at once use the convenience extra:
+
+```bash
+uv sync --extra all-backends
+```
+
+> **Note:** `uv sync --extra X` replaces the active environment with exactly what extra `X`
+> needs — packages from other extras are removed. Specify every extra you want to keep:
+> `uv sync --extra onnx --extra llama-cpp`, or use `--extra all-backends`.
+
 ---
 
 ## CLI

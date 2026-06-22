@@ -2066,6 +2066,13 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+all-backends = [
+    { name = "llama-cpp-python" },
+    { name = "optimum", extra = ["onnxruntime"] },
+    { name = "torch" },
+    { name = "transformers" },
+    { name = "vllm" },
+]
 llama-cpp = [
     { name = "llama-cpp-python" },
 ]
@@ -2107,19 +2114,24 @@ requires-dist = [
     { name = "datasets", specifier = ">=2.0" },
     { name = "fastapi", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.111" },
     { name = "huggingface-hub", marker = "extra == 'server'", specifier = ">=0.23" },
+    { name = "llama-cpp-python", marker = "extra == 'all-backends'", specifier = ">=0.2" },
     { name = "llama-cpp-python", marker = "extra == 'llama-cpp'", specifier = ">=0.2" },
+    { name = "optimum", extras = ["onnxruntime"], marker = "extra == 'all-backends'", specifier = ">=1.17" },
     { name = "optimum", extras = ["onnxruntime"], marker = "extra == 'onnx'", specifier = ">=1.17" },
     { name = "psutil", specifier = ">=5.9" },
     { name = "pydantic", specifier = ">=2.0" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "torch", marker = "extra == 'all-backends'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'onnx'", specifier = ">=2.0" },
     { name = "torch", marker = "extra == 'transformers'", specifier = ">=2.0" },
+    { name = "transformers", marker = "extra == 'all-backends'", specifier = ">=4.40" },
     { name = "transformers", marker = "extra == 'onnx'", specifier = ">=4.40" },
     { name = "transformers", marker = "extra == 'transformers'", specifier = ">=4.40" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'server'", specifier = ">=0.30" },
+    { name = "vllm", marker = "extra == 'all-backends'", specifier = ">=0.4" },
     { name = "vllm", marker = "extra == 'vllm'", specifier = ">=0.4" },
 ]
-provides-extras = ["transformers", "llama-cpp", "onnx", "vllm", "server"]
+provides-extras = ["transformers", "llama-cpp", "onnx", "vllm", "all-backends", "server"]
 
 [package.metadata.requires-dev]
 dev = [
