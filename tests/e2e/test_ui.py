@@ -16,7 +16,7 @@ from collections.abc import Generator
 
 import httpx
 import pytest
-from playwright.sync_api import Page, expect
+from playwright.sync_api import BrowserContext, Page, expect
 
 
 def _chromium_available() -> bool:
@@ -35,6 +35,33 @@ pytestmark = pytest.mark.skipif(
     not _chromium_available(),
     reason="Chromium not available (run: playwright install chromium)",
 )
+
+# ── Plotly CDN stub ────────────────────────────────────────────────────────────
+
+_PLOTLY_STUB = (
+    "window.Plotly={"
+    "newPlot:function(el){"
+    "var c=typeof el==='string'?document.getElementById(el):el;"
+    "if(!c)return;"
+    "var s=document.createElementNS('http://www.w3.org/2000/svg','svg');"
+    "s.setAttribute('class','main-svg');"
+    "c.appendChild(s);"
+    "}"
+    "};"
+)
+
+
+@pytest.fixture(autouse=True)
+def stub_plotly_cdn(context: BrowserContext) -> None:
+    """Intercept Plotly CDN requests to avoid external network dependency in tests."""
+    context.route(
+        "**plotly*",
+        lambda route: route.fulfill(
+            body=_PLOTLY_STUB,
+            content_type="application/javascript",
+        ),
+    )
+
 
 # ── Server fixture ─────────────────────────────────────────────────────────────
 
@@ -278,21 +305,29 @@ def test_detail_panel_loads_after_card_click(page: Page, live_server: str) -> No
 
 
 def test_dataset_pull_error_shown_in_table(page: Page, live_server: str) -> None:
+    from unittest.mock import patch
+
+    from llm_inference_benchmark import datasets as _datasets_mod
     from llm_inference_benchmark.server import _pull_errors
 
     _pull_errors["lmsys-chat"] = "Simulated network error"
     try:
-        page.goto(live_server)
-        # Switch to Datasets tab first (it is hidden by default) then trigger refresh
-        page.evaluate("showTab('datasets')")
-        page.wait_for_selector("#datasets-tbody", timeout=8000)
-        page.evaluate("htmx.trigger('#datasets-tbody', 'load')")
-        page.wait_for_function(
-            "() => document.querySelector('.ds-pull-error') !== null",
-            timeout=8000,
-        )
-        expect(page.locator(".ds-pull-error").first).to_contain_text("Pull failed:")
-        expect(page.locator(".ds-pull-error").first).to_contain_text("Simulated network error")
+        # Patch list_cached so lmsys-chat appears uncached regardless of local state,
+        # allowing the pull error to be surfaced in the UI.
+        with patch.object(_datasets_mod, "list_cached", return_value=[]):
+            page.goto(live_server)
+            page.evaluate("showTab('datasets')")
+            page.wait_for_selector("#datasets-tbody", timeout=8000)
+            page.evaluate(
+                "htmx.ajax('GET', '/api/ui/datasets-table',"
+                " {target: '#datasets-tbody', swap: 'innerHTML'})"
+            )
+            page.wait_for_function(
+                "() => document.querySelector('.ds-pull-error') !== null",
+                timeout=8000,
+            )
+            expect(page.locator(".ds-pull-error").first).to_contain_text("Pull failed:")
+            expect(page.locator(".ds-pull-error").first).to_contain_text("Simulated network error")
     finally:
         _pull_errors.pop("lmsys-chat", None)
 
@@ -309,3 +344,67 @@ def test_gpu_layers_hidden_for_non_llama_cpp(page: Page, live_server: str) -> No
     # Switch back to mock — field disappears again
     page.locator("#f-backend").select_option("mock")
     expect(page.locator("#f-llama-gpu")).to_have_count(0)
+
+
+# ── Multi-run comparison tests ─────────────────────────────────────────────────
+
+
+def _check_two_cards(page: Page) -> tuple[str, str]:
+    """Check the first two run cards and return their run IDs."""
+    page.wait_for_selector(".run-card", timeout=8000)
+    cards = page.locator(".run-card")
+    rid0 = cards.nth(0).get_attribute("data-run-id")
+    rid1 = cards.nth(1).get_attribute("data-run-id")
+    assert rid0 and rid1
+    page.locator(f'.compare-cb[value="{rid0}"]').click()
+    page.locator(f'.compare-cb[value="{rid1}"]').click()
+    return rid0, rid1
+
+
+def test_compare_bar_appears_when_two_runs_checked(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    _check_two_cards(page)
+    bar = page.locator("#compare-bar")
+    expect(bar).to_be_visible()
+    expect(page.locator("#compare-count")).to_contain_text("2 runs selected")
+
+
+def test_compare_bar_clears_on_x_button(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    _check_two_cards(page)
+    expect(page.locator("#compare-bar")).to_be_visible()
+    page.locator('button[aria-label="Clear selection"]').click()
+    expect(page.locator("#compare-bar")).to_be_hidden()
+    checked = page.eval_on_selector_all(".compare-cb", "els => els.filter(e => e.checked).length")
+    assert checked == 0
+
+
+def test_compare_opens_pareto_tab(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    rid0, rid1 = _check_two_cards(page)
+    expect(page.locator("#compare-bar")).to_be_visible()
+    with page.context.expect_page() as new_page_info:
+        page.locator('button:has-text("Compare")').click()
+    new_page = new_page_info.value
+    new_page.wait_for_load_state("domcontentloaded")
+    url = new_page.url
+    assert "/runs/pareto" in url
+    assert rid0 in url
+    assert rid1 in url
+
+
+def test_compare_checkboxes_survive_htmx_refresh(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    rid0, rid1 = _check_two_cards(page)
+    expect(page.locator("#compare-bar")).to_be_visible()
+    page.evaluate("htmx.trigger('#run-list', 'load')")
+    page.wait_for_selector(".run-card", timeout=8000)
+    page.wait_for_function(
+        f"() => !!document.querySelector('.compare-cb[value=\"{rid0}\"]')?.checked",
+        timeout=6000,
+    )
+    page.wait_for_function(
+        f"() => !!document.querySelector('.compare-cb[value=\"{rid1}\"]')?.checked",
+        timeout=6000,
+    )
+    expect(page.locator("#compare-bar")).to_be_visible()
