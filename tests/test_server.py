@@ -834,3 +834,90 @@ async def test_models_api_includes_type_and_name(
     assert data["models"][0]["name"] == "llama-q4.gguf"
     assert data["models"][1]["type"] == "hf"
     assert data["models"][1]["name"] == "meta-llama/Llama-3-8B"
+
+
+# ── Delete run ────────────────────────────────────────────────────────────────
+
+
+async def test_delete_run_done(client: httpx.AsyncClient) -> None:
+    """DELETE /api/runs/{id} removes a completed run and returns 204."""
+    db = _get_db()
+    run_id = "aaaaaaaa-0000-0000-0000-000000000001"
+    db.execute(
+        "INSERT INTO runs (id, status, config, output, created_at, finished_at) "
+        "VALUES (?, 'done', '{}', 'ok', ?, ?)",
+        (run_id, _now_iso(), _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.delete(f"/api/runs/{run_id}")
+    assert resp.status_code == 204
+
+    row = db.execute("SELECT id FROM runs WHERE id=?", (run_id,)).fetchone()
+    assert row is None
+
+
+async def test_delete_run_error_status(client: httpx.AsyncClient) -> None:
+    """DELETE /api/runs/{id} also removes runs in 'error' status."""
+    db = _get_db()
+    run_id = "aaaaaaaa-0000-0000-0000-000000000002"
+    db.execute(
+        "INSERT INTO runs (id, status, config, output, created_at, finished_at) "
+        "VALUES (?, 'error', '{}', 'boom', ?, ?)",
+        (run_id, _now_iso(), _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.delete(f"/api/runs/{run_id}")
+    assert resp.status_code == 204
+
+
+async def test_delete_run_not_found(client: httpx.AsyncClient) -> None:
+    """DELETE /api/runs/{id} returns 404 for an unknown run ID."""
+    resp = await client.delete("/api/runs/does-not-exist")
+    assert resp.status_code == 404
+
+
+async def test_delete_run_pending_returns_409(client: httpx.AsyncClient) -> None:
+    """DELETE /api/runs/{id} returns 409 when the run is still pending."""
+    db = _get_db()
+    run_id = "aaaaaaaa-0000-0000-0000-000000000003"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'pending', '{}', ?)",
+        (run_id, _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.delete(f"/api/runs/{run_id}")
+    assert resp.status_code == 409
+
+
+async def test_delete_run_running_returns_409(client: httpx.AsyncClient) -> None:
+    """DELETE /api/runs/{id} returns 409 when the run is actively running."""
+    db = _get_db()
+    run_id = "aaaaaaaa-0000-0000-0000-000000000004"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'running', '{}', ?)",
+        (run_id, _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.delete(f"/api/runs/{run_id}")
+    assert resp.status_code == 409
+
+
+async def test_delete_run_removes_buffer(client: httpx.AsyncClient) -> None:
+    """DELETE /api/runs/{id} also clears the in-memory streaming buffer."""
+    db = _get_db()
+    run_id = "aaaaaaaa-0000-0000-0000-000000000005"
+    db.execute(
+        "INSERT INTO runs (id, status, config, output, created_at, finished_at) "
+        "VALUES (?, 'done', '{}', 'output', ?, ?)",
+        (run_id, _now_iso(), _now_iso()),
+    )
+    db.commit()
+    _buffers[run_id] = ["line1", "line2"]
+
+    resp = await client.delete(f"/api/runs/{run_id}")
+    assert resp.status_code == 204
+    assert run_id not in _buffers

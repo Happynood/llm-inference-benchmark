@@ -387,6 +387,7 @@ llm-bench serve --host 0.0.0.0 --port 9000
 | `POST` | `/api/runs` | Submit a benchmark config (JSON body); returns `{"run_id": "..."}` immediately |
 | `GET` | `/api/runs/{run_id}` | Poll status (`pending`/`running`/`done`/`error`) and results |
 | `GET` | `/api/runs/{run_id}/stream` | Server-Sent Events streaming stdout of a running benchmark |
+| `DELETE` | `/api/runs/{run_id}` | Delete a completed or errored run; returns 409 if still running |
 | `GET` | `/api/ui/runs-table` | HTMX HTML fragment for the runs table |
 | `GET` | `/runs/{run_id}/pareto.html` | Interactive Plotly Pareto scatter page |
 

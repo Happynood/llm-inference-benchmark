@@ -8,8 +8,9 @@ Exposes the following endpoints:
   POST /api/datasets/pull
   GET  /api/runs
   POST /api/runs
-  GET  /api/runs/{run_id}
-  GET  /api/runs/{run_id}/stream      Server-Sent Events
+  GET    /api/runs/{run_id}
+  DELETE /api/runs/{run_id}
+  GET    /api/runs/{run_id}/stream      Server-Sent Events
   GET  /api/ui/datasets-table         HTMX HTML fragment
   GET  /api/ui/runs-table             HTMX HTML fragment
   GET  /runs/{run_id}/pareto.html     interactive Plotly scatter page
@@ -313,6 +314,8 @@ _DASHBOARD_HTML = """\
     .btn-sm{padding:.18rem .5rem}
     .btn-outline{background:transparent;color:#3b82f6;border:1px solid #3b82f6}
     .btn-outline:hover{background:#eff6ff}
+    .btn-danger{color:#dc2626;border-color:#dc2626}
+    .btn-danger:hover{background:#fee2e2}
     .mono{font-family:ui-monospace,monospace;font-size:.82rem}
     section+section{border-top:1px solid #e2e8f0;padding-top:1rem}
     #log-section,#chart-section{display:none}
@@ -669,6 +672,17 @@ function paretoSelected() {
   var ids = cbs.map(function(cb){ return cb.value; }).join(',');
   window.open('/runs/pareto?ids=' + encodeURIComponent(ids), '_blank');
 }
+
+function deleteRun(runId) {
+  if (!confirm('Delete run ' + runId.slice(0, 8) + '? This cannot be undone.')) return;
+  fetch('/api/runs/' + runId, {method: 'DELETE'}).then(function(r) {
+    if (r.status === 409) {
+      return r.json().then(function(d){ alert(d.detail || 'Run is still in progress.'); });
+    }
+    if (!r.ok) { alert('Delete failed (HTTP ' + r.status + ').'); return; }
+    htmx.trigger('#runs-tbody', 'load');
+  }).catch(function(err){ alert('Delete failed: ' + err.message); });
+}
 </script>
 </body>
 </html>"""
@@ -712,6 +726,8 @@ def _render_runs_table_rows(results: list[RunResult]) -> str:
             f" onclick=\"streamLog('{rid}')\">Log</button>\n"
             f'    <a href="/runs/{rid}/pareto.html"'
             f' class="btn btn-sm btn-outline">Pareto</a>\n'
+            f'    <button class="btn btn-sm btn-outline btn-danger"'
+            f" onclick=\"deleteRun('{rid}')\">Delete</button>\n"
             f"  </td>\n"
             f"</tr>"
         )
@@ -916,6 +932,22 @@ async def get_run(run_id: str) -> RunResult:
     if row is None:
         raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
     return _row_to_result(row)
+
+
+@app.delete("/api/runs/{run_id}", status_code=204)
+async def delete_run(run_id: str) -> None:
+    db = _get_db()
+    row = db.execute("SELECT status FROM runs WHERE id=?", (run_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
+    if row["status"] in ("pending", "running"):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Run {run_id!r} is still {row['status']}; wait for it to finish",
+        )
+    db.execute("DELETE FROM runs WHERE id=?", (run_id,))
+    db.commit()
+    _buffers.pop(run_id, None)
 
 
 @app.get("/api/runs/{run_id}/stream")
