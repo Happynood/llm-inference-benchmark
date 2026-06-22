@@ -377,6 +377,9 @@ left and a live detail panel on the right.
 - **Dataset selector** — choose from any cached real-world dataset (pulled via
   `llm-bench datasets pull <name>`) directly in the modal; "Default prompts" preserves
   the existing synthetic-prompt behaviour.
+- **Multi-run comparison** — check ≥ 2 run cards and click **Compare N runs** to open
+  an interactive Pareto scatter plot comparing throughput vs. latency across the selected
+  runs.  Checkbox selection survives the automatic sidebar refresh.
 - **Delete** button on each run card (running runs are protected with a 409 response).
 - **Download CSV** — completed runs show a **Download CSV** button in the detail panel
   that exports all parsed metrics as a two-row CSV file, ready for analysis.

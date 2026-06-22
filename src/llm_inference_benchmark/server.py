@@ -489,6 +489,9 @@ def _render_run_list_cards(results: list[RunResult]) -> str:
             f'    <span class="run-card-id mono">{html.escape(short_id)}</span>\n'
             f'    <span class="badge badge-{html.escape(run.status)}">'
             f"{html.escape(run.status)}</span>\n"
+            f'    <input type="checkbox" class="compare-cb"'
+            f' value="{html.escape(rid)}"'
+            f" onclick=\"toggleCompare(event,'{html.escape(rid)}')\">\n"
             f"  </div>\n"
             f'  <div class="run-card-model">{html.escape(model_short)}</div>\n'
             f'  <div class="run-card-meta">{" · ".join(meta_parts)}</div>\n'

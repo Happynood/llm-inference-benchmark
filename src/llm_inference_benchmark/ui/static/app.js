@@ -59,6 +59,7 @@ const typeTag = {gguf: 'llama.cpp', hf: 'transformers'};
 
 let selectedRunId = null;
 let sseConn = null;
+const compareSet = new Set();
 
 /* ── Tab switching ───────────────────────────────────────────────────────── */
 
@@ -94,6 +95,10 @@ document.addEventListener('htmx:afterSettle', function(evt) {
       const card = document.querySelector('[data-run-id="' + selectedRunId + '"]');
       if (card) card.classList.add('selected');
     }
+    compareSet.forEach(function(rid) {
+      const cb = document.querySelector('.compare-cb[value="' + rid + '"]');
+      if (cb) cb.checked = true;
+    });
     return;
   }
 
@@ -151,8 +156,45 @@ function deleteRun(runId) {
       document.getElementById('run-detail').innerHTML =
         '<div class="empty-state"><p class="empty-sub">Run deleted.</p></div>';
     }
+    compareSet.delete(runId);
+    updateCompareBar();
     htmx.trigger('#run-list', 'load');
   }).catch(function(err) { alert('Delete failed: ' + err.message); });
+}
+
+/* ── Multi-run comparison ────────────────────────────────────────────────── */
+
+function toggleCompare(evt, runId) {
+  evt.stopPropagation();
+  if (compareSet.has(runId)) {
+    compareSet.delete(runId);
+  } else {
+    compareSet.add(runId);
+  }
+  updateCompareBar();
+}
+
+function updateCompareBar() {
+  const bar   = document.getElementById('compare-bar');
+  const count = document.getElementById('compare-count');
+  if (!bar) return;
+  if (compareSet.size >= 2) {
+    bar.hidden = false;
+    count.textContent = compareSet.size + ' runs selected';
+  } else {
+    bar.hidden = true;
+  }
+}
+
+function openComparison() {
+  if (compareSet.size < 2) return;
+  window.open('/runs/pareto?ids=' + Array.from(compareSet).join(','), '_blank');
+}
+
+function clearComparison() {
+  compareSet.clear();
+  document.querySelectorAll('.compare-cb').forEach(function(cb) { cb.checked = false; });
+  updateCompareBar();
 }
 
 /* ── New Run Modal ───────────────────────────────────────────────────────── */
