@@ -166,10 +166,12 @@ def _discover_models() -> list[dict[str, str]]:
                 snapshots = d / "snapshots"
                 if not snapshots.is_dir() or not any(snapshots.iterdir()):
                     continue  # partial/empty download — skip
-                slug = d.name[len("models--"):]
+                slug = d.name[len("models--") :]
                 model_name = slug.replace("--", "/", 1)
                 # Use the model name (not the hub dir path) so from_pretrained works.
-                results.append({"type": "hf", "name": model_name, "path": str(d), "value": model_name})
+                results.append(
+                    {"type": "hf", "name": model_name, "path": str(d), "value": model_name}
+                )
 
     return results
 
@@ -333,16 +335,16 @@ def _pareto_mask(points: list[tuple[float, float]]) -> list[bool]:
 # ── HTML rendering helpers ────────────────────────────────────────────────────
 
 _DISPLAY_METRICS: list[tuple[str, str, Any]] = [
-    ("tokens_per_second",   "Tok/s",        lambda v: f"{v:.1f}"),
-    ("p50_latency_ms",      "p50 Latency",  lambda v: f"{v:.0f} ms"),
-    ("p95_latency_ms",      "p95 Latency",  lambda v: f"{v:.0f} ms"),
-    ("p50_ttft_ms",         "TTFT p50",     lambda v: f"{v:.0f} ms"),
-    ("peak_cuda_memory_mb", "CUDA Mem",     lambda v: f"{v:.0f} MB"),
-    ("peak_vram_memory_mb", "VRAM",         lambda v: f"{v:.0f} MB"),
-    ("model_load_ms",       "Load Time",    lambda v: f"{v:.0f} ms"),
-    ("energy_joules",       "Energy",       lambda v: f"{v:.1f} J"),
-    ("tokens_per_joule",    "Efficiency",   lambda v: f"{v:.2f} tok/J"),
-    ("sanity_pass_rate",    "Sanity",       lambda v: f"{v * 100:.0f}%"),
+    ("tokens_per_second", "Tok/s", lambda v: f"{v:.1f}"),
+    ("p50_latency_ms", "p50 Latency", lambda v: f"{v:.0f} ms"),
+    ("p95_latency_ms", "p95 Latency", lambda v: f"{v:.0f} ms"),
+    ("p50_ttft_ms", "TTFT p50", lambda v: f"{v:.0f} ms"),
+    ("peak_cuda_memory_mb", "CUDA Mem", lambda v: f"{v:.0f} MB"),
+    ("peak_vram_memory_mb", "VRAM", lambda v: f"{v:.0f} MB"),
+    ("model_load_ms", "Load Time", lambda v: f"{v:.0f} ms"),
+    ("energy_joules", "Energy", lambda v: f"{v:.1f} J"),
+    ("tokens_per_joule", "Efficiency", lambda v: f"{v:.2f} tok/J"),
+    ("sanity_pass_rate", "Sanity", lambda v: f"{v * 100:.0f}%"),
 ]
 
 
@@ -380,11 +382,7 @@ def _render_hw_info(hw: dict[str, str]) -> str:
         parts.append(f"VRAM: {html.escape(hw['hw_vram_gb'])} GB")
     if not parts:
         return ""
-    return (
-        f'<div class="hw-info">'
-        f'<span class="hw-label">Hardware:</span> {" · ".join(parts)}'
-        f"</div>"
-    )
+    return f'<div class="hw-info"><span class="hw-label">Hardware:</span> {" · ".join(parts)}</div>'
 
 
 def _render_run_detail(run: RunResult) -> str:
@@ -414,11 +412,12 @@ def _render_run_detail(run: RunResult) -> str:
     return (
         f'<div id="detail-inner" data-run-id="{rid}" data-status="{html.escape(run.status)}">\n'
         f'  <div class="detail-header">\n'
-        f'    <div>\n'
+        f"    <div>\n"
         f'      <div class="detail-title">\n'
         f'        <span class="detail-id mono">{html.escape(short_id)}</span>\n'
         f'        <span class="detail-backend">{html.escape(backend)}</span>\n'
-        f'        <span class="badge badge-{html.escape(run.status)}">{html.escape(run.status)}</span>\n'
+        f'        <span class="badge badge-{html.escape(run.status)}">'
+        f"{html.escape(run.status)}</span>\n"
         f"      </div>\n"
         f'      <div class="detail-meta">\n'
         f'        <span class="detail-model">{model_display}</span> · {html.escape(created)}\n'
@@ -477,7 +476,8 @@ def _render_run_list_cards(results: list[RunResult]) -> str:
             f" onclick=\"selectRun('{html.escape(rid)}')\">\n"
             f'  <div class="run-card-header">\n'
             f'    <span class="run-card-id mono">{html.escape(short_id)}</span>\n'
-            f'    <span class="badge badge-{html.escape(run.status)}">{html.escape(run.status)}</span>\n'
+            f'    <span class="badge badge-{html.escape(run.status)}">'
+            f"{html.escape(run.status)}</span>\n"
             f"  </div>\n"
             f'  <div class="run-card-model">{html.escape(model_short)}</div>\n'
             f'  <div class="run-card-meta">{" · ".join(meta_parts)}</div>\n'
@@ -610,8 +610,7 @@ def _render_pareto_html(run_id: str, results: list[RunResult]) -> str:
                 "x": [p["latency"] for p in normal],
                 "y": [p["toks"] for p in normal],
                 "text": [
-                    f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}"
-                    for p in normal
+                    f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in normal
                 ],
                 "marker": {"color": "#94a3b8", "size": 10},
                 "hovertemplate": "%{text}<br>p95: %{x:.0f} ms<br>tok/s: %{y:.1f}<extra></extra>",
@@ -626,9 +625,7 @@ def _render_pareto_html(run_id: str, results: list[RunResult]) -> str:
                 "name": "Pareto front",
                 "x": [p["latency"] for p in pf],
                 "y": [p["toks"] for p in pf],
-                "text": [
-                    f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in pf
-                ],
+                "text": [f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in pf],
                 "marker": {"color": "#3b82f6", "size": 12},
                 "line": {"dash": "dot", "color": "#3b82f6"},
                 "hovertemplate": "%{text}<br>p95: %{x:.0f} ms<br>tok/s: %{y:.1f}<extra></extra>",
@@ -642,9 +639,7 @@ def _render_pareto_html(run_id: str, results: list[RunResult]) -> str:
                 "name": "This run",
                 "x": [p["latency"] for p in hi],
                 "y": [p["toks"] for p in hi],
-                "text": [
-                    f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in hi
-                ],
+                "text": [f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in hi],
                 "marker": {"color": "#f59e0b", "size": 16, "symbol": "star"},
                 "hovertemplate": "%{text}<br>p95: %{x:.0f} ms<br>tok/s: %{y:.1f}<extra></extra>",
             }
@@ -666,7 +661,8 @@ def _render_pareto_html(run_id: str, results: list[RunResult]) -> str:
         f"  <meta charset='UTF-8'>\n"
         f"  <title>llm-bench Pareto — {short}</title>\n"
         f"  <script src='https://cdn.plot.ly/plotly-2.32.0.min.js' charset='utf-8'></script>\n"
-        f"  <style>body{{font-family:system-ui,sans-serif;margin:1.5rem;max-width:1000px}}</style>\n"
+        "  <style>body{font-family:system-ui,sans-serif;"
+        "margin:1.5rem;max-width:1000px}</style>\n"
         f"</head>\n<body>\n"
         f"  <h2>Pareto Chart — <span style='font-family:monospace'>{short}</span></h2>\n"
         f"  <p><a href='/'>&#8592; Dashboard</a></p>\n"
