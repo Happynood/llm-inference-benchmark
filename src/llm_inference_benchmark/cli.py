@@ -18,6 +18,19 @@ from llm_inference_benchmark.backends.mock import MockBackend
 from llm_inference_benchmark.config import BenchmarkConfig, load_config
 from llm_inference_benchmark.runner import load_prompts, run_repeated
 
+_DEFAULT_PROMPTS = [
+    "What is the capital of France?",
+    "Explain the difference between TCP and UDP in one sentence.",
+    "Write a Python function that reverses a list without using built-ins.",
+    "What are the main advantages of transformer-based language models?",
+    "Summarize the theory of relativity in three sentences.",
+    "How does a binary search tree maintain its ordering property?",
+    "What is the role of attention in neural networks?",
+    "Describe the difference between supervised and unsupervised learning.",
+    "What is a REST API and how does it work?",
+    "Explain what happens during the TCP three-way handshake.",
+]
+
 
 def _apply_set_overrides(cfg: BenchmarkConfig, set_overrides: tuple[str, ...]) -> BenchmarkConfig:
     """Parse and apply --set KEY=VALUE overrides to *cfg*, returning updated config.
@@ -136,6 +149,27 @@ def _apply_set_overrides(cfg: BenchmarkConfig, set_overrides: tuple[str, ...]) -
         "Pull datasets first with: llm-bench datasets pull <name>"
     ),
 )
+@click.option(
+    "--base-url",
+    "base_url",
+    default=None,
+    metavar="URL",
+    help=(
+        "Base URL of an OpenAI-compatible endpoint (e.g. http://localhost:11434/v1). "
+        "Sets backend to 'openai' and makes --config optional. "
+        "Use --set model=<name> to specify the model."
+    ),
+)
+@click.option(
+    "--api-key",
+    "api_key",
+    default=None,
+    metavar="KEY",
+    help=(
+        "API key for the endpoint specified by --base-url. "
+        "Omit for local servers that do not require authentication."
+    ),
+)
 def main(
     ctx: click.Context,
     config_path: str | None,
@@ -148,6 +182,8 @@ def main(
     set_overrides: tuple[str, ...],
     output_format: str,
     dataset_name: str | None,
+    base_url: str | None,
+    api_key: str | None,
 ) -> None:
     """LLM inference benchmark toolkit.
 
@@ -172,14 +208,32 @@ def main(
 
         llm-bench datasets pull lmsys-chat
         llm-bench --config configs/example.yaml --dataset lmsys-chat --requests 50
+
+    Test any OpenAI-compatible server without a config file:
+
+        llm-bench --base-url http://localhost:11434/v1 --set model=llama3.2:3b
+        llm-bench --base-url https://api.openai.com/v1 --api-key sk-xxx --set model=gpt-4o-mini
     """
     if ctx.invoked_subcommand is not None:
         return
 
-    if config_path is None:
-        raise click.UsageError("--config is required when running a benchmark")
+    if config_path is None and base_url is None:
+        raise click.UsageError("--config or --base-url is required when running a benchmark")
 
-    cfg = load_config(config_path)
+    if config_path is not None:
+        cfg = load_config(config_path)
+    else:
+        from llm_inference_benchmark.config import OpenAIEndpointConfig
+
+        cfg = BenchmarkConfig(
+            backend="openai",
+            openai=OpenAIEndpointConfig(base_url=base_url or "http://localhost:8080/v1"),
+        )
+
+    if base_url is not None:
+        updated_openai = cfg.openai.model_copy(update={"base_url": base_url})
+        cfg = cfg.model_copy(update={"backend": "openai", "openai": updated_openai})
+
     if set_overrides:
         cfg = _apply_set_overrides(cfg, set_overrides)
     overrides: dict[str, int] = {}
@@ -194,7 +248,7 @@ def main(
     if overrides:
         cfg = cfg.model_copy(update=overrides)
     _t0 = time.perf_counter()
-    backend = _build_backend(cfg)
+    backend = _build_backend(cfg, api_key=api_key)
     model_load_ms = (time.perf_counter() - _t0) * 1000.0
 
     if dataset_name is not None:
@@ -204,8 +258,10 @@ def main(
             prompts = _ds_load(dataset_name, n=cfg.requests, seed=cfg.seed)
         except FileNotFoundError as exc:
             raise click.UsageError(str(exc)) from exc
-    else:
+    elif config_path is not None:
         prompts = load_prompts(cfg.resolve_prompts_file())
+    else:
+        prompts = _DEFAULT_PROMPTS[: cfg.requests]
 
     if output_format != "json":
         header = f"Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}"
@@ -235,7 +291,7 @@ def main(
         from llm_inference_benchmark.manifest import collect_manifest, write_manifest
 
         Path(manifest_path).parent.mkdir(parents=True, exist_ok=True)
-        manifest = collect_manifest(config_path, cfg)
+        manifest = collect_manifest(config_path or "", cfg)
         write_manifest(manifest, manifest_path)
         click.echo(f"Manifest written to {manifest_path}")
 
@@ -1511,7 +1567,7 @@ def datasets_list() -> None:
         click.echo(f"{name:<20}  {count}")
 
 
-def _build_backend(cfg: BenchmarkConfig) -> Backend:
+def _build_backend(cfg: BenchmarkConfig, api_key: str | None = None) -> Backend:
     if cfg.backend == "mock":
         return MockBackend(
             model=cfg.model,
@@ -1554,6 +1610,7 @@ def _build_backend(cfg: BenchmarkConfig) -> Backend:
             temperature=cfg.openai.temperature,
             timeout_s=cfg.openai.timeout_s,
             api_key_env=cfg.openai.api_key_env,
+            api_key=api_key,
             stream=cfg.openai.stream,
             seed=cfg.seed,
         )
