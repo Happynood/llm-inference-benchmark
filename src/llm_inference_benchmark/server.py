@@ -12,6 +12,7 @@ Endpoints:
   POST /api/runs
   GET    /api/runs/{run_id}
   DELETE /api/runs/{run_id}
+  GET    /api/runs/{run_id}/results.csv  downloadable CSV of parsed metrics
   GET    /api/runs/{run_id}/stream      Server-Sent Events
   GET  /api/ui/run-list              HTMX HTML fragment — sidebar card list
   GET  /api/ui/run-detail/{run_id}   HTMX HTML fragment — run detail panel
@@ -24,7 +25,9 @@ Endpoints:
 from __future__ import annotations
 
 import asyncio
+import csv
 import html
+import io
 import json
 import re
 import sqlite3
@@ -409,6 +412,13 @@ def _render_run_detail(run: RunResult) -> str:
     if len(model) > 80:
         model_display = html.escape("…" + model[-77:])
 
+    csv_btn = (
+        f'    <a href="/api/runs/{rid}/results.csv"'
+        f' class="btn btn-sm btn-outline" download>Download CSV</a>\n'
+        if run.status == "done"
+        else ""
+    )
+
     return (
         f'<div id="detail-inner" data-run-id="{rid}" data-status="{html.escape(run.status)}">\n'
         f'  <div class="detail-header">\n'
@@ -433,6 +443,7 @@ def _render_run_detail(run: RunResult) -> str:
         f" onclick=\"deleteRun('{rid}')\">Delete</button>\n"
         f'    <a href="/runs/{rid}/pareto.html"'
         f' class="btn btn-sm btn-outline" target="_blank">Pareto Chart</a>\n'
+        f"{csv_btn}"
         f"  </div>\n"
         f"\n"
         f'  <div class="log-section">\n'
@@ -769,6 +780,42 @@ async def delete_run(run_id: str) -> None:
     db.execute("DELETE FROM runs WHERE id=?", (run_id,))
     db.commit()
     _buffers.pop(run_id, None)
+
+
+@app.get("/api/runs/{run_id}/results.csv")
+async def download_run_csv(run_id: str) -> Response:
+    db = _get_db()
+    row = db.execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
+    run = _row_to_result(row)
+    if run.status in ("pending", "running"):
+        raise HTTPException(status_code=409, detail="Run is not finished")
+    metrics = _parse_metrics_from_output(run.output)
+    cfg = run.config or {}
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        ["run_id", "backend", "model", "status", "created_at", "finished_at"]
+        + _NUMERIC_METRIC_KEYS
+    )
+    writer.writerow(
+        [
+            run.run_id,
+            cfg.get("backend", ""),
+            cfg.get("model", ""),
+            run.status,
+            run.created_at,
+            run.finished_at or "",
+        ]
+        + [("" if metrics.get(k) is None else metrics[k]) for k in _NUMERIC_METRIC_KEYS]
+    )
+    short = run_id[:8]
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": f'attachment; filename="run_{short}.csv"'},
+    )
 
 
 @app.get("/api/runs/{run_id}/stream")

@@ -938,3 +938,125 @@ async def test_delete_run_removes_buffer(client: httpx.AsyncClient) -> None:
     resp = await client.delete(f"/api/runs/{run_id}")
     assert resp.status_code == 204
     assert run_id not in _buffers
+
+
+# ── CSV export ────────────────────────────────────────────────────────────────
+
+_SAMPLE_OUTPUT = """\
+  tokens_per_second: 42.5
+  p50_latency_ms: 110
+  p95_latency_ms: 210
+  peak_cuda_memory_mb: 2048
+"""
+
+
+async def test_csv_export_returns_200(client: httpx.AsyncClient) -> None:
+    """GET /api/runs/{id}/results.csv returns 200 for a done run."""
+    db = _get_db()
+    run_id = "bbbbbbbb-0000-0000-0000-000000000001"
+    db.execute(
+        "INSERT INTO runs (id, status, config, output, created_at, finished_at) "
+        "VALUES (?, 'done', '{\"backend\":\"mock\",\"model\":\"m1\"}', ?, ?, ?)",
+        (run_id, _SAMPLE_OUTPUT, _now_iso(), _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.get(f"/api/runs/{run_id}/results.csv")
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers["content-type"]
+    assert f'attachment; filename="run_{run_id[:8]}.csv"' in resp.headers["content-disposition"]
+
+
+async def test_csv_export_header_and_data_row(client: httpx.AsyncClient) -> None:
+    """CSV has exactly two rows: a header and one data row with correct values."""
+    import csv
+    import io
+
+    db = _get_db()
+    run_id = "bbbbbbbb-0000-0000-0000-000000000002"
+    created = _now_iso()
+    finished = _now_iso()
+    db.execute(
+        "INSERT INTO runs (id, status, config, output, created_at, finished_at) "
+        "VALUES (?, 'done', '{\"backend\":\"mock\",\"model\":\"my-model\"}', ?, ?, ?)",
+        (run_id, _SAMPLE_OUTPUT, created, finished),
+    )
+    db.commit()
+
+    resp = await client.get(f"/api/runs/{run_id}/results.csv")
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    assert len(rows) == 2
+    header, data = rows
+
+    assert header[0] == "run_id"
+    assert "backend" in header
+    assert "model" in header
+    assert "tokens_per_second" in header
+    assert "p50_latency_ms" in header
+
+    backend_idx = header.index("backend")
+    model_idx = header.index("model")
+    tps_idx = header.index("tokens_per_second")
+    p50_idx = header.index("p50_latency_ms")
+
+    assert data[0] == run_id
+    assert data[backend_idx] == "mock"
+    assert data[model_idx] == "my-model"
+    assert data[tps_idx] == "42.5"
+    assert data[p50_idx] == "110.0"
+
+
+async def test_csv_export_missing_metrics_are_empty_string(client: httpx.AsyncClient) -> None:
+    """Metrics not present in output appear as empty strings, not 'None'."""
+    import csv
+    import io
+
+    db = _get_db()
+    run_id = "bbbbbbbb-0000-0000-0000-000000000003"
+    db.execute(
+        "INSERT INTO runs (id, status, config, output, created_at, finished_at) "
+        "VALUES (?, 'done', '{}', 'no metrics here', ?, ?)",
+        (run_id, _now_iso(), _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.get(f"/api/runs/{run_id}/results.csv")
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    header, data = rows
+    energy_idx = header.index("energy_joules")
+    assert data[energy_idx] == ""
+
+
+async def test_csv_export_not_found(client: httpx.AsyncClient) -> None:
+    """GET /api/runs/{id}/results.csv returns 404 for unknown run ID."""
+    resp = await client.get("/api/runs/does-not-exist/results.csv")
+    assert resp.status_code == 404
+
+
+async def test_csv_export_pending_returns_409(client: httpx.AsyncClient) -> None:
+    """GET /api/runs/{id}/results.csv returns 409 for a pending run."""
+    db = _get_db()
+    run_id = "bbbbbbbb-0000-0000-0000-000000000004"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'pending', '{}', ?)",
+        (run_id, _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.get(f"/api/runs/{run_id}/results.csv")
+    assert resp.status_code == 409
+    assert resp.json()["detail"] == "Run is not finished"
+
+
+async def test_csv_export_running_returns_409(client: httpx.AsyncClient) -> None:
+    """GET /api/runs/{id}/results.csv returns 409 for a running run."""
+    db = _get_db()
+    run_id = "bbbbbbbb-0000-0000-0000-000000000005"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'running', '{}', ?)",
+        (run_id, _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.get(f"/api/runs/{run_id}/results.csv")
+    assert resp.status_code == 409

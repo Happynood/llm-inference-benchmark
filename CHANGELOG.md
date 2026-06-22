@@ -9,6 +9,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Download CSV from the dashboard**: completed runs now show a **Download CSV** button
+  in the run detail panel.  Clicking it fetches `GET /api/runs/{run_id}/results.csv` and
+  downloads a two-row CSV (header + data) containing `run_id`, `backend`, `model`,
+  `status`, timestamps, and all numeric metrics.  Missing metrics appear as empty strings.
+  The endpoint returns `404` for unknown runs and `409` for runs that have not finished.
+
 - **`llm-bench sweep` command**: ramp `concurrency` across a comma-separated range and
   emit a throughput-vs-latency curve in a single CSV.  Each level produces a row with
   `concurrency`, `throughput_rps`, `p50_latency_ms`, `p95_latency_ms`, `tokens_per_second`,

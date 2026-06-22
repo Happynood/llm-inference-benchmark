@@ -378,6 +378,8 @@ left and a live detail panel on the right.
   `llm-bench datasets pull <name>`) directly in the modal; "Default prompts" preserves
   the existing synthetic-prompt behaviour.
 - **Delete** button on each run card (running runs are protected with a 409 response).
+- **Download CSV** — completed runs show a **Download CSV** button in the detail panel
+  that exports all parsed metrics as a two-row CSV file, ready for analysis.
 
 ```bash
 # Install server dependencies
@@ -400,6 +402,7 @@ llm-bench serve --host 0.0.0.0 --port 9000
 | `GET` | `/api/runs` | List past benchmark results from `~/.llm-bench/results.db` |
 | `POST` | `/api/runs` | Submit a benchmark config (JSON body); returns `{"run_id": "..."}` immediately |
 | `GET` | `/api/runs/{run_id}` | Poll status (`pending`/`running`/`done`/`error`) and results |
+| `GET` | `/api/runs/{run_id}/results.csv` | Download parsed metrics as CSV (header + data row); 409 if not finished |
 | `GET` | `/api/runs/{run_id}/stream` | Server-Sent Events streaming stdout of a running benchmark |
 | `DELETE` | `/api/runs/{run_id}` | Delete a completed or errored run; returns 409 if still running |
 | `GET` | `/api/ui/runs-table` | HTMX HTML fragment for the runs table |
