@@ -430,7 +430,7 @@ async def test_dashboard_returns_html(client: httpx.AsyncClient) -> None:
     assert resp.status_code == 200
     assert "text/html" in resp.headers["content-type"]
     assert "llm-bench" in resp.text
-    assert "runs-tbody" in resp.text
+    assert "run-list" in resp.text
 
 
 async def test_runs_table_fragment_empty(client: httpx.AsyncClient) -> None:
@@ -677,17 +677,23 @@ def test_do_pull_dataset_clears_error_on_success() -> None:
     assert "lmsys-chat" not in _pull_errors
 
 
-async def test_list_datasets_includes_error_field(client: httpx.AsyncClient) -> None:
+async def test_list_datasets_includes_error_field(
+    client: httpx.AsyncClient, tmp_path: Path
+) -> None:
     _pull_errors["lmsys-chat"] = "test error"
-    resp = await client.get("/api/datasets")
+    with patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path):
+        resp = await client.get("/api/datasets")
     assert resp.status_code == 200
     entry = next(d for d in resp.json()["datasets"] if d["name"] == "lmsys-chat")
     assert entry["error"] == "test error"
 
 
-async def test_datasets_table_fragment_shows_error(client: httpx.AsyncClient) -> None:
+async def test_datasets_table_fragment_shows_error(
+    client: httpx.AsyncClient, tmp_path: Path
+) -> None:
     _pull_errors["lmsys-chat"] = "Network unreachable"
-    resp = await client.get("/api/ui/datasets-table")
+    with patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path):
+        resp = await client.get("/api/ui/datasets-table")
     assert resp.status_code == 200
     assert "Pull failed:" in resp.text
     assert "Network unreachable" in resp.text
@@ -803,16 +809,19 @@ async def test_dashboard_contains_model_select(client: httpx.AsyncClient) -> Non
     resp = await client.get("/")
     assert resp.status_code == 200
     assert "f-model" in resp.text
-    assert "loadModels" in resp.text
+    # loadModels lives in the external app.js file
+    js_resp = await client.get("/static/app.js")
+    assert js_resp.status_code == 200
+    assert "loadModels" in js_resp.text
 
 
 async def test_dashboard_loadmodels_uses_type_tag(client: httpx.AsyncClient) -> None:
     """The dashboard JS maps model types to human-readable backend tags."""
-    resp = await client.get("/")
-    assert resp.status_code == 200
-    assert "typeTag" in resp.text
-    assert "llama.cpp" in resp.text
-    assert "transformers" in resp.text
+    js_resp = await client.get("/static/app.js")
+    assert js_resp.status_code == 200
+    assert "typeTag" in js_resp.text
+    assert "llama.cpp" in js_resp.text
+    assert "transformers" in js_resp.text
 
 
 async def test_models_api_includes_type_and_name(

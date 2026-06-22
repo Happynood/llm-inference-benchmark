@@ -74,7 +74,7 @@ REGISTRY: dict[str, dict[str, Any]] = {
     },
     "swe-bench-pro": {
         "hf_repo": "ScaleAI/SWE-bench_Pro",
-        "split": "train",
+        "split": "test",
         "max_samples": 100,
         "extractor": "swe_bench_pro",
         "description": "ScaleAI/SWE-bench_Pro — real-world GitHub issue repair tasks",
