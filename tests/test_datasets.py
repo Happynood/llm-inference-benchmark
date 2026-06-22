@@ -15,6 +15,7 @@ from llm_inference_benchmark.datasets import (
     REGISTRY,
     _extract_gsm8k,
     _extract_hermes_fn,
+    _extract_humaneval,
     _extract_lmsys_chat,
     _extract_mmlu_pro,
     _extract_swe_bench_pro,
@@ -480,7 +481,53 @@ def test_registry_has_expected_entries() -> None:
     assert "gsm8k" in REGISTRY
     assert "mmlu-pro" in REGISTRY
     assert "swe-bench-pro" in REGISTRY
+    assert "humaneval" in REGISTRY
     for spec in REGISTRY.values():
         assert "hf_repo" in spec
         assert "extractor" in spec
         assert "max_samples" in spec
+
+
+# ── HumanEval extractor ───────────────────────────────────────────────────────
+
+
+def test_extract_humaneval_returns_code_prompt() -> None:
+    row = {"prompt": 'def add(a, b):\n    """Return a + b."""\n'}
+    result = _extract_humaneval(row)
+    assert result is not None
+    assert result.startswith("# Complete the following Python function:")
+    assert "def add(a, b):" in result
+
+
+def test_extract_humaneval_typical_row() -> None:
+    row = {
+        "task_id": "HumanEval/0",
+        "prompt": (
+            "from typing import List\n\n"
+            "def has_close_elements(numbers: List[float], threshold: float) -> bool:\n"
+            '    """ Check if in given list of numbers, are any two numbers closer to each other\n'
+            "    than given threshold.\n"
+            '    """\n'
+        ),
+        "canonical_solution": "    for idx, elem in enumerate(numbers):\n        pass\n",
+        "test": "def check(candidate):\n    pass",
+        "entry_point": "has_close_elements",
+    }
+    result = _extract_humaneval(row)
+    assert result is not None
+    assert "has_close_elements" in result
+    assert result.startswith("# Complete the following Python function:")
+
+
+def test_extract_humaneval_skips_empty_prompt() -> None:
+    assert _extract_humaneval({}) is None
+    assert _extract_humaneval({"prompt": ""}) is None
+    assert _extract_humaneval({"prompt": "   "}) is None
+
+
+def test_humaneval_registry_entry() -> None:
+    spec = REGISTRY["humaneval"]
+    assert spec["hf_repo"] == "openai/openai_humaneval"
+    assert spec["split"] == "test"
+    assert spec["max_samples"] == 164
+    assert spec["extractor"] == "humaneval"

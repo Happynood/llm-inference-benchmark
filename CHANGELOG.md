@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **`humaneval` dataset**: `llm-bench datasets pull humaneval` downloads all 164 Python
+  function-completion problems from `openai/openai_humaneval`.  Each prompt is prefixed with
+  a brief instruction so the model knows to complete the function.  Use it as a code-generation
+  benchmark that is reproducible across model versions.
+
 - **Download CSV from the dashboard**: completed runs now show a **Download CSV** button
   in the run detail panel.  Clicking it fetches `GET /api/runs/{run_id}/results.csv` and
   downloads a two-row CSV (header + data) containing `run_id`, `backend`, `model`,
