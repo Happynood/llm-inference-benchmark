@@ -79,6 +79,13 @@ REGISTRY: dict[str, dict[str, Any]] = {
         "extractor": "swe_bench_pro",
         "description": "ScaleAI/SWE-bench_Pro — real-world GitHub issue repair tasks",
     },
+    "humaneval": {
+        "hf_repo": "openai/openai_humaneval",
+        "split": "test",
+        "max_samples": 164,
+        "extractor": "humaneval",
+        "description": "openai/openai_humaneval — 164 Python coding problems (function completion)",
+    },
 }
 
 
@@ -177,6 +184,13 @@ def _extract_swe_bench_pro(row: dict[str, Any]) -> str | None:
     return f"Analyze this software issue and suggest a fix:\n\n{text}"
 
 
+def _extract_humaneval(row: dict[str, Any]) -> str | None:
+    prompt = str(row.get("prompt", "")).strip()
+    if not prompt:
+        return None
+    return f"# Complete the following Python function:\n\n{prompt}"
+
+
 _EXTRACTORS = {
     "wildchat": _extract_wildchat,
     "lmsys_chat": _extract_lmsys_chat,
@@ -187,6 +201,7 @@ _EXTRACTORS = {
     "gsm8k": _extract_gsm8k,
     "mmlu_pro": _extract_mmlu_pro,
     "swe_bench_pro": _extract_swe_bench_pro,
+    "humaneval": _extract_humaneval,
 }
 
 

@@ -430,6 +430,7 @@ llm-bench datasets pull long-context-64k  # 10 passages  @ ~64k tokens
 llm-bench datasets pull gsm8k             # 200 grade-school math problems
 llm-bench datasets pull mmlu-pro          # 200 multi-choice knowledge questions
 llm-bench datasets pull swe-bench-pro     # 100 real-world software issue descriptions
+llm-bench datasets pull humaneval         # 164 Python coding problems (function completion)
 
 # List cached datasets
 llm-bench datasets list
