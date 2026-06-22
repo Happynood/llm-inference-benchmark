@@ -23,6 +23,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Web UI model dropdown shortened labels**: the **Model** dropdown in the "New Run" modal
+  now shows a human-readable short name instead of the raw model path.  The org prefix is
+  stripped for HuggingFace models (e.g. `meta-llama/Llama-3.2-1B-Instruct` →
+  `Llama-3.2-1B-Instruct`), and a backend tag is appended in parentheses
+  (`(llama.cpp)` for GGUF, `(transformers)` for HF).  The full path is preserved as the
+  submitted `<option value>` and is shown as a tooltip via the `title` attribute.
+
 - **Web UI dataset selector**: the "New Run" modal now includes a **Dataset** dropdown
   populated with all currently-cached datasets (name + sample count).  Selecting a dataset
   routes benchmark prompts through the corresponding real-world prompt set instead of the

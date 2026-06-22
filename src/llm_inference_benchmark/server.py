@@ -520,11 +520,21 @@ function toggleGpuRow() {
 function loadModels() {
   fetch('/api/models').then(function(r){ return r.json(); }).then(function(data) {
     var sel = document.getElementById('f-model');
-    var models = [];
-    (data.models || []).forEach(function(m){ models.push(m.path || m.id || ''); });
-    if (!models.length) { models = ['<no models found>']; }
-    sel.innerHTML = models.map(function(m){
-      return '<option value="' + m.replace(/"/g,'&quot;') + '">' + m + '</option>';
+    var models = data.models || [];
+    if (!models.length) {
+      sel.innerHTML = '<option value="">&lt;no models found&gt;</option>';
+      return;
+    }
+    var typeTag = {gguf: 'llama.cpp', hf: 'transformers'};
+    sel.innerHTML = models.map(function(m) {
+      var val = m.path || m.id || '';
+      var name = m.name || val;
+      var short = name.indexOf('/') !== -1 ? name.substring(name.indexOf('/') + 1) : name;
+      var tag = typeTag[m.type] || m.type || '';
+      var label = tag ? short + ' (' + tag + ')' : short;
+      var ev = val.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
+      var el = label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      return '<option value="' + ev + '" title="' + ev + '">' + el + '</option>';
     }).join('');
   }).catch(function(){
     document.getElementById('f-model').innerHTML =

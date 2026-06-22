@@ -796,3 +796,41 @@ async def test_dashboard_contains_dataset_selector(client: httpx.AsyncClient) ->
     assert resp.status_code == 200
     assert "f-dataset" in resp.text
     assert "Default prompts" in resp.text
+
+
+async def test_dashboard_contains_model_select(client: httpx.AsyncClient) -> None:
+    """The dashboard HTML includes the model select element for the run form."""
+    resp = await client.get("/")
+    assert resp.status_code == 200
+    assert "f-model" in resp.text
+    assert "loadModels" in resp.text
+
+
+async def test_dashboard_loadmodels_uses_type_tag(client: httpx.AsyncClient) -> None:
+    """The dashboard JS maps model types to human-readable backend tags."""
+    resp = await client.get("/")
+    assert resp.status_code == 200
+    assert "typeTag" in resp.text
+    assert "llama.cpp" in resp.text
+    assert "transformers" in resp.text
+
+
+async def test_models_api_includes_type_and_name(
+    client: httpx.AsyncClient,
+) -> None:
+    """/api/models returns type and name fields used by the dropdown renderer."""
+    fake_models = [
+        {"type": "gguf", "name": "llama-q4.gguf", "path": "/models/llama-q4.gguf"},
+        {
+            "type": "hf",
+            "name": "meta-llama/Llama-3-8B",
+            "path": "/cache/models--meta-llama--Llama-3-8B",
+        },
+    ]
+    with patch.object(server_mod, "_discover_models", return_value=fake_models):
+        resp = await client.get("/api/models")
+    data = resp.json()
+    assert data["models"][0]["type"] == "gguf"
+    assert data["models"][0]["name"] == "llama-q4.gguf"
+    assert data["models"][1]["type"] == "hf"
+    assert data["models"][1]["name"] == "meta-llama/Llama-3-8B"
