@@ -100,6 +100,7 @@ app = FastAPI(title="llm-bench Web API", version="1.0.0")
 
 class RunRequest(BaseModel):
     config: dict[str, Any]
+    dataset: str | None = None
 
 
 class RunSubmitted(BaseModel):
@@ -189,7 +190,7 @@ def _do_pull_dataset(name: str) -> None:
 # ── Background benchmark runner ───────────────────────────────────────────────
 
 
-def _do_run(run_id: str, config: dict[str, Any]) -> None:
+def _do_run(run_id: str, config: dict[str, Any], dataset: str | None = None) -> None:
     """Execute llm-bench with *config*; updates DB status and streaming buffer."""
     import os
 
@@ -211,8 +212,11 @@ def _do_run(run_id: str, config: dict[str, Any]) -> None:
             cfg_path = tmp.name
 
         try:
+            cmd = [str(Path(sys.executable).parent / "llm-bench"), "--config", cfg_path]
+            if dataset:
+                cmd.extend(["--dataset", dataset])
             proc = subprocess.Popen(
-                [str(Path(sys.executable).parent / "llm-bench"), "--config", cfg_path],
+                cmd,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.STDOUT,
                 text=True,
@@ -342,6 +346,10 @@ _DASHBOARD_HTML = """\
     <div class="form-row">
       <label for="f-model">Model</label>
       <select id="f-model"><option value="">Loading…</option></select>
+    </div>
+    <div class="form-row">
+      <label for="f-dataset">Dataset (prompt source)</label>
+      <select id="f-dataset"><option value="">Default prompts</option></select>
     </div>
     <div class="form-row">
       <label for="f-backend">Backend</label>
@@ -496,6 +504,7 @@ function streamLog(runId) {
 function openModal() {
   document.getElementById('run-modal').classList.add('open');
   loadModels();
+  loadModalDatasets();
 }
 
 function closeModal() {
@@ -523,8 +532,22 @@ function loadModels() {
   });
 }
 
+function loadModalDatasets() {
+  fetch('/api/datasets').then(function(r){ return r.json(); }).then(function(data) {
+    var sel = document.getElementById('f-dataset');
+    var cached = (data.datasets || []).filter(function(d){ return d.cached; });
+    var opts = '<option value="">Default prompts</option>';
+    cached.forEach(function(d){
+      var label = d.name + ' (' + d.samples + ' samples)';
+      opts += '<option value="' + d.name.replace(/"/g,'&quot;') + '">' + label + '</option>';
+    });
+    sel.innerHTML = opts;
+  }).catch(function(){});
+}
+
 function submitRun() {
   var model    = document.getElementById('f-model').value;
+  var dataset  = document.getElementById('f-dataset').value || null;
   var backend  = document.getElementById('f-backend').value;
   var requests = parseInt(document.getElementById('f-requests').value) || 10;
   var conc     = parseInt(document.getElementById('f-concurrency').value) || 1;
@@ -544,13 +567,15 @@ function submitRun() {
       }
     } catch(e) { /* ignore parse errors */ }
   }
+  var body = {config: config};
+  if (dataset) { body['dataset'] = dataset; }
   var btn = document.getElementById('submit-btn');
   btn.disabled = true;
   btn.textContent = 'Submitting…';
   fetch('/api/runs', {
     method: 'POST',
     headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({config: config})
+    body: JSON.stringify(body)
   }).then(function(r){
     if (!r.ok) { throw new Error('HTTP ' + r.status); }
     return r.json();
@@ -871,7 +896,7 @@ async def submit_run(body: RunRequest, background_tasks: BackgroundTasks) -> Run
         (run_id, json.dumps(body.config), _now_iso()),
     )
     db.commit()
-    background_tasks.add_task(_do_run, run_id, body.config)
+    background_tasks.add_task(_do_run, run_id, body.config, dataset=body.dataset)
     return RunSubmitted(run_id=run_id)
 
 
