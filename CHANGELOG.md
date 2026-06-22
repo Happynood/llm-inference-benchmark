@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **E2E tests for multi-run comparison**: four Playwright tests cover the compare bar
+  appearing when two run cards are checked, the ✕ clear button hiding the bar, the
+  **Compare** button opening the Pareto page in a new tab with the correct `?ids=` query
+  string, and checkbox state persisting across the automatic HTMX run-list refresh.
+
 - **`humaneval` dataset**: `llm-bench datasets pull humaneval` downloads all 164 Python
   function-completion problems from `openai/openai_humaneval`.  Each prompt is prefixed with
   a brief instruction so the model knows to complete the function.  Use it as a code-generation

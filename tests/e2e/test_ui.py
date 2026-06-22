@@ -309,3 +309,67 @@ def test_gpu_layers_hidden_for_non_llama_cpp(page: Page, live_server: str) -> No
     # Switch back to mock — field disappears again
     page.locator("#f-backend").select_option("mock")
     expect(page.locator("#f-llama-gpu")).to_have_count(0)
+
+
+# ── Multi-run comparison tests ─────────────────────────────────────────────────
+
+
+def _check_two_cards(page: Page) -> tuple[str, str]:
+    """Check the first two run cards and return their run IDs."""
+    page.wait_for_selector(".run-card", timeout=8000)
+    cards = page.locator(".run-card")
+    rid0 = cards.nth(0).get_attribute("data-run-id")
+    rid1 = cards.nth(1).get_attribute("data-run-id")
+    assert rid0 and rid1
+    page.locator(f'.compare-cb[value="{rid0}"]').click()
+    page.locator(f'.compare-cb[value="{rid1}"]').click()
+    return rid0, rid1
+
+
+def test_compare_bar_appears_when_two_runs_checked(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    _check_two_cards(page)
+    bar = page.locator("#compare-bar")
+    expect(bar).to_be_visible()
+    expect(page.locator("#compare-count")).to_contain_text("2 runs selected")
+
+
+def test_compare_bar_clears_on_x_button(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    _check_two_cards(page)
+    expect(page.locator("#compare-bar")).to_be_visible()
+    page.locator('button[aria-label="Clear selection"]').click()
+    expect(page.locator("#compare-bar")).to_be_hidden()
+    checked = page.eval_on_selector_all(".compare-cb", "els => els.filter(e => e.checked).length")
+    assert checked == 0
+
+
+def test_compare_opens_pareto_tab(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    rid0, rid1 = _check_two_cards(page)
+    expect(page.locator("#compare-bar")).to_be_visible()
+    with page.context.expect_page() as new_page_info:
+        page.locator('button:has-text("Compare")').click()
+    new_page = new_page_info.value
+    new_page.wait_for_load_state("domcontentloaded")
+    url = new_page.url
+    assert "/runs/pareto" in url
+    assert rid0 in url
+    assert rid1 in url
+
+
+def test_compare_checkboxes_survive_htmx_refresh(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    rid0, rid1 = _check_two_cards(page)
+    expect(page.locator("#compare-bar")).to_be_visible()
+    page.evaluate("htmx.trigger('#run-list', 'load')")
+    page.wait_for_selector(".run-card", timeout=8000)
+    page.wait_for_function(
+        f"() => !!document.querySelector('.compare-cb[value=\"{rid0}\"]')?.checked",
+        timeout=6000,
+    )
+    page.wait_for_function(
+        f"() => !!document.querySelector('.compare-cb[value=\"{rid1}\"]')?.checked",
+        timeout=6000,
+    )
+    expect(page.locator("#compare-bar")).to_be_visible()
