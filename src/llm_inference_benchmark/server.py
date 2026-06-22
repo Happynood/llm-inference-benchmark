@@ -1,7 +1,9 @@
 """FastAPI HTTP backend for llm-bench Web UI.
 
-Exposes the following endpoints:
+Endpoints:
   GET  /                              dashboard (HTML)
+  GET  /static/app.css               CSS
+  GET  /static/app.js                JS
   GET  /api/health
   GET  /api/models
   GET  /api/datasets
@@ -11,9 +13,12 @@ Exposes the following endpoints:
   GET    /api/runs/{run_id}
   DELETE /api/runs/{run_id}
   GET    /api/runs/{run_id}/stream      Server-Sent Events
-  GET  /api/ui/datasets-table         HTMX HTML fragment
-  GET  /api/ui/runs-table             HTMX HTML fragment
-  GET  /runs/{run_id}/pareto.html     interactive Plotly scatter page
+  GET  /api/ui/run-list              HTMX HTML fragment — sidebar card list
+  GET  /api/ui/run-detail/{run_id}   HTMX HTML fragment — run detail panel
+  GET  /api/ui/runs-table            HTMX HTML fragment — legacy table rows
+  GET  /api/ui/datasets-table        HTMX HTML fragment
+  GET  /runs/{run_id}/pareto.html    interactive Plotly scatter page
+  GET  /runs/pareto                  multi-run Pareto page
 """
 
 from __future__ import annotations
@@ -33,11 +38,17 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
-from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
+from fastapi.responses import HTMLResponse, Response, StreamingResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
 from llm_inference_benchmark import datasets as _datasets_mod
+
+# ── Paths ─────────────────────────────────────────────────────────────────────
+
+_UI_DIR = Path(__file__).parent / "ui"
+_templates = Jinja2Templates(directory=str(_UI_DIR / "templates"))
 
 # ── Database ─────────────────────────────────────────────────────────────────
 
@@ -82,11 +93,11 @@ def _get_db() -> sqlite3.Connection:
     return conn
 
 
-# ── Streaming buffers (keyed by run_id, alive while the run is active) ───────
+# ── Streaming buffers ─────────────────────────────────────────────────────────
 
 _buffers: dict[str, list[str]] = {}
 
-# ── Dataset pull error store (keyed by dataset name) ─────────────────────────
+# ── Dataset pull error store ──────────────────────────────────────────────────
 
 _pull_errors: dict[str, str] = {}
 
@@ -121,7 +132,7 @@ class RunResult(BaseModel):
     finished_at: str | None = None
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# ── Core helpers ──────────────────────────────────────────────────────────────
 
 
 def _now_iso() -> str:
@@ -140,20 +151,25 @@ def _row_to_result(row: sqlite3.Row) -> RunResult:
 
 
 def _discover_models() -> list[dict[str, str]]:
+    """Return GGUF files and HF-cached models found on the local machine."""
     results: list[dict[str, str]] = []
 
     gguf_root = Path.home() / "models"
     if gguf_root.is_dir():
         for p in sorted(gguf_root.glob("**/*.gguf")):
-            results.append({"type": "gguf", "name": p.name, "path": str(p)})
+            results.append({"type": "gguf", "name": p.name, "path": str(p), "value": str(p)})
 
     hf_hub = Path.home() / ".cache" / "huggingface" / "hub"
     if hf_hub.is_dir():
         for d in sorted(hf_hub.iterdir()):
             if d.is_dir() and d.name.startswith("models--"):
-                slug = d.name[len("models--") :]
+                snapshots = d / "snapshots"
+                if not snapshots.is_dir() or not any(snapshots.iterdir()):
+                    continue  # partial/empty download — skip
+                slug = d.name[len("models--"):]
                 model_name = slug.replace("--", "/", 1)
-                results.append({"type": "hf", "name": model_name, "path": str(d)})
+                # Use the model name (not the hub dir path) so from_pretrained works.
+                results.append({"type": "hf", "name": model_name, "path": str(d), "value": model_name})
 
     return results
 
@@ -248,15 +264,53 @@ def _do_run(run_id: str, config: dict[str, Any], dataset: str | None = None) -> 
 
 # ── Metrics parsing ───────────────────────────────────────────────────────────
 
+_NUMERIC_METRIC_KEYS = [
+    "tokens_per_second",
+    "decode_tokens_per_second",
+    "p50_latency_ms",
+    "p95_latency_ms",
+    "p50_ttft_ms",
+    "p95_ttft_ms",
+    "mean_input_tokens",
+    "mean_output_tokens",
+    "peak_cpu_memory_mb",
+    "peak_cuda_memory_mb",
+    "peak_vram_memory_mb",
+    "model_load_ms",
+    "warmup_p50_latency_ms",
+    "energy_joules",
+    "tokens_per_joule",
+    "sanity_pass_rate",
+    "task_quality_pass_rate",
+    "total_tokens",
+    "request_count",
+    "empty_output_count",
+    "repeated_output_count",
+    "thermal_throttle_pct",
+]
+
 
 def _parse_metrics_from_output(output: str | None) -> dict[str, float | None]:
-    """Extract key numeric metrics from benchmark stdout text."""
+    """Extract numeric metrics from benchmark stdout text."""
     if not output:
-        return {"tokens_per_second": None, "p50_ttft_ms": None, "p95_latency_ms": None}
+        return {k: None for k in _NUMERIC_METRIC_KEYS}
     result: dict[str, float | None] = {}
-    for key in ("tokens_per_second", "p50_ttft_ms", "p95_latency_ms"):
+    for key in _NUMERIC_METRIC_KEYS:
         m = re.search(rf"^\s+{re.escape(key)}: ([0-9]+(?:\.[0-9]+)?)", output, re.MULTILINE)
         result[key] = float(m.group(1)) if m else None
+    return result
+
+
+_HW_KEYS = ["hw_cpu", "hw_gpu", "hw_os", "hw_cpu_cores", "hw_ram_gb", "hw_vram_gb"]
+
+
+def _parse_hw_from_output(output: str) -> dict[str, str]:
+    """Extract hardware info lines from benchmark stdout."""
+    result: dict[str, str] = {}
+    for key in _HW_KEYS:
+        m = re.search(rf"^\s+{re.escape(key)}: (.+)$", output, re.MULTILINE)
+        if m:
+            result[key] = m.group(1).strip()
     return result
 
 
@@ -276,419 +330,164 @@ def _pareto_mask(points: list[tuple[float, float]]) -> list[bool]:
     return [not d for d in dominated]
 
 
-# ── Dashboard HTML ─────────────────────────────────────────────────────────────
+# ── HTML rendering helpers ────────────────────────────────────────────────────
 
-_DASHBOARD_HTML = """\
-<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>llm-bench</title>
-  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
-  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
-  <style>
-    *{box-sizing:border-box}
-    body{font-family:system-ui,-apple-system,sans-serif;
-         max-width:1400px;margin:0 auto;padding:1.5rem;color:#111}
-    h1{margin:0 0 .25rem}
-    h2{margin:1.5rem 0 .5rem;font-size:.9rem;text-transform:uppercase;
-       letter-spacing:.06em;color:#64748b}
-    table{border-collapse:collapse;width:100%}
-    th{text-align:left;padding:.45rem .75rem;border-bottom:2px solid #e2e8f0;
-       font-size:.8rem;color:#64748b;white-space:nowrap}
-    td{padding:.45rem .75rem;border-bottom:1px solid #f1f5f9;
-       font-size:.875rem;vertical-align:middle}
-    tr:hover td{background:#f8fafc}
-    .badge{display:inline-block;padding:.1rem .45rem;border-radius:.25rem;
-           font-size:.75rem;font-weight:600}
-    .badge-running{background:#fef3c7;color:#92400e}
-    .badge-done{background:#d1fae5;color:#065f46}
-    .badge-error{background:#fee2e2;color:#991b1b}
-    .badge-pending{background:#f1f5f9;color:#475569}
-    pre{background:#0f172a;color:#e2e8f0;padding:1rem;border-radius:.5rem;
-        max-height:320px;overflow-y:auto;font-size:.82rem;line-height:1.55;margin:0}
-    .btn{cursor:pointer;padding:.3rem .8rem;border:none;border-radius:.3rem;
-         background:#3b82f6;color:#fff;font-size:.82rem;text-decoration:none}
-    .btn:hover{background:#2563eb}
-    .btn-sm{padding:.18rem .5rem}
-    .btn-outline{background:transparent;color:#3b82f6;border:1px solid #3b82f6}
-    .btn-outline:hover{background:#eff6ff}
-    .btn-danger{color:#dc2626;border-color:#dc2626}
-    .btn-danger:hover{background:#fee2e2}
-    .mono{font-family:ui-monospace,monospace;font-size:.82rem}
-    section+section{border-top:1px solid #e2e8f0;padding-top:1rem}
-    #log-section,#chart-section{display:none}
-    .modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);
-      z-index:100;align-items:center;justify-content:center}
-    .modal-backdrop.open{display:flex}
-    .modal{background:#fff;border-radius:.5rem;padding:1.5rem;width:100%;max-width:480px;
-      box-shadow:0 8px 32px rgba(0,0,0,.18)}
-    .modal h3{margin:0 0 1rem;font-size:1rem}
-    .form-row{margin-bottom:.75rem}
-    .form-row label{display:block;font-size:.8rem;color:#475569;margin-bottom:.25rem;
-      font-weight:500}
-    .form-row input,.form-row select,.form-row textarea{
-      width:100%;padding:.35rem .6rem;border:1px solid #cbd5e1;border-radius:.3rem;
-      font-size:.875rem;font-family:inherit}
-    .form-row textarea{resize:vertical;min-height:60px}
-    .modal-actions{display:flex;justify-content:flex-end;gap:.5rem;margin-top:1rem}
-    #f-gpu-row{display:none}
-    .ds-select{padding:.3rem .6rem;border:1px solid #cbd5e1;border-radius:.3rem;font-size:.875rem}
-  </style>
-</head>
-<body>
-<h1>llm-bench</h1>
-<p style="color:#64748b;margin:.25rem 0 1.5rem">Benchmark Runs Dashboard</p>
+_DISPLAY_METRICS: list[tuple[str, str, Any]] = [
+    ("tokens_per_second",   "Tok/s",        lambda v: f"{v:.1f}"),
+    ("p50_latency_ms",      "p50 Latency",  lambda v: f"{v:.0f} ms"),
+    ("p95_latency_ms",      "p95 Latency",  lambda v: f"{v:.0f} ms"),
+    ("p50_ttft_ms",         "TTFT p50",     lambda v: f"{v:.0f} ms"),
+    ("peak_cuda_memory_mb", "CUDA Mem",     lambda v: f"{v:.0f} MB"),
+    ("peak_vram_memory_mb", "VRAM",         lambda v: f"{v:.0f} MB"),
+    ("model_load_ms",       "Load Time",    lambda v: f"{v:.0f} ms"),
+    ("energy_joules",       "Energy",       lambda v: f"{v:.1f} J"),
+    ("tokens_per_joule",    "Efficiency",   lambda v: f"{v:.2f} tok/J"),
+    ("sanity_pass_rate",    "Sanity",       lambda v: f"{v * 100:.0f}%"),
+]
 
-<!-- New Run modal -->
-<div class="modal-backdrop" id="run-modal" role="dialog" aria-modal="true"
-     aria-labelledby="modal-title">
-  <div class="modal">
-    <h3 id="modal-title">New Benchmark Run</h3>
-    <div class="form-row">
-      <label for="f-model">Model</label>
-      <select id="f-model"><option value="">Loading…</option></select>
-    </div>
-    <div class="form-row">
-      <label for="f-dataset">Dataset (prompt source)</label>
-      <select id="f-dataset"><option value="">Default prompts</option></select>
-    </div>
-    <div class="form-row">
-      <label for="f-backend">Backend</label>
-      <select id="f-backend" onchange="toggleGpuRow()">
-        <option value="mock">mock</option>
-        <option value="llama-cpp">llama-cpp</option>
-        <option value="transformers">transformers</option>
-        <option value="openai">openai</option>
-        <option value="vllm">vllm</option>
-        <option value="onnx">onnx</option>
-      </select>
-    </div>
-    <div class="form-row">
-      <label for="f-requests">Requests</label>
-      <input type="number" id="f-requests" value="10" min="1">
-    </div>
-    <div class="form-row">
-      <label for="f-concurrency">Concurrency</label>
-      <input type="number" id="f-concurrency" value="1" min="1">
-    </div>
-    <div class="form-row">
-      <label for="f-warmup">Warmup requests</label>
-      <input type="number" id="f-warmup" value="2" min="0">
-    </div>
-    <div class="form-row" id="f-gpu-row">
-      <label for="f-gpu-layers">GPU layers (llama-cpp)</label>
-      <input type="number" id="f-gpu-layers" value="28" min="0">
-    </div>
-    <div class="form-row">
-      <label for="f-extra">Extra YAML (optional)</label>
-      <textarea id="f-extra" placeholder="key: value"></textarea>
-    </div>
-    <div class="modal-actions">
-      <button class="btn btn-outline" onclick="closeModal()">Cancel</button>
-      <button class="btn" id="submit-btn" onclick="submitRun()">Run Benchmark</button>
-    </div>
-  </div>
-</div>
 
-<section>
-  <div style="display:flex;align-items:center;gap:.75rem;margin-bottom:.5rem">
-    <h2 style="margin:0">Runs</h2>
-    <button class="btn" id="new-run-btn" onclick="openModal()">+ New Run</button>
-  </div>
-  <div style="overflow-x:auto">
-  <table>
-    <thead><tr>
-      <th><input type="checkbox" id="select-all" title="Select all"></th>
-      <th>Run</th><th>Model</th><th>Backend</th>
-      <th>Tok/s</th><th>TTFT&nbsp;p50</th><th>Status</th>
-      <th>Created</th><th>Actions</th>
-    </tr></thead>
-    <tbody id="runs-tbody"
-           hx-get="/api/ui/runs-table"
-           hx-trigger="load, every 5s"
-           hx-swap="innerHTML">
-      <tr><td colspan="9" style="color:#94a3b8;padding:1.5rem .75rem">Loading…</td></tr>
-    </tbody>
-  </table>
-  </div>
-  <div style="margin-top:.75rem">
-    <button class="btn btn-outline" onclick="compareSelected()">Compare Selected</button>
-    <button id="pareto-btn" class="btn btn-outline" onclick="paretoSelected()"
-            style="display:none;margin-left:.5rem">Pareto</button>
-  </div>
-</section>
+def _render_metric_cards(metrics: dict[str, float | None]) -> str:
+    cards = []
+    for key, label, fmt in _DISPLAY_METRICS:
+        val = metrics.get(key)
+        if val is None:
+            continue
+        val_str = fmt(val)
+        cards.append(
+            f'<div class="metric-card">'
+            f'<div class="metric-value">{html.escape(val_str)}</div>'
+            f'<div class="metric-label">{html.escape(label)}</div>'
+            f"</div>"
+        )
+    if not cards:
+        return ""
+    return f'<div class="metric-grid">{"".join(cards)}</div>'
 
-<section>
-  <h2>Datasets</h2>
-  <div style="overflow-x:auto">
-  <table>
-    <thead><tr>
-      <th>Name</th><th>Description</th><th>Cached</th><th>Samples</th>
-    </tr></thead>
-    <tbody id="datasets-tbody"
-           hx-get="/api/ui/datasets-table"
-           hx-trigger="load, every 10s"
-           hx-swap="innerHTML">
-      <tr><td colspan="4" style="color:#94a3b8;padding:1.5rem .75rem">Loading…</td></tr>
-    </tbody>
-  </table>
-  </div>
-  <div style="display:flex;align-items:center;gap:.5rem;margin-top:.75rem">
-    <select id="dataset-select" class="ds-select"></select>
-    <button class="btn" onclick="pullDataset()">Pull</button>
-    <span id="pull-status" style="font-size:.8rem;color:#64748b"></span>
-  </div>
-</section>
 
-<section id="log-section">
-  <h2>Live Log — <span id="log-run-id" class="mono"></span></h2>
-  <pre id="log-output"></pre>
-</section>
+def _render_hw_info(hw: dict[str, str]) -> str:
+    if not hw:
+        return ""
+    parts = []
+    if "hw_cpu" in hw:
+        parts.append(f"CPU: {html.escape(hw['hw_cpu'])}")
+    if "hw_cpu_cores" in hw:
+        parts.append(f"{html.escape(hw['hw_cpu_cores'])} cores")
+    if "hw_ram_gb" in hw:
+        parts.append(f"RAM: {html.escape(hw['hw_ram_gb'])} GB")
+    if "hw_gpu" in hw:
+        parts.append(f"GPU: {html.escape(hw['hw_gpu'])}")
+    if "hw_vram_gb" in hw:
+        parts.append(f"VRAM: {html.escape(hw['hw_vram_gb'])} GB")
+    if not parts:
+        return ""
+    return (
+        f'<div class="hw-info">'
+        f'<span class="hw-label">Hardware:</span> {" · ".join(parts)}'
+        f"</div>"
+    )
 
-<section id="chart-section">
-  <h2>Throughput Comparison</h2>
-  <div id="comparison-chart"></div>
-</section>
 
-<script>
-function _updateToolbar() {
-  var checked = Array.from(document.querySelectorAll('.run-cb:checked'));
-  var pb = document.getElementById('pareto-btn');
-  if (pb) pb.style.display = checked.length >= 2 ? '' : 'none';
-}
+def _render_run_detail(run: RunResult) -> str:
+    """Return the HTMX HTML fragment for the run detail panel."""
+    cfg = run.config or {}
+    model = str(cfg.get("model", "—"))
+    backend = str(cfg.get("backend", "—"))
+    short_id = run.run_id[:8]
+    created = run.created_at[:16].replace("T", " ")
 
-document.getElementById('select-all').addEventListener('change', function() {
-  document.querySelectorAll('.run-cb').forEach(function(cb){ cb.checked = this.checked; }, this);
-  _updateToolbar();
-});
-document.body.addEventListener('change', function(evt) {
-  if (evt.target && evt.target.classList.contains('run-cb')) _updateToolbar();
-});
+    metrics = _parse_metrics_from_output(run.output)
+    hw = _parse_hw_from_output(run.output or "")
+    metric_html = _render_metric_cards(metrics)
+    hw_html = _render_hw_info(hw)
 
-var _checkedRuns = new Set();
-document.body.addEventListener('htmx:beforeSwap', function(evt) {
-  if (evt.detail.target && evt.detail.target.id === 'runs-tbody') {
-    _checkedRuns = new Set(
-      Array.from(document.querySelectorAll('.run-cb:checked')).map(function(cb){ return cb.value; })
-    );
-  }
-});
-document.body.addEventListener('htmx:afterSettle', function(evt) {
-  if (evt.detail.target && evt.detail.target.id === 'runs-tbody') {
-    var all = document.querySelectorAll('.run-cb');
-    all.forEach(function(cb){ cb.checked = _checkedRuns.has(cb.value); });
-    var checked = Array.from(all).filter(function(cb){ return cb.checked; });
-    var sa = document.getElementById('select-all');
-    if (sa) {
-      sa.checked = all.length > 0 && checked.length === all.length;
-      sa.indeterminate = checked.length > 0 && checked.length < all.length;
-    }
-    _updateToolbar();
-  }
-});
+    log_content = ""
+    if run.status in ("done", "error") and run.output:
+        log_content = html.escape(run.output)
 
-var _sse = null;
-function streamLog(runId) {
-  if (_sse) { _sse.close(); }
-  document.getElementById('log-section').style.display = 'block';
-  document.getElementById('log-run-id').textContent = runId.slice(0, 8);
-  var pre = document.getElementById('log-output');
-  pre.textContent = '';
-  _sse = new EventSource('/api/runs/' + runId + '/stream');
-  _sse.onmessage = function(e) {
-    if (e.data.startsWith('[done:')) { _sse.close(); return; }
-    pre.textContent += e.data + '\\n';
-    pre.scrollTop = pre.scrollHeight;
-  };
-}
+    log_header = "Output" if run.status in ("done", "error") else "Live Log"
+    rid = html.escape(run.run_id)
 
-function openModal() {
-  document.getElementById('run-modal').classList.add('open');
-  loadModels();
-  loadModalDatasets();
-}
+    model_display = html.escape(model)
+    if len(model) > 80:
+        model_display = html.escape("…" + model[-77:])
 
-function closeModal() {
-  document.getElementById('run-modal').classList.remove('open');
-}
+    return (
+        f'<div id="detail-inner" data-run-id="{rid}" data-status="{html.escape(run.status)}">\n'
+        f'  <div class="detail-header">\n'
+        f'    <div>\n'
+        f'      <div class="detail-title">\n'
+        f'        <span class="detail-id mono">{html.escape(short_id)}</span>\n'
+        f'        <span class="detail-backend">{html.escape(backend)}</span>\n'
+        f'        <span class="badge badge-{html.escape(run.status)}">{html.escape(run.status)}</span>\n'
+        f"      </div>\n"
+        f'      <div class="detail-meta">\n'
+        f'        <span class="detail-model">{model_display}</span> · {html.escape(created)}\n'
+        f"      </div>\n"
+        f"    </div>\n"
+        f"  </div>\n"
+        f"\n"
+        f"  {metric_html}\n"
+        f"  {hw_html}\n"
+        f"\n"
+        f'  <div class="detail-actions">\n'
+        f'    <button class="btn btn-sm btn-outline btn-danger"'
+        f" onclick=\"deleteRun('{rid}')\">Delete</button>\n"
+        f'    <a href="/runs/{rid}/pareto.html"'
+        f' class="btn btn-sm btn-outline" target="_blank">Pareto Chart</a>\n'
+        f"  </div>\n"
+        f"\n"
+        f'  <div class="log-section">\n'
+        f'    <div class="log-header">{html.escape(log_header)}</div>\n'
+        f'    <pre class="log-output" id="log-output">{log_content}</pre>\n'
+        f"  </div>\n"
+        f"</div>\n"
+    )
 
-function toggleGpuRow() {
-  var backend = document.getElementById('f-backend').value;
-  document.getElementById('f-gpu-row').style.display =
-    backend === 'llama-cpp' ? 'block' : 'none';
-}
 
-function loadModels() {
-  fetch('/api/models').then(function(r){ return r.json(); }).then(function(data) {
-    var sel = document.getElementById('f-model');
-    var models = data.models || [];
-    if (!models.length) {
-      sel.innerHTML = '<option value="">&lt;no models found&gt;</option>';
-      return;
-    }
-    var typeTag = {gguf: 'llama.cpp', hf: 'transformers'};
-    sel.innerHTML = models.map(function(m) {
-      var val = m.path || m.id || '';
-      var name = m.name || val;
-      var short = name.indexOf('/') !== -1 ? name.substring(name.indexOf('/') + 1) : name;
-      var tag = typeTag[m.type] || m.type || '';
-      var label = tag ? short + ' (' + tag + ')' : short;
-      var ev = val.replace(/&/g,'&amp;').replace(/"/g,'&quot;');
-      var el = label.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-      return '<option value="' + ev + '" title="' + ev + '">' + el + '</option>';
-    }).join('');
-  }).catch(function(){
-    document.getElementById('f-model').innerHTML =
-      '<option value="">(failed to load)</option>';
-  });
-}
+def _render_run_list_cards(results: list[RunResult]) -> str:
+    """Return sidebar run card HTML (HTMX fragment)."""
+    if not results:
+        return (
+            '<div class="run-empty">No runs yet.'
+            " Click <strong>+ New Run</strong> to start a benchmark.</div>"
+        )
+    parts: list[str] = []
+    for run in results:
+        cfg = run.config or {}
+        model = str(cfg.get("model", "—"))
+        backend = str(cfg.get("backend", "—"))
+        model_short = model.split("/")[-1] if "/" in model else model
+        model_short = ("…" + model_short[-37:]) if len(model_short) > 40 else model_short
 
-function loadModalDatasets() {
-  fetch('/api/datasets').then(function(r){ return r.json(); }).then(function(data) {
-    var sel = document.getElementById('f-dataset');
-    var cached = (data.datasets || []).filter(function(d){ return d.cached; });
-    var opts = '<option value="">Default prompts</option>';
-    cached.forEach(function(d){
-      var label = d.name + ' (' + d.samples + ' samples)';
-      opts += '<option value="' + d.name.replace(/"/g,'&quot;') + '">' + label + '</option>';
-    });
-    sel.innerHTML = opts;
-  }).catch(function(){});
-}
+        metrics = _parse_metrics_from_output(run.output)
+        toks = metrics.get("tokens_per_second")
+        toks_str = f"{toks:.1f} tok/s" if toks is not None else ""
 
-function submitRun() {
-  var model    = document.getElementById('f-model').value;
-  var dataset  = document.getElementById('f-dataset').value || null;
-  var backend  = document.getElementById('f-backend').value;
-  var requests = parseInt(document.getElementById('f-requests').value) || 10;
-  var conc     = parseInt(document.getElementById('f-concurrency').value) || 1;
-  var warmup   = parseInt(document.getElementById('f-warmup').value) || 0;
-  var config   = {model: model, backend: backend, requests: requests,
-                  concurrency: conc, warmup_requests: warmup};
-  if (backend === 'llama-cpp') {
-    var gpuLayers = parseInt(document.getElementById('f-gpu-layers').value);
-    if (!isNaN(gpuLayers)) { config['llama_cpp'] = {n_gpu_layers: gpuLayers}; }
-  }
-  var extraYaml = (document.getElementById('f-extra').value || '').trim();
-  if (extraYaml) {
-    try {
-      var parsed = jsyaml ? jsyaml.load(extraYaml) : null;
-      if (parsed && typeof parsed === 'object') {
-        Object.assign(config, parsed);
-      }
-    } catch(e) { /* ignore parse errors */ }
-  }
-  var body = {config: config};
-  if (dataset) { body['dataset'] = dataset; }
-  var btn = document.getElementById('submit-btn');
-  btn.disabled = true;
-  btn.textContent = 'Submitting…';
-  fetch('/api/runs', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify(body)
-  }).then(function(r){
-    if (!r.ok) { throw new Error('HTTP ' + r.status); }
-    return r.json();
-  }).then(function(data) {
-    closeModal();
-    btn.disabled = false;
-    btn.textContent = 'Run Benchmark';
-    htmx.trigger('#runs-tbody', 'load');
-    if (data.run_id) {
-      setTimeout(function(){ streamLog(data.run_id); }, 500);
-    }
-  }).catch(function(err) {
-    alert('Failed to start run: ' + err.message);
-    btn.disabled = false;
-    btn.textContent = 'Run Benchmark';
-  });
-}
+        created = run.created_at[:16].replace("T", " ")
+        rid = run.run_id
+        short_id = rid[:8]
 
-function loadDatasetNames() {
-  fetch('/api/datasets').then(function(r){ return r.json(); }).then(function(data) {
-    var sel = document.getElementById('dataset-select');
-    sel.innerHTML = (data.datasets || []).map(function(d){
-      return '<option value="' + d.name.replace(/"/g,'&quot;') + '">' + d.name + '</option>';
-    }).join('');
-  }).catch(function(){});
-}
-loadDatasetNames();
+        meta_parts = [html.escape(backend)]
+        if toks_str:
+            meta_parts.append(html.escape(toks_str))
+        meta_parts.append(html.escape(created))
 
-function pullDataset() {
-  var name = document.getElementById('dataset-select').value;
-  if (!name) return;
-  var statusEl = document.getElementById('pull-status');
-  statusEl.textContent = 'Starting pull…';
-  fetch('/api/datasets/pull', {
-    method: 'POST',
-    headers: {'Content-Type': 'application/json'},
-    body: JSON.stringify({name: name})
-  }).then(function(r){
-    if (!r.ok) { throw new Error('HTTP ' + r.status); }
-    return r.json();
-  }).then(function(){
-    statusEl.textContent = 'Pull started — table will refresh automatically.';
-    htmx.trigger('#datasets-tbody', 'load');
-  }).catch(function(err){
-    statusEl.textContent = 'Error: ' + err.message;
-  });
-}
-
-function compareSelected() {
-  var cbs = Array.from(document.querySelectorAll('.run-cb:checked'));
-  if (cbs.length < 2) { alert('Select at least 2 runs to compare.'); return; }
-  var labels = cbs.map(function(cb){ return cb.dataset.label; });
-  var toks   = cbs.map(function(cb){ return parseFloat(cb.dataset.toks) || 0; });
-  var ttfts  = cbs.map(function(cb){
-    return cb.dataset.ttft ? parseFloat(cb.dataset.ttft) : null; });
-  document.getElementById('chart-section').style.display = 'block';
-  var traces = [
-    {type:'bar', name:'Tokens / s', x:labels, y:toks, marker:{color:'#3b82f6'}}
-  ];
-  if (ttfts.some(function(v){ return v !== null; })) {
-    traces.push({
-      type:'bar', name:'TTFT p50 (ms)', x:labels,
-      y:ttfts.map(function(v){ return v === null ? 0 : v; }),
-      marker:{color:'#f59e0b'}, yaxis:'y2'
-    });
-  }
-  Plotly.newPlot('comparison-chart', traces, {
-    barmode:'group',
-    title:{text:'Throughput & Latency', font:{size:14}},
-    yaxis:{title:'Tokens / s', titlefont:{color:'#3b82f6'}, tickfont:{color:'#3b82f6'}},
-    yaxis2:{title:'TTFT p50 (ms)', titlefont:{color:'#f59e0b'}, tickfont:{color:'#f59e0b'},
-            overlaying:'y', side:'right'},
-    legend:{orientation:'h', y:-0.2},
-    margin:{t:40, b:80}
-  });
-}
-
-function paretoSelected() {
-  var cbs = Array.from(document.querySelectorAll('.run-cb:checked'));
-  if (cbs.length < 2) { alert('Select at least 2 runs for Pareto analysis.'); return; }
-  var ids = cbs.map(function(cb){ return cb.value; }).join(',');
-  window.open('/runs/pareto?ids=' + encodeURIComponent(ids), '_blank');
-}
-
-function deleteRun(runId) {
-  if (!confirm('Delete run ' + runId.slice(0, 8) + '? This cannot be undone.')) return;
-  fetch('/api/runs/' + runId, {method: 'DELETE'}).then(function(r) {
-    if (r.status === 409) {
-      return r.json().then(function(d){ alert(d.detail || 'Run is still in progress.'); });
-    }
-    if (!r.ok) { alert('Delete failed (HTTP ' + r.status + ').'); return; }
-    htmx.trigger('#runs-tbody', 'load');
-  }).catch(function(err){ alert('Delete failed: ' + err.message); });
-}
-</script>
-</body>
-</html>"""
+        parts.append(
+            f'<div class="run-card" data-run-id="{html.escape(rid)}"'
+            f" onclick=\"selectRun('{html.escape(rid)}')\">\n"
+            f'  <div class="run-card-header">\n'
+            f'    <span class="run-card-id mono">{html.escape(short_id)}</span>\n'
+            f'    <span class="badge badge-{html.escape(run.status)}">{html.escape(run.status)}</span>\n'
+            f"  </div>\n"
+            f'  <div class="run-card-model">{html.escape(model_short)}</div>\n'
+            f'  <div class="run-card-meta">{" · ".join(meta_parts)}</div>\n'
+            f"</div>"
+        )
+    return "\n".join(parts)
 
 
 def _render_runs_table_rows(results: list[RunResult]) -> str:
+    """Legacy table row renderer (kept for backward compatibility and tests)."""
     if not results:
         return (
             '<tr><td colspan="9" style="color:#94a3b8;padding:1.5rem .75rem">'
@@ -703,10 +502,10 @@ def _render_runs_table_rows(results: list[RunResult]) -> str:
         model = html.escape(str(cfg.get("model", "—")))
         backend = html.escape(str(cfg.get("backend", "—")))
         toks_str = f"{toks:.1f}" if toks is not None else "N/A"
-        ttft_str = f"{ttft:.0f} ms" if ttft is not None else "N/A"
+        ttft_str = f"{ttft:.0f} ms" if ttft is not None else "N/A"
         toks_data = str(toks) if toks is not None else ""
         ttft_data = str(ttft) if ttft is not None else ""
-        created = run.created_at[:16].replace("T", " ")
+        created = run.created_at[:16].replace("T", " ")
         short_id = run.run_id[:8]
         label = html.escape(f"{backend}/{model[:20]}")
         rid = run.run_id
@@ -811,7 +610,8 @@ def _render_pareto_html(run_id: str, results: list[RunResult]) -> str:
                 "x": [p["latency"] for p in normal],
                 "y": [p["toks"] for p in normal],
                 "text": [
-                    f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in normal
+                    f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}"
+                    for p in normal
                 ],
                 "marker": {"color": "#94a3b8", "size": 10},
                 "hovertemplate": "%{text}<br>p95: %{x:.0f} ms<br>tok/s: %{y:.1f}<extra></extra>",
@@ -826,7 +626,9 @@ def _render_pareto_html(run_id: str, results: list[RunResult]) -> str:
                 "name": "Pareto front",
                 "x": [p["latency"] for p in pf],
                 "y": [p["toks"] for p in pf],
-                "text": [f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in pf],
+                "text": [
+                    f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in pf
+                ],
                 "marker": {"color": "#3b82f6", "size": 12},
                 "line": {"dash": "dot", "color": "#3b82f6"},
                 "hovertemplate": "%{text}<br>p95: %{x:.0f} ms<br>tok/s: %{y:.1f}<extra></extra>",
@@ -840,7 +642,9 @@ def _render_pareto_html(run_id: str, results: list[RunResult]) -> str:
                 "name": "This run",
                 "x": [p["latency"] for p in hi],
                 "y": [p["toks"] for p in hi],
-                "text": [f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in hi],
+                "text": [
+                    f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in hi
+                ],
                 "marker": {"color": "#f59e0b", "size": 16, "symbol": "star"},
                 "hovertemplate": "%{text}<br>p95: %{x:.0f} ms<br>tok/s: %{y:.1f}<extra></extra>",
             }
@@ -862,9 +666,7 @@ def _render_pareto_html(run_id: str, results: list[RunResult]) -> str:
         f"  <meta charset='UTF-8'>\n"
         f"  <title>llm-bench Pareto — {short}</title>\n"
         f"  <script src='https://cdn.plot.ly/plotly-2.32.0.min.js' charset='utf-8'></script>\n"
-        f"  <style>"
-        f"body{{font-family:system-ui,sans-serif;margin:1.5rem;max-width:1000px}}"
-        f"</style>\n"
+        f"  <style>body{{font-family:system-ui,sans-serif;margin:1.5rem;max-width:1000px}}</style>\n"
         f"</head>\n<body>\n"
         f"  <h2>Pareto Chart — <span style='font-family:monospace'>{short}</span></h2>\n"
         f"  <p><a href='/'>&#8592; Dashboard</a></p>\n"
@@ -874,7 +676,22 @@ def _render_pareto_html(run_id: str, results: list[RunResult]) -> str:
     )
 
 
-# ── Endpoints ─────────────────────────────────────────────────────────────────
+# ── Static file routes ────────────────────────────────────────────────────────
+
+
+@app.get("/static/app.css")
+async def serve_css() -> Response:
+    return Response((_UI_DIR / "static" / "app.css").read_text(), media_type="text/css")
+
+
+@app.get("/static/app.js")
+async def serve_js() -> Response:
+    return Response(
+        (_UI_DIR / "static" / "app.js").read_text(), media_type="application/javascript"
+    )
+
+
+# ── API endpoints ─────────────────────────────────────────────────────────────
 
 
 @app.get("/api/health")
@@ -900,11 +717,6 @@ async def pull_dataset(
         raise HTTPException(status_code=422, detail=f"Unknown dataset {body.name!r}")
     background_tasks.add_task(_do_pull_dataset, body.name)
     return {"status": "started"}
-
-
-@app.get("/api/ui/datasets-table", response_class=HTMLResponse)
-async def datasets_table_fragment() -> str:
-    return _render_datasets_table(_dataset_statuses())
 
 
 @app.get("/api/runs")
@@ -977,8 +789,6 @@ async def stream_run(run_id: str) -> StreamingResponse:
 
             status: str = current["status"]
             if status in ("done", "error"):
-                # If the run completed before we had a buffer (e.g. server restart),
-                # stream from stored output instead.
                 if buf is None:
                     stored: str = current["output"] or ""
                     for line in stored.split("\n"):
@@ -991,9 +801,22 @@ async def stream_run(run_id: str) -> StreamingResponse:
     return StreamingResponse(_generate(), media_type="text/event-stream")
 
 
-@app.get("/", response_class=HTMLResponse)
-async def dashboard() -> str:
-    return _DASHBOARD_HTML
+# ── UI / HTMX fragment endpoints ──────────────────────────────────────────────
+
+
+@app.get("/api/ui/run-list", response_class=HTMLResponse)
+async def run_list_fragment() -> str:
+    rows = _get_db().execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
+    results = [_row_to_result(r) for r in rows]
+    return _render_run_list_cards(results)
+
+
+@app.get("/api/ui/run-detail/{run_id}", response_class=HTMLResponse)
+async def run_detail_fragment(run_id: str) -> str:
+    row = _get_db().execute("SELECT * FROM runs WHERE id=?", (run_id,)).fetchone()
+    if row is None:
+        return f"<p>Run {html.escape(run_id[:8])} not found.</p>"
+    return _render_run_detail(_row_to_result(row))
 
 
 @app.get("/api/ui/runs-table", response_class=HTMLResponse)
@@ -1001,6 +824,22 @@ async def runs_table_fragment() -> str:
     rows = _get_db().execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
     results = [_row_to_result(r) for r in rows]
     return _render_runs_table_rows(results)
+
+
+@app.get("/api/ui/datasets-table", response_class=HTMLResponse)
+async def datasets_table_fragment() -> str:
+    return _render_datasets_table(_dataset_statuses())
+
+
+# ── Dashboard ─────────────────────────────────────────────────────────────────
+
+
+@app.get("/", response_class=HTMLResponse)
+async def dashboard(request: Request) -> Any:
+    return _templates.TemplateResponse(request=request, name="dashboard.html")
+
+
+# ── Pareto pages ──────────────────────────────────────────────────────────────
 
 
 @app.get("/runs/{run_id}/pareto.html", response_class=HTMLResponse)
@@ -1023,5 +862,4 @@ async def pareto_multi_page(ids: str = Query(..., description="Comma-separated r
     if not rows:
         raise HTTPException(status_code=404, detail="No matching runs found")
     results = [_row_to_result(r) for r in rows]
-    # Use the first selected run as the "highlight" anchor
     return _render_pareto_html(id_list[0], results)

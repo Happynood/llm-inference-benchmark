@@ -1,0 +1,365 @@
+/* llm-bench dashboard UI */
+'use strict';
+
+/* ── Helpers ─────────────────────────────────────────────────────────────── */
+
+function esc(s) {
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
+function setNestedValue(obj, path, value) {
+  const parts = path.split('.');
+  let cur = obj;
+  for (let i = 0; i < parts.length - 1; i++) {
+    if (!cur[parts[i]] || typeof cur[parts[i]] !== 'object') cur[parts[i]] = {};
+    cur = cur[parts[i]];
+  }
+  cur[parts[parts.length - 1]] = value;
+}
+
+/* ── Backend field definitions ───────────────────────────────────────────── */
+
+const BACKEND_FIELDS = {
+  'mock': [
+    {id: 'f-mock-latency',  key: 'mock.latency_ms',           label: 'Latency (ms)',       type: 'number', default: 10},
+    {id: 'f-mock-tokens',   key: 'mock.tokens_per_response',  label: 'Tokens / response',  type: 'number', default: 50},
+  ],
+  'llama-cpp': [
+    {id: 'f-llama-gpu',    key: 'llama_cpp.n_gpu_layers', label: 'GPU Layers',    type: 'number', default: -1,   hint: '-1 offloads all layers to GPU; 0 = CPU only'},
+    {id: 'f-llama-ctx',    key: 'llama_cpp.n_ctx',        label: 'Context Size',  type: 'number', default: 4096},
+    {id: 'f-llama-tokens', key: 'llama_cpp.max_tokens',   label: 'Max Tokens',    type: 'number', default: 50},
+  ],
+  'transformers': [
+    {id: 'f-hf-device', key: 'hf.device',          label: 'Device',         type: 'select', options: ['cpu', 'cuda', 'mps'], default: 'cpu', hint: 'Use "cuda" for NVIDIA GPU acceleration'},
+    {id: 'f-hf-dtype',  key: 'hf.torch_dtype',     label: 'Precision',      type: 'select', options: ['float32', 'float16', 'bfloat16'], default: 'float32'},
+    {id: 'f-hf-tokens', key: 'hf.max_new_tokens',  label: 'Max New Tokens', type: 'number', default: 50},
+  ],
+  'openai': [
+    {id: 'f-oai-url',    key: 'openai.base_url',   label: 'Base URL',     type: 'text',   default: 'http://localhost:8080/v1', hint: 'Set OPENAI_API_KEY env var for authentication'},
+    {id: 'f-oai-tokens', key: 'openai.max_tokens', label: 'Max Tokens',   type: 'number', default: 50},
+    {id: 'f-oai-stream', key: 'openai.stream',     label: 'Streaming',    type: 'select', options: ['false', 'true'], default: 'false'},
+  ],
+  'vllm': [
+    {id: 'f-vllm-tp',     key: 'vllm.tensor_parallel_size',   label: 'Tensor Parallel',  type: 'number', default: 1},
+    {id: 'f-vllm-gpu',    key: 'vllm.gpu_memory_utilization', label: 'GPU Memory Util',  type: 'number', default: 0.9, step: 0.05, min: 0.1, max: 1.0},
+    {id: 'f-vllm-tokens', key: 'vllm.max_new_tokens',         label: 'Max New Tokens',   type: 'number', default: 50},
+  ],
+  'onnx': [
+    {id: 'f-onnx-device', key: 'onnx.device',          label: 'Device',         type: 'select', options: ['cpu', 'cuda'], default: 'cpu'},
+    {id: 'f-onnx-tokens', key: 'onnx.max_new_tokens',  label: 'Max New Tokens', type: 'number', default: 50},
+  ],
+};
+
+/* Maps model type to human-readable backend tag shown in dropdowns */
+const typeTag = {gguf: 'llama.cpp', hf: 'transformers'};
+
+/* ── State ───────────────────────────────────────────────────────────────── */
+
+let selectedRunId = null;
+let sseConn = null;
+
+/* ── Tab switching ───────────────────────────────────────────────────────── */
+
+function showTab(name) {
+  ['runs', 'datasets'].forEach(function(t) {
+    const panel = document.getElementById('tab-' + t);
+    const btn   = document.getElementById('tab-btn-' + t);
+    if (panel) panel.hidden = (t !== name);
+    if (btn)   btn.classList.toggle('active', t === name);
+  });
+  if (name === 'datasets') {
+    loadDatasetNames();
+  }
+}
+
+/* ── Run list ────────────────────────────────────────────────────────────── */
+
+function selectRun(runId) {
+  selectedRunId = runId;
+  document.querySelectorAll('.run-card').forEach(function(el) {
+    el.classList.toggle('selected', el.dataset.runId === runId);
+  });
+  htmx.ajax('GET', '/api/ui/run-detail/' + runId, {target: '#run-detail', swap: 'innerHTML'});
+}
+
+/* Preserve selected card after HTMX run-list refresh */
+document.addEventListener('htmx:afterSettle', function(evt) {
+  const target = evt.detail && evt.detail.target;
+  if (!target) return;
+
+  if (target.id === 'run-list') {
+    if (selectedRunId) {
+      const card = document.querySelector('[data-run-id="' + selectedRunId + '"]');
+      if (card) card.classList.add('selected');
+    }
+    return;
+  }
+
+  if (target.id === 'run-detail') {
+    const inner = document.getElementById('detail-inner');
+    if (inner) {
+      const status = inner.dataset.status;
+      const runId  = inner.dataset.runId;
+      if (status === 'running' || status === 'pending') {
+        startSSE(runId);
+      }
+    }
+  }
+});
+
+/* ── SSE live log ────────────────────────────────────────────────────────── */
+
+function startSSE(runId) {
+  if (sseConn) { sseConn.close(); sseConn = null; }
+  const logEl = document.getElementById('log-output');
+  if (!logEl) return;
+  logEl.textContent = '';
+
+  sseConn = new EventSource('/api/runs/' + runId + '/stream');
+  sseConn.onmessage = function(e) {
+    if (e.data.startsWith('[done:')) {
+      sseConn.close(); sseConn = null;
+      /* Reload detail panel to show final metrics */
+      if (selectedRunId === runId) {
+        setTimeout(function() {
+          htmx.ajax('GET', '/api/ui/run-detail/' + runId, {target: '#run-detail', swap: 'innerHTML'});
+        }, 400);
+      }
+      return;
+    }
+    if (logEl) {
+      logEl.textContent += e.data + '\n';
+      logEl.scrollTop = logEl.scrollHeight;
+    }
+  };
+  sseConn.onerror = function() { if (sseConn) { sseConn.close(); sseConn = null; } };
+}
+
+/* ── Delete run ──────────────────────────────────────────────────────────── */
+
+function deleteRun(runId) {
+  if (!confirm('Delete run ' + runId.slice(0, 8) + '? This cannot be undone.')) return;
+  fetch('/api/runs/' + runId, {method: 'DELETE'}).then(function(r) {
+    if (r.status === 409) {
+      return r.json().then(function(d) { alert(d.detail || 'Run is in progress.'); });
+    }
+    if (!r.ok) { alert('Delete failed (HTTP ' + r.status + ').'); return; }
+    if (selectedRunId === runId) {
+      selectedRunId = null;
+      document.getElementById('run-detail').innerHTML =
+        '<div class="empty-state"><p class="empty-sub">Run deleted.</p></div>';
+    }
+    htmx.trigger('#run-list', 'load');
+  }).catch(function(err) { alert('Delete failed: ' + err.message); });
+}
+
+/* ── New Run Modal ───────────────────────────────────────────────────────── */
+
+function openNewRunModal() {
+  document.getElementById('modal-overlay').hidden = false;
+  loadModels();
+  loadModalDatasets();
+  onBackendChange();
+}
+
+function closeNewRunModal() {
+  document.getElementById('modal-overlay').hidden = true;
+}
+
+function overlayClick(evt) {
+  if (evt.target === document.getElementById('modal-overlay')) closeNewRunModal();
+}
+
+/* ── Model loading ───────────────────────────────────────────────────────── */
+
+function loadModels() {
+  fetch('/api/models').then(function(r) { return r.json(); }).then(function(data) {
+    const sel = document.getElementById('f-model');
+    const models = data.models || [];
+    if (!models.length) {
+      sel.innerHTML = '<option value="">(no models found in ~/models or HF cache)</option>';
+      return;
+    }
+    sel.innerHTML = models.map(function(m) {
+      const val  = m.value || (m.type === 'gguf' ? m.path : m.name);
+      const tag  = typeTag[m.type] || m.type || '';
+      const name = m.name || val;
+      const disp = name.split('/').pop() || name;
+      const label = tag ? (disp + ' (' + tag + ')') : disp;
+      return '<option value="' + esc(val) + '" data-type="' + esc(m.type) + '" title="' + esc(val) + '">' + esc(label) + '</option>';
+    }).join('');
+    onModelChange();
+  }).catch(function() {
+    document.getElementById('f-model').innerHTML = '<option value="">(failed to load)</option>';
+  });
+}
+
+function onModelChange() {
+  const sel = document.getElementById('f-model');
+  const opt = sel && sel.options[sel.selectedIndex];
+  if (!opt) return;
+
+  const type = opt.dataset.type;
+  const backendSel = document.getElementById('f-backend');
+  if (type === 'gguf' && backendSel.value !== 'llama-cpp') {
+    backendSel.value = 'llama-cpp';
+    onBackendChange();
+  } else if (type === 'hf' && backendSel.value !== 'transformers') {
+    backendSel.value = 'transformers';
+    onBackendChange();
+  }
+
+  const hintEl = document.getElementById('model-hint');
+  if (hintEl) {
+    const path = opt.value;
+    hintEl.textContent = path.length > 60 ? '…' + path.slice(-57) : path;
+  }
+}
+
+/* ── Backend-specific fields ─────────────────────────────────────────────── */
+
+function onBackendChange() {
+  const backend = document.getElementById('f-backend').value;
+  renderBackendFields(backend);
+}
+
+function renderBackendFields(backend) {
+  const fields = BACKEND_FIELDS[backend] || [];
+  const container = document.getElementById('backend-fields');
+  if (!fields.length) { container.innerHTML = ''; return; }
+
+  const inner = fields.map(function(f) {
+    let input;
+    if (f.type === 'select') {
+      const opts = f.options.map(function(o) {
+        return '<option value="' + esc(o) + '"' + (o === String(f.default) ? ' selected' : '') + '>' + esc(o) + '</option>';
+      }).join('');
+      input = '<select id="' + esc(f.id) + '" class="form-input">' + opts + '</select>';
+    } else {
+      const extras = [
+        f.step !== undefined ? 'step="' + f.step + '"' : '',
+        f.min  !== undefined ? 'min="'  + f.min  + '"' : '',
+        f.max  !== undefined ? 'max="'  + f.max  + '"' : '',
+      ].filter(Boolean).join(' ');
+      input = '<input type="' + esc(f.type) + '" id="' + esc(f.id) + '" class="form-input" value="' + esc(f.default) + '"' + (extras ? ' ' + extras : '') + '>';
+    }
+    const hint = f.hint ? '<div class="form-hint">' + esc(f.hint) + '</div>' : '';
+    return '<div class="form-group"><label class="form-label" for="' + esc(f.id) + '">' + esc(f.label) + '</label>' + input + hint + '</div>';
+  }).join('');
+
+  container.innerHTML = '<fieldset class="fieldset"><legend>' + esc(backend) + ' Settings</legend>' + inner + '</fieldset>';
+}
+
+/* ── Build config object from form ──────────────────────────────────────── */
+
+function buildConfig() {
+  const backend = document.getElementById('f-backend').value;
+  const model   = document.getElementById('f-model').value;
+
+  const config = {
+    backend:         backend,
+    model:           model,
+    requests:        parseInt(document.getElementById('f-requests').value)    || 10,
+    concurrency:     parseInt(document.getElementById('f-concurrency').value) || 1,
+    warmup_requests: parseInt(document.getElementById('f-warmup').value)      || 0,
+  };
+
+  const fields = BACKEND_FIELDS[backend] || [];
+  fields.forEach(function(f) {
+    const el = document.getElementById(f.id);
+    if (!el) return;
+    let val = el.value;
+    if (f.type === 'number') {
+      val = parseFloat(val);
+      if (isNaN(val)) return;
+    }
+    if (f.type === 'select' && (val === 'true' || val === 'false')) {
+      val = (val === 'true');
+    }
+    setNestedValue(config, f.key, val);
+  });
+
+  return config;
+}
+
+/* ── Submit run ──────────────────────────────────────────────────────────── */
+
+function submitRun() {
+  const dataset = document.getElementById('f-dataset').value || null;
+  const config  = buildConfig();
+
+  if (!config.model) { alert('Please select a model.'); return; }
+
+  const btn = document.getElementById('submit-btn');
+  btn.disabled = true; btn.textContent = 'Submitting…';
+
+  fetch('/api/runs', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({config: config, dataset: dataset}),
+  }).then(function(r) {
+    if (!r.ok) { return r.json().then(function(d) { throw new Error(d.detail || ('HTTP ' + r.status)); }); }
+    return r.json();
+  }).then(function(data) {
+    closeNewRunModal();
+    btn.disabled = false; btn.textContent = 'Run Benchmark';
+    htmx.trigger('#run-list', 'load');
+    if (data.run_id) {
+      setTimeout(function() { selectRun(data.run_id); }, 300);
+    }
+  }).catch(function(err) {
+    alert('Failed to start run: ' + err.message);
+    btn.disabled = false; btn.textContent = 'Run Benchmark';
+  });
+}
+
+/* ── Dataset helpers ─────────────────────────────────────────────────────── */
+
+function loadDatasetNames() {
+  fetch('/api/datasets').then(function(r) { return r.json(); }).then(function(data) {
+    const sel = document.getElementById('dataset-select');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">Select dataset…</option>' +
+      (data.datasets || []).map(function(d) {
+        return '<option value="' + esc(d.name) + '">' + esc(d.name) + '</option>';
+      }).join('');
+  }).catch(function() {});
+}
+
+function loadModalDatasets() {
+  fetch('/api/datasets').then(function(r) { return r.json(); }).then(function(data) {
+    const sel = document.getElementById('f-dataset');
+    if (!sel) return;
+    const cached = (data.datasets || []).filter(function(d) { return d.cached; });
+    sel.innerHTML = '<option value="">Default prompts</option>' +
+      cached.map(function(d) {
+        return '<option value="' + esc(d.name) + '">' + esc(d.name) + ' (' + d.samples + ' samples)</option>';
+      }).join('');
+  }).catch(function() {});
+}
+
+function pullSelectedDataset() {
+  const name = document.getElementById('dataset-select').value;
+  if (!name) { alert('Select a dataset first.'); return; }
+  const statusEl = document.getElementById('pull-status');
+  statusEl.textContent = 'Starting pull…';
+  fetch('/api/datasets/pull', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({name: name}),
+  }).then(function(r) {
+    if (!r.ok) { return r.json().then(function(d) { throw new Error(d.detail || ('HTTP ' + r.status)); }); }
+    return r.json();
+  }).then(function() {
+    statusEl.textContent = 'Pulling — table refreshes automatically.';
+    htmx.trigger('#datasets-tbody', 'load');
+  }).catch(function(err) { statusEl.textContent = 'Error: ' + err.message; });
+}
+
+/* ── Init ────────────────────────────────────────────────────────────────── */
+
+document.addEventListener('DOMContentLoaded', function() {
+  /* Nothing needed at startup; runs and datasets load via HTMX hx-trigger=load */
+});

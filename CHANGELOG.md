@@ -9,6 +9,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Live dashboard with SSE log streaming**: the dashboard now uses a two-panel layout
+  (sidebar run cards + main detail panel).  While a benchmark is running, log lines stream
+  live into the detail panel via Server-Sent Events; metrics and hardware info appear
+  automatically when the run finishes — no page reload needed.
+
+- **GPU configuration in the UI**: the New Run modal now renders backend-specific fields
+  dynamically.  llama-cpp exposes **GPU Layers** (default `-1` = all layers on GPU) and
+  **Context Size**; transformers exposes a **Device** dropdown (`cpu` / `cuda` / `mps`)
+  with an inline hint, and a **Precision** selector (`float32` / `float16` / `bfloat16`);
+  vLLM and ONNX similarly expose their GPU knobs — all with defaults that favour GPU use.
+
+- **Modular UI file layout**: the dashboard HTML, CSS, and JavaScript are now separate
+  files (`ui/templates/dashboard.html`, `ui/static/app.css`, `ui/static/app.js`) instead
+  of a single ~400-line embedded string in `server.py`.  The JS and CSS are lintable,
+  formattable, and independently editable.
+
 - **Web UI run deletion**: each row in the dashboard now has a **Delete** button.
   Clicking it confirms with the user and calls `DELETE /api/runs/{run_id}`, then
   refreshes the table.  Deleting a run that is still `pending` or `running` returns
@@ -27,6 +43,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   is visible directly in the output.
 
 ### Fixed
+
+- **Transformers backend no longer errors on HuggingFace models**: the "New Run" modal
+  was passing the local cache directory path (e.g.
+  `~/.cache/huggingface/hub/models--Qwen--Qwen3-0.6B`) to `from_pretrained()` instead of
+  the model name (`Qwen/Qwen3-0.6B`), causing `ValueError: Unrecognized model`.  The
+  model dropdown now sends the canonical `org/name` identifier.
+
+- **Partially-downloaded HF models no longer appear in the dropdown**: models that only
+  have a `refs/` directory in the HuggingFace cache (no populated `snapshots/` directory)
+  are now silently skipped by `_discover_models()`.  Previously they appeared as selectable
+  options but always failed to load when the benchmark started.
+
+- **`swe-bench-pro` dataset pull no longer fails**: the registry entry used split
+  `"train"`, but `ScaleAI/SWE-bench_Pro` only provides a `"test"` split.  Fixed.
 
 - **ONNX example config now works without authentication**: `configs/onnx-example.yaml`
   previously used `optimum-internal-testing/tiny-random-GPT2Model`, a private model that

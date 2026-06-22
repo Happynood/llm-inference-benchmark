@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>llm-bench</title>
+  <link rel="stylesheet" href="/static/app.css">
+  <script src="https://unpkg.com/htmx.org@1.9.12/dist/htmx.min.js"></script>
+</head>
+<body>
+
+<header class="app-header">
+  <span class="brand">llm-bench</span>
+  <button class="btn btn-primary" onclick="openNewRunModal()">+ New Run</button>
+</header>
+
+<div class="app-body">
+
+  <!-- Sidebar -->
+  <aside class="sidebar">
+    <div class="sidebar-tabs">
+      <button class="tab-btn active" id="tab-btn-runs" onclick="showTab('runs')">Runs</button>
+      <button class="tab-btn" id="tab-btn-datasets" onclick="showTab('datasets')">Datasets</button>
+    </div>
+
+    <div id="tab-runs" class="tab-panel">
+      <div id="run-list"
+           hx-get="/api/ui/run-list"
+           hx-trigger="load, every 3s"
+           hx-swap="innerHTML">
+        <div class="loading">Loading…</div>
+      </div>
+    </div>
+
+    <div id="tab-datasets" class="tab-panel" hidden>
+      <div class="dataset-pull-row">
+        <select id="dataset-select" class="form-input form-input-sm">
+          <option value="">Select dataset…</option>
+        </select>
+        <button class="btn btn-sm" onclick="pullSelectedDataset()">Pull</button>
+      </div>
+      <span id="pull-status" class="pull-status"></span>
+      <table class="data-table">
+        <thead>
+          <tr><th>Dataset</th><th>Samples</th><th></th></tr>
+        </thead>
+        <tbody id="datasets-tbody"
+               hx-get="/api/ui/datasets-table"
+               hx-trigger="load, every 10s"
+               hx-swap="innerHTML">
+          <tr><td colspan="3" class="muted">Loading…</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </aside>
+
+  <!-- Main detail panel -->
+  <main class="main-panel" id="run-detail">
+    <div class="empty-state">
+      <div class="empty-icon">📊</div>
+      <p class="empty-title">No run selected</p>
+      <p class="empty-sub">Pick a run from the list or click <strong>+ New Run</strong></p>
+    </div>
+  </main>
+
+</div>
+
+<!-- New Run Modal -->
+<div id="modal-overlay" class="modal-overlay" hidden onclick="overlayClick(event)">
+  <div class="modal" role="dialog" aria-labelledby="modal-title">
+    <div class="modal-header">
+      <h3 id="modal-title">New Benchmark Run</h3>
+      <button class="modal-close" onclick="closeNewRunModal()" aria-label="Close">✕</button>
+    </div>
+    <div class="modal-body">
+
+      <div class="form-group">
+        <label class="form-label" for="f-model">Model</label>
+        <select id="f-model" class="form-input" onchange="onModelChange()">
+          <option value="">Loading models…</option>
+        </select>
+        <div id="model-hint" class="form-hint"></div>
+      </div>
+
+      <div class="form-group">
+        <label class="form-label" for="f-backend">Backend</label>
+        <select id="f-backend" class="form-input" onchange="onBackendChange()">
+          <option value="mock">mock — fast simulation</option>
+          <option value="llama-cpp">llama-cpp — local GGUF models</option>
+          <option value="transformers">transformers — HuggingFace models</option>
+          <option value="openai">openai — OpenAI-compatible API</option>
+          <option value="vllm">vllm — high-throughput server</option>
+          <option value="onnx">onnx — ONNX Runtime</option>
+        </select>
+      </div>
+
+      <!-- Backend-specific fields injected by JS -->
+      <div id="backend-fields"></div>
+
+      <fieldset class="fieldset">
+        <legend>Run Settings</legend>
+        <div class="form-row-3">
+          <div class="form-group">
+            <label class="form-label" for="f-requests">Requests</label>
+            <input type="number" id="f-requests" class="form-input" value="10" min="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="f-concurrency">Concurrency</label>
+            <input type="number" id="f-concurrency" class="form-input" value="1" min="1">
+          </div>
+          <div class="form-group">
+            <label class="form-label" for="f-warmup">Warmup</label>
+            <input type="number" id="f-warmup" class="form-input" value="2" min="0">
+          </div>
+        </div>
+      </fieldset>
+
+      <div class="form-group">
+        <label class="form-label" for="f-dataset">Dataset (prompt source)</label>
+        <select id="f-dataset" class="form-input">
+          <option value="">Default prompts</option>
+        </select>
+      </div>
+
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeNewRunModal()">Cancel</button>
+      <button class="btn btn-primary" id="submit-btn" onclick="submitRun()">Run Benchmark</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/app.js"></script>
+</body>
+</html>

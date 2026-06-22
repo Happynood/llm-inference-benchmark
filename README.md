@@ -364,16 +364,19 @@ docker compose run --rm llm-bench-cuda \
 
 ## Web UI
 
-`llm-bench serve` starts a local server with a built-in browser dashboard (HTMX +
-Plotly).  Open `http://localhost:8080` to see a live runs table, per-run log streaming,
-a bar-chart comparison for selected runs, and a Pareto chart (p95 latency vs throughput)
-for each completed run.
+`llm-bench serve` starts a local server with a built-in browser dashboard.
+Open `http://localhost:8080` to see a two-panel layout: a sidebar with run cards on the
+left and a live detail panel on the right.
 
-Click **+ New Run** in the dashboard to open a modal form — choose model, backend,
-concurrency, and other parameters, then submit directly from the browser without touching
-the CLI or `curl`.  A **Dataset** dropdown lists all cached real-world datasets (pulled
-via `llm-bench datasets pull <name>`); selecting one routes the run's prompts through
-that dataset instead of the config's built-in synthetic prompts.
+- **Live log streaming** — while a benchmark runs, stdout streams into the detail panel
+  via Server-Sent Events.  Metrics and hardware info appear automatically when it finishes.
+- **GPU configuration** — the **+ New Run** modal renders backend-specific fields: GPU
+  Layers for llama-cpp (default `-1` = all layers on GPU), Device dropdown for
+  transformers (`cpu` / `cuda` / `mps`), GPU memory utilisation for vLLM, and so on.
+- **Dataset selector** — choose from any cached real-world dataset (pulled via
+  `llm-bench datasets pull <name>`) directly in the modal; "Default prompts" preserves
+  the existing synthetic-prompt behaviour.
+- **Delete** button on each run card (running runs are protected with a 409 response).
 
 ```bash
 # Install server dependencies
