@@ -37,6 +37,7 @@ class OpenAIEndpointBackend(Backend):
         temperature: float = 0.0,
         timeout_s: float = 60.0,
         api_key_env: str | None = None,
+        api_key: str | None = None,
         stream: bool = False,
         seed: int | None = None,
     ) -> None:
@@ -46,6 +47,7 @@ class OpenAIEndpointBackend(Backend):
         self._temperature = temperature
         self._timeout_s = timeout_s
         self._api_key_env = api_key_env
+        self._api_key = api_key
         self._stream = stream
         self._seed = seed
 
@@ -62,10 +64,9 @@ class OpenAIEndpointBackend(Backend):
             headers={"Content-Type": "application/json"},
             method="POST",
         )
-        if self._api_key_env:
-            key = os.environ.get(self._api_key_env)
-            if key:
-                req.add_header("Authorization", f"Bearer {key}")
+        key = self._api_key or (os.environ.get(self._api_key_env) if self._api_key_env else None)
+        if key:
+            req.add_header("Authorization", f"Bearer {key}")
         return req
 
     def generate(self, prompt: str) -> GenerationResult:

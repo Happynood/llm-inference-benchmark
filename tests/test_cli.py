@@ -648,3 +648,140 @@ def test_output_json_auto_creates_parent_dir(tmp_config: Path, tmp_path: Path) -
     )
     assert result.exit_code == 0, result.output
     assert out.exists()
+
+
+# ---------------------------------------------------------------------------
+# --base-url / --api-key flags
+# ---------------------------------------------------------------------------
+
+
+def test_base_url_requires_no_config() -> None:
+    """--base-url alone (with mock server) should succeed without --config."""
+    import json as _json
+    from unittest.mock import MagicMock, patch
+
+    fake_body = _json.dumps(
+        {
+            "choices": [{"message": {"role": "assistant", "content": "Paris"}}],
+            "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+        }
+    ).encode()
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = fake_body
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+
+    with patch(
+        "llm_inference_benchmark.backends.openai_endpoint.urlopen",
+        return_value=mock_resp,
+    ):
+        result = CliRunner().invoke(
+            main,
+            [
+                "--base-url",
+                "http://localhost:11434/v1",
+                "--set",
+                "model=llama3:3b",
+                "--requests",
+                "2",
+                "--set",
+                "warmup_requests=0",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    assert "Benchmark Results" in result.output
+
+
+def test_base_url_overrides_config_openai_url(tmp_config: Path) -> None:
+    """--base-url with --config switches backend to openai and overrides base_url."""
+    import json as _json
+    from unittest.mock import MagicMock, patch
+
+    fake_body = _json.dumps(
+        {
+            "choices": [{"message": {"role": "assistant", "content": "ok"}}],
+            "usage": {"prompt_tokens": 4, "completion_tokens": 2, "total_tokens": 6},
+        }
+    ).encode()
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = fake_body
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+
+    captured_urls: list[str] = []
+
+    def _mock_urlopen(req, **_kw):  # type: ignore[override]
+        captured_urls.append(req.full_url)
+        return mock_resp
+
+    with patch(
+        "llm_inference_benchmark.backends.openai_endpoint.urlopen",
+        side_effect=_mock_urlopen,
+    ):
+        result = CliRunner().invoke(
+            main,
+            [
+                "--config",
+                str(tmp_config),
+                "--base-url",
+                "http://custom-host:1234/v1",
+                "--requests",
+                "1",
+                "--set",
+                "warmup_requests=0",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    assert any("custom-host:1234" in u for u in captured_urls)
+
+
+def test_api_key_sent_as_bearer_header(tmp_config: Path) -> None:
+    """--api-key value is sent as Authorization: Bearer header."""
+    import json as _json
+    from unittest.mock import MagicMock, patch
+
+    fake_body = _json.dumps(
+        {
+            "choices": [{"message": {"role": "assistant", "content": "hello"}}],
+            "usage": {"prompt_tokens": 3, "completion_tokens": 2, "total_tokens": 5},
+        }
+    ).encode()
+    mock_resp = MagicMock()
+    mock_resp.read.return_value = fake_body
+    mock_resp.__enter__ = lambda s: s
+    mock_resp.__exit__ = MagicMock(return_value=False)
+
+    captured_headers: list[dict] = []
+
+    def _mock_urlopen(req, **_kw):  # type: ignore[override]
+        captured_headers.append(dict(req.headers))
+        return mock_resp
+
+    with patch(
+        "llm_inference_benchmark.backends.openai_endpoint.urlopen",
+        side_effect=_mock_urlopen,
+    ):
+        result = CliRunner().invoke(
+            main,
+            [
+                "--base-url",
+                "http://localhost:11434/v1",
+                "--api-key",
+                "sk-testkey",
+                "--set",
+                "model=llama3:3b",
+                "--requests",
+                "1",
+                "--set",
+                "warmup_requests=0",
+            ],
+        )
+    assert result.exit_code == 0, result.output
+    assert any(h.get("Authorization") == "Bearer sk-testkey" for h in captured_headers)
+
+
+def test_no_config_no_base_url_fails() -> None:
+    """Running without --config and without --base-url must fail with a clear error."""
+    result = CliRunner().invoke(main, ["--requests", "1"])
+    assert result.exit_code != 0
+    assert "--config" in result.output or "--base-url" in result.output or "Error" in result.output

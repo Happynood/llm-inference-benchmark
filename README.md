@@ -54,6 +54,10 @@ uv run llm-bench --config configs/example.yaml --output results/mock.csv
 
 # Compare results
 uv run llm-bench compare results/mock.csv
+
+# Test any OpenAI-compatible server without a config file
+uv run llm-bench --base-url http://localhost:11434/v1 --set model=llama3.2:3b
+uv run llm-bench --base-url https://api.openai.com/v1 --api-key sk-xxx --set model=gpt-4o-mini
 ```
 
 For full installation options (transformers, llama.cpp, GPU), see **[docs/quickstart.md](docs/quickstart.md)**.
@@ -498,7 +502,7 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 
 - [ ] **`llm-bench sweep`** — auto-ramp concurrency until p95 latency exceeds threshold; plot throughput vs. latency curve
 - [ ] **Open-loop load mode** — constant-arrival-rate requests (not closed-loop sequential)
-- [ ] **`--base-url` / `--api-key` global flags** — test any OpenAI-compatible server (LM Studio, Jan, Ollama, vLLM remote) without a config file
+- [x] **`--base-url` / `--api-key` global flags** — test any OpenAI-compatible server (LM Studio, Jan, Ollama, vLLM remote) without a config file
 
 ### Phase 6 — Model Downloads
 

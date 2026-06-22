@@ -23,6 +23,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **`--base-url` and `--api-key` CLI flags**: test any OpenAI-compatible server (Ollama,
+  LM Studio, llama.cpp server, vLLM, OpenAI) without writing a YAML config file.
+  `llm-bench --base-url http://localhost:11434/v1 --set model=llama3.2:3b` runs a full
+  benchmark against a local endpoint; `--api-key` passes the literal key value as a Bearer
+  token and takes precedence over any `openai.api_key_env` in the config.  When combined
+  with `--config`, `--base-url` overrides `openai.base_url` and switches the backend to
+  `openai`.  When neither `--config` nor `--dataset` is provided, a built-in set of ten
+  default prompts is used so no local file path is required.
+
 - **GPU backend requirements documented**: the `## GPU Setup` section in `README.md` and
   `docs/quickstart.md` now includes dedicated sub-sections for the **vLLM** and **ONNX
   Runtime** backends.  Key points documented: vLLM is Linux-only and has no CPU fallback;
