@@ -956,7 +956,7 @@ async def test_csv_export_returns_200(client: httpx.AsyncClient) -> None:
     run_id = "bbbbbbbb-0000-0000-0000-000000000001"
     db.execute(
         "INSERT INTO runs (id, status, config, output, created_at, finished_at) "
-        "VALUES (?, 'done', '{\"backend\":\"mock\",\"model\":\"m1\"}', ?, ?, ?)",
+        'VALUES (?, \'done\', \'{"backend":"mock","model":"m1"}\', ?, ?, ?)',
         (run_id, _SAMPLE_OUTPUT, _now_iso(), _now_iso()),
     )
     db.commit()
@@ -978,7 +978,7 @@ async def test_csv_export_header_and_data_row(client: httpx.AsyncClient) -> None
     finished = _now_iso()
     db.execute(
         "INSERT INTO runs (id, status, config, output, created_at, finished_at) "
-        "VALUES (?, 'done', '{\"backend\":\"mock\",\"model\":\"my-model\"}', ?, ?, ?)",
+        'VALUES (?, \'done\', \'{"backend":"mock","model":"my-model"}\', ?, ?, ?)',
         (run_id, _SAMPLE_OUTPUT, created, finished),
     )
     db.commit()

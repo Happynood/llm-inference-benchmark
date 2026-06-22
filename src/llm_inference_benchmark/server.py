@@ -796,8 +796,7 @@ async def download_run_csv(run_id: str) -> Response:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(
-        ["run_id", "backend", "model", "status", "created_at", "finished_at"]
-        + _NUMERIC_METRIC_KEYS
+        ["run_id", "backend", "model", "status", "created_at", "finished_at"] + _NUMERIC_METRIC_KEYS
     )
     writer.writerow(
         [
