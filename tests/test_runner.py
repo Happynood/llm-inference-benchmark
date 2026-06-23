@@ -5,7 +5,12 @@ import pytest
 
 from llm_inference_benchmark.backends.mock import MockBackend
 from llm_inference_benchmark.config import BenchmarkConfig
-from llm_inference_benchmark.runner import _resolve_prompt_sequence, load_prompts, run_benchmark
+from llm_inference_benchmark.runner import (
+    _resolve_prompt_sequence,
+    _run_open_loop,
+    load_prompts,
+    run_benchmark,
+)
 
 
 def test_load_prompts(tmp_prompts: Path) -> None:
@@ -298,3 +303,83 @@ def test_run_benchmark_seed_is_reproducible(tmp_prompts: Path) -> None:
     run_benchmark(_RecordingBackend("b"), cfg, prompts)
 
     assert received["a"] == received["b"]
+
+
+# ---------------------------------------------------------------------------
+# Open-loop load mode
+# ---------------------------------------------------------------------------
+
+
+def test_open_loop_request_count(tmp_prompts: Path) -> None:
+    backend = MockBackend(model="test", latency_ms=0, tokens_per_response=5)
+    cfg = BenchmarkConfig(
+        requests=8, warmup_requests=0, prompts_file=str(tmp_prompts), arrival_rate_rps=100.0
+    )
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.request_count == 8
+
+
+def test_open_loop_takes_precedence_over_concurrency(tmp_prompts: Path) -> None:
+    """arrival_rate_rps routes to open-loop regardless of concurrency setting."""
+    backend = MockBackend(model="test", latency_ms=0, tokens_per_response=5)
+    cfg = BenchmarkConfig(
+        requests=6,
+        concurrency=3,
+        warmup_requests=0,
+        prompts_file=str(tmp_prompts),
+        arrival_rate_rps=200.0,
+    )
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.request_count == 6
+
+
+def test_open_loop_produces_nonzero_throughput(tmp_prompts: Path) -> None:
+    backend = MockBackend(model="test", latency_ms=0, tokens_per_response=10)
+    cfg = BenchmarkConfig(
+        requests=5, warmup_requests=0, prompts_file=str(tmp_prompts), arrival_rate_rps=50.0
+    )
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.tokens_per_second > 0
+
+
+def test_open_loop_is_not_sequential_for_thermal(tmp_prompts: Path) -> None:
+    """Open-loop mode should not compute thermal_throttle_pct (is_sequential=False)."""
+    backend = MockBackend(model="test", latency_ms=0, tokens_per_response=5)
+    cfg = BenchmarkConfig(
+        requests=20,
+        warmup_requests=0,
+        prompts_file=str(tmp_prompts),
+        arrival_rate_rps=500.0,
+    )
+    report = run_benchmark(backend, cfg, load_prompts(tmp_prompts))
+    assert report.thermal_throttle_pct is None
+
+
+def test_open_loop_dispatch_timing(tmp_prompts: Path) -> None:
+    """Requests are dispatched at roughly 1/rate-second intervals."""
+    import asyncio
+    import time
+
+    dispatch_times: list[float] = []
+
+    class _TimingBackend(MockBackend):
+        def generate(self, prompt: str):  # type: ignore[override]
+            dispatch_times.append(time.perf_counter())
+            return super().generate(prompt)
+
+    rate = 50.0  # 50 req/s → 20 ms apart
+    backend = _TimingBackend(model="test", latency_ms=0, tokens_per_response=5)
+    cfg = BenchmarkConfig(
+        requests=5,
+        warmup_requests=0,
+        prompts_file=str(tmp_prompts),
+        arrival_rate_rps=rate,
+    )
+    prompts = load_prompts(tmp_prompts)
+    asyncio.run(_run_open_loop(backend, cfg, prompts))
+
+    assert len(dispatch_times) == 5
+    gaps = [dispatch_times[i + 1] - dispatch_times[i] for i in range(len(dispatch_times) - 1)]
+    expected_gap = 1.0 / rate
+    for gap in gaps:
+        assert gap == pytest.approx(expected_gap, abs=0.02), f"gap {gap:.4f} s outside tolerance"

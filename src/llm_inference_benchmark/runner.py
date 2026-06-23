@@ -53,11 +53,14 @@ def _resolve_prompt_sequence(prompts: list[str], n: int, seed: int | None) -> li
     return random.Random(seed).choices(prompts, k=n)
 
 
+_RunResult = tuple[
+    list[RequestMetrics], list[str], list[str], float, list[float], list[float], list[float]
+]
+
+
 async def _run_concurrent(
     backend: Backend, config: BenchmarkConfig, prompts: list[str]
-) -> tuple[
-    list[RequestMetrics], list[str], list[str], float, list[float], list[float], list[float]
-]:
+) -> _RunResult:
     """Fire config.requests requests with up to config.concurrency in flight at once.
 
     Returns (results, texts, prompts_used, wall_clock_elapsed_s, ttft_values, tpot_values,
@@ -85,6 +88,60 @@ async def _run_concurrent(
 
     wall_t0 = time.perf_counter()
     quads = await asyncio.gather(*[_one(i) for i in range(config.requests)])
+    wall_elapsed_s = time.perf_counter() - wall_t0
+
+    prompts_used = [q[0] for q in quads]
+    results = [q[1] for q in quads]
+    texts = [q[2] for q in quads]
+    ttft_values = [q[3] for q in quads if q[3] is not None]
+    tpot_values = [
+        (q[1].latency_ms - q[3]) / q[1].output_tokens
+        for q in quads
+        if q[3] is not None and q[1].output_tokens > 0 and q[1].latency_ms > q[3]
+    ]
+    itl_values: list[float] = [v for q in quads if q[4] is not None for v in q[4]]
+    return results, texts, prompts_used, wall_elapsed_s, ttft_values, tpot_values, itl_values
+
+
+async def _run_open_loop(
+    backend: Backend, config: BenchmarkConfig, prompts: list[str]
+) -> _RunResult:
+    """Dispatch requests at a fixed arrival rate (open-loop mode).
+
+    Request i is scheduled at t0 + i / arrival_rate_rps seconds.  Requests
+    accumulate concurrently with no semaphore cap, modelling constant-arrival-rate
+    traffic (Poisson process, uniform inter-arrival approximation).  This reveals
+    queueing latency that closed-loop semaphore mode hides.
+    """
+    assert config.arrival_rate_rps is not None
+    interval_s = 1.0 / config.arrival_rate_rps
+
+    async def _one(
+        i: int, dispatch_at: float
+    ) -> tuple[str, RequestMetrics, str, float | None, list[float] | None]:
+        delay = dispatch_at - asyncio.get_event_loop().time()
+        if delay > 0:
+            await asyncio.sleep(delay)
+        prompt = prompts[i % len(prompts)]
+        r = await asyncio.to_thread(backend.generate, prompt)
+        return (
+            prompt,
+            RequestMetrics(
+                latency_ms=r.latency_ms,
+                input_tokens=r.input_tokens,
+                output_tokens=r.output_tokens,
+            ),
+            r.text,
+            r.ttft_ms,
+            r.itl_values,
+        )
+
+    loop = asyncio.get_event_loop()
+    t0 = loop.time()
+    tasks = [asyncio.create_task(_one(i, t0 + i * interval_s)) for i in range(config.requests)]
+
+    wall_t0 = time.perf_counter()
+    quads = await asyncio.gather(*tasks)
     wall_elapsed_s = time.perf_counter() - wall_t0
 
     prompts_used = [q[0] for q in quads]
@@ -136,7 +193,17 @@ def run_benchmark(
 
     with MemorySampler() as mem, NvidiaSmiSampler() as vram, PowerSampler() as power:
         reset_cuda_peak()
-        if config.concurrency > 1:
+        if config.arrival_rate_rps is not None:
+            (
+                results,
+                texts,
+                prompts_used,
+                wall_clock_elapsed_s,
+                ttft_values,
+                tpot_values,
+                itl_values,
+            ) = asyncio.run(_run_open_loop(backend, config, sequence))
+        elif config.concurrency > 1:
             (
                 results,
                 texts,
@@ -215,7 +282,7 @@ def run_benchmark(
         mean_answer_tokens=mean_a_tokens,
         reasoning_fraction=r_fraction,
         energy_joules=power.energy_joules,
-        is_sequential=config.concurrency == 1,
+        is_sequential=config.concurrency == 1 and config.arrival_rate_rps is None,
     )
 
 

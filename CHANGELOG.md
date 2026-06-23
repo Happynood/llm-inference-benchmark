@@ -9,6 +9,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Open-loop load mode** (`--arrival-rate RPS`): dispatch requests at a constant
+  arrival rate (requests/second) regardless of response time.  Unlike semaphore-based
+  concurrency, this models Poisson-process traffic patterns and reveals queueing latency
+  that closed-loop testing hides.  Set `arrival_rate_rps` in YAML or pass
+  `--arrival-rate 5` on the CLI.  When active, `concurrency` is ignored and the CLI
+  echo shows `arrival rate : X rps (open-loop)`.
+
 - **E2E tests for multi-run comparison**: four Playwright tests cover the compare bar
   appearing when two run cards are checked, the ✕ clear button hiding the bar, the
   **Compare** button opening the Pareto page in a new tab with the correct `?ids=` query
