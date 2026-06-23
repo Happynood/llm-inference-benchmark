@@ -168,6 +168,9 @@ Full reference: **[docs/cli.md](docs/cli.md)**
 ```bash
 # Override config values without editing YAML
 uv run llm-bench --config configs/example.yaml --requests 50 --concurrency 4 --warmup-requests 2 --seed 42
+
+# Open-loop mode: dispatch at a fixed arrival rate (models real traffic patterns)
+uv run llm-bench --config configs/example.yaml --arrival-rate 5 --requests 50
 ```
 
 ### Constraint-based recommendation
@@ -523,7 +526,7 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 ### Phase 5 — Concurrency & Engine Agnosticism
 
 - [x] **`llm-bench sweep`** — auto-ramp concurrency until p95 latency exceeds threshold; emit throughput-vs-latency curve as a combined CSV with one row per level
-- [ ] **Open-loop load mode** — constant-arrival-rate requests (not closed-loop sequential)
+- [x] **Open-loop load mode** — `--arrival-rate RPS` dispatches requests at a fixed rate; reveals queueing latency that closed-loop mode hides
 - [x] **`--base-url` / `--api-key` global flags** — test any OpenAI-compatible server (LM Studio, Jan, Ollama, vLLM remote) without a config file
 
 ### Phase 6 — Model Downloads

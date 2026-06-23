@@ -58,6 +58,7 @@ class BenchmarkConfig(BaseModel):
     model: str = "mock-gpt2"
     requests: int = Field(default=20, ge=1)
     concurrency: int = Field(default=1, ge=1)
+    arrival_rate_rps: float | None = Field(default=None, gt=0.0)
     prompts_file: str = "data/prompts/smoke.txt"
     quality_file: str | None = None
     workload_profile: str | None = None

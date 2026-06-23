@@ -114,6 +114,17 @@ def _apply_set_overrides(cfg: BenchmarkConfig, set_overrides: tuple[str, ...]) -
     help="Override config concurrency",
 )
 @click.option(
+    "--arrival-rate",
+    "arrival_rate_override",
+    default=None,
+    type=float,
+    metavar="RPS",
+    help=(
+        "Run in open-loop mode: dispatch requests at a fixed arrival rate (requests/second). "
+        "Overrides --concurrency. Models constant-arrival-rate traffic to reveal queueing latency."
+    ),
+)
+@click.option(
     "--seed",
     "seed_override",
     default=None,
@@ -178,6 +189,7 @@ def main(
     requests_override: int | None,
     warmup_requests_override: int | None,
     concurrency_override: int | None,
+    arrival_rate_override: float | None,
     seed_override: int | None,
     set_overrides: tuple[str, ...],
     output_format: str,
@@ -236,13 +248,17 @@ def main(
 
     if set_overrides:
         cfg = _apply_set_overrides(cfg, set_overrides)
-    overrides: dict[str, int] = {}
+    overrides: dict[str, object] = {}
     if requests_override is not None:
         overrides["requests"] = requests_override
     if warmup_requests_override is not None:
         overrides["warmup_requests"] = warmup_requests_override
     if concurrency_override is not None:
         overrides["concurrency"] = concurrency_override
+    if arrival_rate_override is not None:
+        if arrival_rate_override <= 0:
+            raise click.UsageError("--arrival-rate must be a positive number (requests/second)")
+        overrides["arrival_rate_rps"] = arrival_rate_override
     if seed_override is not None:
         overrides["seed"] = seed_override
     if overrides:
@@ -704,6 +720,7 @@ def validate_config_cmd(
             "model": cfg.model,
             "requests": cfg.requests,
             "concurrency": cfg.concurrency,
+            "arrival_rate_rps": cfg.arrival_rate_rps,
             "warmup_requests": cfg.warmup_requests,
             "repeats": cfg.repeats,
             "prompts_file": cfg.resolve_prompts_file(),
@@ -722,7 +739,10 @@ def validate_config_cmd(
     click.echo(f"  backend          : {cfg.backend}")
     click.echo(f"  model            : {cfg.model}")
     click.echo(f"  requests         : {cfg.requests}")
-    click.echo(f"  concurrency      : {cfg.concurrency}")
+    if cfg.arrival_rate_rps is not None:
+        click.echo(f"  arrival rate     : {cfg.arrival_rate_rps} rps (open-loop)")
+    else:
+        click.echo(f"  concurrency      : {cfg.concurrency}")
     click.echo(f"  warmup_requests  : {cfg.warmup_requests}")
     click.echo(f"  repeats          : {cfg.repeats}")
     click.echo(f"  prompts_file     : {cfg.resolve_prompts_file()}")
