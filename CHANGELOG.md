@@ -9,6 +9,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **`llm-bench pull`**: download GGUF or Transformers models from HuggingFace Hub in one
+  command.  For GGUF, pass `--quant` to select the quantization variant and the file lands
+  in `~/models/` (override with `--dest`).  For Transformers, omit `--quant` and the model
+  snapshot is saved to the default HF cache.  Features: pre-download size guard
+  (`--max-size-gb`, default 10), post-download SHA-256 verification against LFS metadata
+  (corrupted downloads are deleted automatically), skip-if-already-cached, and
+  `HF_TOKEN` / `--token` support for gated models.
+
+  ```bash
+  llm-bench pull Qwen/Qwen2.5-Coder-7B-Instruct-GGUF --quant Q4_K_M
+  llm-bench pull HuggingFaceTB/SmolLM2-360M-Instruct --backend transformers
+  llm-bench pull Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF --quant Q5_K_M --max-size-gb 5
+  ```
+
 - **Open-loop load mode** (`--arrival-rate RPS`): dispatch requests at a constant
   arrival rate (requests/second) regardless of response time.  Unlike semaphore-based
   concurrency, this models Poisson-process traffic patterns and reveals queueing latency

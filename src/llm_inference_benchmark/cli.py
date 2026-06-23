@@ -1643,6 +1643,91 @@ def sweep_cmd(
         sys.exit(1)
 
 
+@main.command("pull")
+@click.argument("repo_id")
+@click.option(
+    "--quant",
+    default=None,
+    metavar="QUANT",
+    help="GGUF quantization suffix to download (e.g. Q4_K_M). Required for --backend gguf.",
+)
+@click.option(
+    "--backend",
+    type=click.Choice(["gguf", "transformers"]),
+    default=None,
+    help="Download backend. Defaults to gguf when --quant is set, otherwise transformers.",
+)
+@click.option(
+    "--dest",
+    "dest_dir",
+    default=None,
+    type=click.Path(path_type=Path),
+    help="Destination directory for GGUF files (default: ~/models/).",
+)
+@click.option(
+    "--max-size-gb",
+    default=10.0,
+    show_default=True,
+    type=float,
+    help="Abort if the remote file exceeds this size in GB.",
+)
+@click.option(
+    "--token",
+    "hf_token",
+    default=None,
+    envvar="HF_TOKEN",
+    metavar="TOKEN",
+    help="HuggingFace access token (or set HF_TOKEN env var).",
+)
+def pull_cmd(
+    repo_id: str,
+    quant: str | None,
+    backend: str | None,
+    dest_dir: Path | None,
+    max_size_gb: float,
+    hf_token: str | None,
+) -> None:
+    """Download a model from HuggingFace Hub.
+
+    For GGUF models, pass --quant to select the quantization variant:
+
+    \b
+        llm-bench pull Qwen/Qwen2.5-Coder-7B-Instruct-GGUF --quant Q4_K_M
+        llm-bench pull HuggingFaceTB/SmolLM2-360M-Instruct --backend transformers
+        llm-bench pull Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF --quant Q5_K_M --max-size-gb 5
+    """
+    from llm_inference_benchmark.puller import pull_gguf, pull_transformers
+
+    resolved_backend = backend or ("gguf" if quant else "transformers")
+
+    try:
+        if resolved_backend == "gguf":
+            if not quant:
+                raise click.UsageError(
+                    "--quant is required when using --backend gguf. Example: --quant Q4_K_M"
+                )
+            result = pull_gguf(
+                repo_id,
+                quant,
+                dest_dir=dest_dir,
+                token=hf_token,
+                max_size_gb=max_size_gb,
+            )
+        else:
+            result = pull_transformers(
+                repo_id,
+                token=hf_token,
+                max_size_gb=max_size_gb,
+            )
+    except (ValueError, ImportError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    if result.skipped:
+        click.echo(f"Already cached: {result.path}")
+    else:
+        click.echo(f"Downloaded to: {result.path}")
+
+
 @main.command("serve")
 @click.option("--host", default="127.0.0.1", show_default=True, help="Bind host")
 @click.option("--port", default=8080, show_default=True, type=int, help="Bind port")

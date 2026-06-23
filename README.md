@@ -154,6 +154,7 @@ llm-bench pareto    FILE [FILE...]                     # Pareto classification
 llm-bench recommend FILE [FILE...] [CONSTRAINTS]       # best config under constraints
 llm-bench matrix    --config MATRIX_YAML               # multi-run sweep
 llm-bench sweep     --config YAML --concurrency-range 1,2,4,8  # throughput-vs-latency ramp
+llm-bench pull      REPO_ID [--quant QUANT] [--backend gguf|transformers]  # download model
 llm-bench serve     [--host HOST] [--port PORT]        # start Web API server
 llm-bench profiles                                     # list built-in workload profiles
 llm-bench validate-config --config YAML                # validate config without running
@@ -453,6 +454,31 @@ for measuring prefill latency and validating models with extended context window
 
 ---
 
+## Model Downloads
+
+Download GGUF or Transformers models directly from HuggingFace Hub:
+
+```bash
+# Download a GGUF quant into ~/models/
+llm-bench pull Qwen/Qwen2.5-Coder-7B-Instruct-GGUF --quant Q4_K_M
+
+# Download a Transformers model into the HF cache (~/.cache/huggingface/hub)
+llm-bench pull HuggingFaceTB/SmolLM2-360M-Instruct --backend transformers
+
+# Override destination directory or size ceiling
+llm-bench pull Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF --quant Q5_K_M --dest ~/models --max-size-gb 5
+
+# Gated models: pass HF_TOKEN env var or --token flag
+HF_TOKEN=hf_... llm-bench pull meta-llama/Llama-3.2-3B-Instruct-GGUF --quant Q4_K_M
+```
+
+`llm-bench pull` checks the remote file size before downloading (default ceiling: 10 GB) and
+verifies the SHA-256 hash against HuggingFace LFS metadata after download.  If the hash does
+not match, the partial file is deleted automatically.  Re-running the command skips files
+that are already cached with the correct hash.
+
+---
+
 ## Tech Stack
 
 | Layer | Tool |
@@ -531,8 +557,8 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 
 ### Phase 6 — Model Downloads
 
-- [ ] `llm-bench pull <model-id> [--quant Q4_K_M]` — download GGUF to `~/models/` or HF snapshot to cache
-- [ ] Hash verification, size-limit guard, progress bar
+- [x] `llm-bench pull <model-id> [--quant Q4_K_M]` — download GGUF to `~/models/` or HF snapshot to cache
+- [x] Hash verification, size-limit guard, progress bar
 - [ ] Auto-suggest downloadable versions of models that exceed local VRAM
 
 ---
