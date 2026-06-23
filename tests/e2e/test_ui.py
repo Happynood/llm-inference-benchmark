@@ -40,13 +40,19 @@ pytestmark = pytest.mark.skipif(
 
 _PLOTLY_STUB = (
     "window.Plotly={"
-    "newPlot:function(el){"
+    "_render:function(el){"
     "var c=typeof el==='string'?document.getElementById(el):el;"
     "if(!c)return;"
+    "if(!c.querySelector('.main-svg')){"
     "var s=document.createElementNS('http://www.w3.org/2000/svg','svg');"
     "s.setAttribute('class','main-svg');"
+    "s.style.display='block';"
     "c.appendChild(s);"
     "}"
+    "},"
+    "newPlot:function(el){this._render(el);},"
+    "react:function(el){this._render(el);},"
+    "downloadImage:function(){}"
     "};"
 )
 

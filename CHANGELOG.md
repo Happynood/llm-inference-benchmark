@@ -9,6 +9,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Interactive Pareto chart axis selectors**: the `/runs/{id}/pareto.html` page now lets
+  you pick any two metrics for the X and Y axes via dropdown menus — e.g. VRAM vs
+  throughput, TTFT vs latency, or efficiency vs p95 latency.  The Pareto front is
+  recomputed in the browser whenever the selection changes.  A **Download PNG** button
+  exports the chart at 1200×700 px for reports and README screenshots.
+
 - **`llm-bench pull`**: download GGUF or Transformers models from HuggingFace Hub in one
   command.  For GGUF, pass `--quant` to select the quantization variant and the file lands
   in `~/models/` (override with `--dest`).  For Transformers, omit `--quant` and the model

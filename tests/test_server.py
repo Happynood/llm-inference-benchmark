@@ -494,8 +494,10 @@ async def test_pareto_page_with_metrics(client: httpx.AsyncClient, isolated_db: 
     _get_db().commit()
     resp = await client.get("/runs/run-p2/pareto.html")
     assert resp.status_code == 200
-    assert "Plotly.newPlot" in resp.text
+    assert "Plotly.react" in resp.text
     assert "run-p2"[:8] in resp.text
+    assert 'id="x-axis"' in resp.text
+    assert "Download PNG" in resp.text
 
 
 # ── _render_runs_table_rows and _render_pareto_html unit tests ────────────────
@@ -534,8 +536,51 @@ def test_render_pareto_html_with_metrics(isolated_db: Path) -> None:
         finished_at=None,
     )
     out = _render_pareto_html("abc", [result])
-    assert "Plotly.newPlot" in out
+    assert "Plotly.react" in out
     assert "60.0" in out
+    assert 'id="x-axis"' in out
+    assert 'id="y-axis"' in out
+    assert "Download PNG" in out
+    assert "paretoMask" in out
+
+
+def test_render_pareto_html_axis_data_embedded(isolated_db: Path) -> None:
+    from llm_inference_benchmark.server import RunResult
+
+    output = "  tokens_per_second: 55.5\n  p95_latency_ms: 180.0\n  peak_vram_memory_mb: 4096.0\n"
+    result = RunResult(
+        run_id="xyz",
+        status="done",
+        config={"backend": "llama_cpp", "model": "llama3"},
+        output=output,
+        created_at=_now_iso(),
+        finished_at=None,
+    )
+    out = _render_pareto_html("xyz", [result])
+    assert "55.5" in out
+    assert "4096.0" in out
+    assert "peak_vram_memory_mb" in out
+
+
+def test_render_pareto_html_multi_run_pareto_front(isolated_db: Path) -> None:
+    from llm_inference_benchmark.server import RunResult
+
+    def _run(rid: str, toks: float, lat: float) -> RunResult:
+        return RunResult(
+            run_id=rid,
+            status="done",
+            config={"backend": "mock", "model": "m"},
+            output=f"  tokens_per_second: {toks}\n  p95_latency_ms: {lat}\n",
+            created_at=_now_iso(),
+            finished_at=None,
+        )
+
+    runs = [_run("r1", 100.0, 50.0), _run("r2", 50.0, 200.0), _run("r3", 80.0, 100.0)]
+    out = _render_pareto_html("r1", runs)
+    assert "paretoMask" in out
+    # All three run IDs should appear in the embedded data
+    for rid in ("r1", "r2", "r3"):
+        assert rid in out
 
 
 # ── Datasets API ──────────────────────────────────────────────────────────────
