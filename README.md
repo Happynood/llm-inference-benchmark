@@ -384,6 +384,11 @@ left and a live detail panel on the right.
 - **Multi-run comparison** — check ≥ 2 run cards and click **Compare N runs** to open
   an interactive Pareto scatter plot comparing throughput vs. latency across the selected
   runs.  Checkbox selection survives the automatic sidebar refresh.
+- **Pareto chart axis selectors** — click **Pareto Chart** on any completed run to open
+  `/runs/{id}/pareto.html`.  X and Y axis dropdowns let you explore any metric pair
+  (e.g. VRAM vs throughput, TTFT vs p95 latency, efficiency vs memory); the Pareto front
+  is recomputed live in the browser.  A **Download PNG** button exports the chart at
+  1200×700 px.
 - **Delete** button on each run card (running runs are protected with a 409 response).
 - **Download CSV** — completed runs show a **Download CSV** button in the detail panel
   that exports all parsed metrics as a two-row CSV file, ready for analysis.

@@ -578,111 +578,180 @@ def _render_datasets_table(statuses: list[dict[str, Any]]) -> str:
     return "\n".join(parts)
 
 
+_PARETO_CHART_TMPL = """\
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>llm-bench Pareto — PARETO_SHORT</title>
+  <script src="https://cdn.plot.ly/plotly-2.32.0.min.js" charset="utf-8"></script>
+  <style>
+    body{font-family:system-ui,sans-serif;margin:1.5rem;max-width:1000px}
+    .controls{display:flex;gap:1rem;align-items:center;margin-bottom:1rem;flex-wrap:wrap}
+    label{font-size:.875rem;color:#475569}
+    select{padding:.25rem .5rem;border:1px solid #cbd5e1;border-radius:.375rem;font-size:.875rem}
+    .btn{padding:.375rem .75rem;background:#3b82f6;color:#fff;border:none;
+         border-radius:.375rem;cursor:pointer;font-size:.875rem}
+    .btn:hover{background:#2563eb}
+  </style>
+</head>
+<body>
+  <h2>Pareto Chart — <span style="font-family:monospace">PARETO_SHORT</span></h2>
+  <p><a href="/">← Dashboard</a></p>
+  <div class="controls">
+    <label>X axis: <select id="x-axis"></select></label>
+    <label>Y axis: <select id="y-axis"></select></label>
+    <button class="btn" onclick="downloadPNG()">Download PNG</button>
+  </div>
+  <div id="chart"></div>
+  <script>
+const PTS = PARETO_PTS_JSON;
+const AXES = [
+  {key:'p95_latency_ms',           label:'p95 Latency (ms)',          minimize:true},
+  {key:'p50_latency_ms',           label:'p50 Latency (ms)',          minimize:true},
+  {key:'tokens_per_second',        label:'Throughput (tok/s)',        minimize:false},
+  {key:'decode_tokens_per_second', label:'Decode Throughput (tok/s)', minimize:false},
+  {key:'p50_ttft_ms',              label:'TTFT p50 (ms)',             minimize:true},
+  {key:'p95_ttft_ms',              label:'TTFT p95 (ms)',             minimize:true},
+  {key:'peak_vram_memory_mb',      label:'VRAM (MB)',                 minimize:true},
+  {key:'peak_cuda_memory_mb',      label:'CUDA Mem (MB)',             minimize:true},
+  {key:'peak_cpu_memory_mb',       label:'CPU Mem (MB)',              minimize:true},
+  {key:'model_load_ms',            label:'Load Time (ms)',            minimize:true},
+  {key:'tokens_per_joule',         label:'Efficiency (tok/J)',        minimize:false},
+  {key:'sanity_pass_rate',         label:'Sanity Pass Rate',         minimize:false},
+];
+
+function paretoMask(pts, xKey, yKey, xMin, yMin) {
+  const dominated = pts.map(() => false);
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = 0; j < pts.length; j++) {
+      if (i === j) continue;
+      const xi = pts[i][xKey], yi = pts[i][yKey];
+      const xj = pts[j][xKey], yj = pts[j][yKey];
+      if (xi == null || yi == null || xj == null || yj == null) continue;
+      const xBetter = xMin ? xj <= xi : xj >= xi;
+      const yBetter = yMin ? yj <= yi : yj >= yi;
+      const xStrict = xMin ? xj < xi : xj > xi;
+      const yStrict = yMin ? yj < yi : yj > yi;
+      if (xBetter && yBetter && (xStrict || yStrict)) { dominated[i] = true; break; }
+    }
+  }
+  return dominated.map(d => !d);
+}
+
+function redraw() {
+  const xKey  = document.getElementById('x-axis').value;
+  const yKey  = document.getElementById('y-axis').value;
+  const xMeta = AXES.find(a => a.key === xKey) || {label: xKey, minimize: true};
+  const yMeta = AXES.find(a => a.key === yKey) || {label: yKey, minimize: false};
+
+  const valid = PTS.filter(p => p[xKey] != null && p[yKey] != null);
+  if (!valid.length) {
+    Plotly.react('chart', [], {title: 'No data for selected axes'});
+    return;
+  }
+
+  const mask   = valid.length > 1
+    ? paretoMask(valid, xKey, yKey, xMeta.minimize, yMeta.minimize)
+    : [true];
+  const normal = valid.filter((p, i) => !p.highlight && !mask[i]);
+  const pareto = valid.filter((p, i) =>  mask[i] && !p.highlight);
+  const hi     = valid.filter(p => p.highlight);
+  const ht     = '%{text}<br>' + xMeta.label + ': %{x:.3g}<br>'
+    + yMeta.label + ': %{y:.3g}<extra></extra>';
+
+  const traces = [];
+  if (normal.length) traces.push({
+    type:'scatter', mode:'markers', name:'Other runs',
+    x: normal.map(p => p[xKey]), y: normal.map(p => p[yKey]),
+    text: normal.map(p => p.label),
+    marker: {color:'#94a3b8', size:10},
+    hovertemplate: ht,
+  });
+  if (pareto.length) {
+    const pf = [...pareto].sort((a, b) => a[xKey] - b[xKey]);
+    traces.push({
+      type:'scatter', mode:'markers+lines', name:'Pareto front',
+      x: pf.map(p => p[xKey]), y: pf.map(p => p[yKey]),
+      text: pf.map(p => p.label),
+      marker: {color:'#3b82f6', size:12},
+      line: {dash:'dot', color:'#3b82f6'},
+      hovertemplate: ht,
+    });
+  }
+  if (hi.length) traces.push({
+    type:'scatter', mode:'markers', name:'This run',
+    x: hi.map(p => p[xKey]), y: hi.map(p => p[yKey]),
+    text: hi.map(p => p.label),
+    marker: {color:'#f59e0b', size:16, symbol:'star'},
+    hovertemplate: ht,
+  });
+
+  Plotly.react('chart', traces, {
+    title: 'Pareto — Run PARETO_SHORT',
+    xaxis: {title: xMeta.label},
+    yaxis: {title: yMeta.label},
+    hovermode: 'closest',
+    legend: {orientation: 'h'},
+  });
+}
+
+function downloadPNG() {
+  Plotly.downloadImage('chart', {
+    format: 'png', filename: 'pareto-PARETO_SHORT', width: 1200, height: 700,
+  });
+}
+
+const available = AXES.filter(a => PTS.some(p => p[a.key] != null));
+const xSel = document.getElementById('x-axis');
+const ySel = document.getElementById('y-axis');
+available.forEach(a => {
+  xSel.appendChild(new Option(a.label, a.key));
+  ySel.appendChild(new Option(a.label, a.key));
+});
+const defX = available.find(a => a.key === 'p95_latency_ms') || available[0];
+const defY = available.find(a => a.key === 'tokens_per_second') || available[1] || available[0];
+if (defX) xSel.value = defX.key;
+if (defY) ySel.value = defY.key;
+xSel.addEventListener('change', redraw);
+ySel.addEventListener('change', redraw);
+redraw();
+  </script>
+</body>
+</html>"""
+
+
 def _render_pareto_html(run_id: str, results: list[RunResult]) -> str:
     pts: list[dict[str, Any]] = []
     for r in results:
         m = _parse_metrics_from_output(r.output)
-        lat = m.get("p95_latency_ms")
-        tok = m.get("tokens_per_second")
-        if lat is None or tok is None:
+        if m.get("p95_latency_ms") is None or m.get("tokens_per_second") is None:
             continue
         cfg = r.config or {}
-        pts.append(
-            {
-                "run_id": r.run_id,
-                "latency": lat,
-                "toks": tok,
-                "backend": cfg.get("backend", "?"),
-                "model": cfg.get("model", "?"),
-                "highlight": r.run_id == run_id,
-            }
-        )
+        pt: dict[str, Any] = {
+            "run_id": r.run_id,
+            "label": (
+                f"{cfg.get('backend', '?')}/{str(cfg.get('model', '?'))[:20]}<br>{r.run_id[:8]}"
+            ),
+            "highlight": r.run_id == run_id,
+        }
+        for key in _NUMERIC_METRIC_KEYS:
+            pt[key] = m.get(key)
+        pts.append(pt)
+
+    short = html.escape(run_id[:8])
 
     if not pts:
         return (
             f"<!DOCTYPE html><html lang='en'><body>"
-            f"<h2>Pareto — {html.escape(run_id[:8])}</h2>"
+            f"<h2>Pareto — {short}</h2>"
             f"<p>No completed runs with parseable metrics yet.</p>"
             f"<p><a href='/'>&#8592; Dashboard</a></p>"
             f"</body></html>"
         )
 
-    coords = [(p["latency"], p["toks"]) for p in pts]
-    mask = _pareto_mask(coords) if len(pts) > 1 else [True]
-
-    normal = [p for p, is_p in zip(pts, mask, strict=True) if not p["highlight"] and not is_p]
-    pareto = [p for p, is_p in zip(pts, mask, strict=True) if is_p and not p["highlight"]]
-    hi = [p for p in pts if p["highlight"]]
-
-    traces: list[dict[str, Any]] = []
-    if normal:
-        traces.append(
-            {
-                "type": "scatter",
-                "mode": "markers",
-                "name": "Other runs",
-                "x": [p["latency"] for p in normal],
-                "y": [p["toks"] for p in normal],
-                "text": [
-                    f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in normal
-                ],
-                "marker": {"color": "#94a3b8", "size": 10},
-                "hovertemplate": "%{text}<br>p95: %{x:.0f} ms<br>tok/s: %{y:.1f}<extra></extra>",
-            }
-        )
-    if pareto:
-        pf = sorted(pareto, key=lambda p: p["latency"])
-        traces.append(
-            {
-                "type": "scatter",
-                "mode": "markers+lines",
-                "name": "Pareto front",
-                "x": [p["latency"] for p in pf],
-                "y": [p["toks"] for p in pf],
-                "text": [f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in pf],
-                "marker": {"color": "#3b82f6", "size": 12},
-                "line": {"dash": "dot", "color": "#3b82f6"},
-                "hovertemplate": "%{text}<br>p95: %{x:.0f} ms<br>tok/s: %{y:.1f}<extra></extra>",
-            }
-        )
-    if hi:
-        traces.append(
-            {
-                "type": "scatter",
-                "mode": "markers",
-                "name": "This run",
-                "x": [p["latency"] for p in hi],
-                "y": [p["toks"] for p in hi],
-                "text": [f"{p['backend']}/{str(p['model'])[:20]}<br>{p['run_id'][:8]}" for p in hi],
-                "marker": {"color": "#f59e0b", "size": 16, "symbol": "star"},
-                "hovertemplate": "%{text}<br>p95: %{x:.0f} ms<br>tok/s: %{y:.1f}<extra></extra>",
-            }
-        )
-
-    layout: dict[str, Any] = {
-        "title": f"Pareto — Run {run_id[:8]}",
-        "xaxis": {"title": "p95 Latency (ms)"},
-        "yaxis": {"title": "Throughput (tok/s)"},
-        "hovermode": "closest",
-        "legend": {"orientation": "h"},
-    }
-    traces_json = json.dumps(traces)
-    layout_json = json.dumps(layout)
-    short = html.escape(run_id[:8])
-
-    return (
-        f"<!DOCTYPE html>\n<html lang='en'>\n<head>\n"
-        f"  <meta charset='UTF-8'>\n"
-        f"  <title>llm-bench Pareto — {short}</title>\n"
-        f"  <script src='https://cdn.plot.ly/plotly-2.32.0.min.js' charset='utf-8'></script>\n"
-        "  <style>body{font-family:system-ui,sans-serif;"
-        "margin:1.5rem;max-width:1000px}</style>\n"
-        f"</head>\n<body>\n"
-        f"  <h2>Pareto Chart — <span style='font-family:monospace'>{short}</span></h2>\n"
-        f"  <p><a href='/'>&#8592; Dashboard</a></p>\n"
-        f"  <div id='chart'></div>\n"
-        f"  <script>Plotly.newPlot('chart', {traces_json}, {layout_json});</script>\n"
-        f"</body>\n</html>"
+    return _PARETO_CHART_TMPL.replace("PARETO_PTS_JSON", json.dumps(pts)).replace(
+        "PARETO_SHORT", short
     )
 
 
