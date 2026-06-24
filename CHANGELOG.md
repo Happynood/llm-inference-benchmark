@@ -31,8 +31,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   document the two commands to enable GPU acceleration (`make install-llama-cpp-prebuilt`
   or `make install-llama-cpp-cuda`).
 
-### Added (continued)
-
 - **Interactive Pareto chart axis selectors**: the `/runs/{id}/pareto.html` page now lets
   you pick any two metrics for the X and Y axes via dropdown menus — e.g. VRAM vs
   throughput, TTFT vs latency, or efficiency vs p95 latency.  The Pareto front is
