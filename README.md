@@ -330,16 +330,16 @@ docker run --rm \
 
 ### Running with Docker + GPU (llama.cpp / CUDA)
 
-`Dockerfile.cuda` builds `llama-cpp-python` with `GGML_CUDA=ON` so all GPU layers run on the
-device. Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
+The `gpu` build target in `Dockerfile` compiles `llama-cpp-python` with `GGML_CUDA=ON` so
+all GPU layers offload to the device. Requires the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html)
 on the host.
 
 ```bash
 # Build once (no GPU needed for the build step)
-docker build -f Dockerfile.cuda -t llm-bench-cuda .
+docker build --target gpu -t llm-bench:gpu .
 
 # Verify — prints CLI help
-docker run --rm llm-bench-cuda --help
+docker run --rm llm-bench:gpu --help
 
 # Run a llama.cpp benchmark with full GPU offload
 # Place your GGUF model under ~/models/ on the host
@@ -347,7 +347,7 @@ docker run --rm --gpus all \
   -v "$(pwd)/configs:/app/configs" \
   -v "$(pwd)/results:/app/results" \
   -v "$HOME/models:/models:ro" \
-  llm-bench-cuda \
+  llm-bench:gpu \
   --config /app/configs/example.yaml \
   --backend llama-cpp \
   --model /models/Llama-3.2-3B-Instruct-Q4_K_M.gguf \
@@ -358,12 +358,28 @@ docker run --rm --gpus all \
 Or use the compose file:
 
 ```bash
-docker compose run --rm llm-bench-cuda \
-  --config /app/configs/example.yaml --output /app/results/bench-cuda.csv
+docker compose run --rm bench-gpu \
+  --config /app/configs/example.yaml --output /app/results/bench-gpu.csv
 ```
 
 > **Tip:** set `n_gpu_layers: 28` (or `-1` for all layers) in your YAML config instead of
 > passing `--n-gpu-layers` each time.
+
+### Running the Web UI with Docker
+
+The `webui` build target packages `llm-bench serve` as a standalone container:
+
+```bash
+# Start the dashboard (rebuilds the image if needed)
+docker compose up webui
+
+# Open http://localhost:8080 in your browser
+```
+
+Run benchmarks by submitting jobs through the Web UI form.  GGUF models from `~/models/`
+and the HuggingFace cache at `~/.cache/huggingface` on the host are automatically visible
+inside the container via the volume bindings in `docker-compose.yml`.  Results persist in a
+named Docker volume (`llm-bench-data`) across container restarts.
 
 ---
 
@@ -403,6 +419,30 @@ llm-bench serve
 # Bind to all interfaces on a custom port
 llm-bench serve --host 0.0.0.0 --port 9000
 ```
+
+### llama-cpp GPU in the Web UI
+
+When you select the `llama-cpp` backend in the **+ New Run** form, the dashboard calls
+`/api/capabilities` to check whether the installed `llama-cpp-python` was compiled with
+CUDA.  If it was not (the default `uv sync --extra llama-cpp` gives a CPU-only build), a
+warning banner appears:
+
+> **GPU offload unavailable.** The installed llama-cpp-python was built without CUDA support
+> — the model will run on CPU regardless of the GPU Layers setting.
+
+This is not an error — llama.cpp falls back to CPU automatically, so benchmarks still run.
+To enable GPU acceleration, reinstall with CUDA **before** starting `llm-bench serve`:
+
+```bash
+# Option A — Pre-built CUDA wheel (no compiler needed, recommended)
+make install-llama-cpp-prebuilt
+
+# Option B — Build from source (requires nvcc / CUDA toolkit)
+make install-llama-cpp-cuda
+```
+
+Restart `llm-bench serve` after reinstalling; the warning disappears once GPU support is
+detected.
 
 ### API endpoints
 
