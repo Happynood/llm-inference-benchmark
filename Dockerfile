@@ -93,3 +93,31 @@ RUN uv sync --extra server --no-dev --frozen
 
 EXPOSE 8080
 CMD ["llm-bench", "serve", "--host", "0.0.0.0", "--port", "8080"]
+
+# ---- webui-gpu: Web API + dashboard with CUDA GPU support ----
+FROM nvidia/cuda:12.6.0-devel-ubuntu22.04 AS webui-gpu
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake curl git python3 python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+
+RUN CMAKE_ARGS="-DGGML_CUDA=ON" FORCE_CMAKE=1 \
+    uv sync --extra server --extra llama-cpp --no-dev --frozen --no-install-project
+
+COPY src/ ./src/
+COPY README.md ./
+
+RUN CMAKE_ARGS="-DGGML_CUDA=ON" FORCE_CMAKE=1 \
+    uv sync --extra server --extra llama-cpp --no-dev --frozen
+
+EXPOSE 8080
+CMD ["llm-bench", "serve", "--host", "0.0.0.0", "--port", "8080"]

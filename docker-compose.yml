@@ -44,5 +44,28 @@ services:
       - ${HOME}/models:/models:ro
     # Open http://localhost:8080 after: docker compose up webui
 
+  webui-gpu:
+    build:
+      context: .
+      target: webui-gpu
+    image: llm-bench:webui-gpu
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+    volumes:
+      - llm-bench-data:/root/.llm-bench
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+      - ${HOME}/models:/models:ro
+    # Open http://localhost:8080 after: docker compose up webui-gpu
+
 volumes:
   llm-bench-data:
