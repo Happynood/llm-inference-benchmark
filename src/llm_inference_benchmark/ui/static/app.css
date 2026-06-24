@@ -81,11 +81,11 @@ button { cursor: pointer; font-family: inherit; }
 /* ── Run filter bar ───────────────────────────────────────────────────────── */
 .run-filter-bar {
   display: flex; gap: .375rem; flex-shrink: 0;
-  padding: .4rem .75rem;
+  padding: .4rem .75rem; flex-wrap: wrap;
   border-bottom: 1px solid var(--border);
   background: var(--bg);
 }
-.run-filter-bar input[type="text"] { flex: 1; min-width: 0; }
+.run-filter-bar input[type="text"] { flex: 1; min-width: 80px; }
 .run-filter-bar select { flex-shrink: 0; width: auto; }
 
 /* ── Run list cards ───────────────────────────────────────────────────────── */

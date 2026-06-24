@@ -16,6 +16,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Sort order for the run list**: the filter bar in the Runs sidebar now includes a sort
+  select with three options — *Newest first* (default), *Oldest first*, and *Model A→Z*.
+  The sort cooperates with the existing keyword search and status filter, and the
+  3-second auto-refresh preserves the active sort order.
+
 - **Run duration in the Web UI**: completed run cards in the sidebar now show the elapsed
   wall-clock time (e.g. `45s`, `1m 23s`) in the meta line alongside throughput and
   backend.  The same duration appears in the run detail panel next to the creation
