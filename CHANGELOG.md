@@ -9,6 +9,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **VRAM-aware model suggestions in `llm-bench pull`**: when a requested GGUF file
+  would exceed local GPU VRAM (estimated as file size × 1.1 for KV-cache overhead),
+  `llm-bench pull` now prints a warning and lists alternative quantizations from the
+  same repo that do fit.  Suggestions are sorted by descending quality (largest that
+  still fits first).  The download proceeds after the warning so CPU-only use is
+  unaffected.  When no GPU is detected the check is skipped silently.
+  New public helper: `suggest_fitting_variants(repo_id, vram_gb)` in
+  `llm_inference_benchmark.puller`.
+
 - **Docker `webui-gpu` service**: new `webui-gpu` build target in `Dockerfile` (based on
   `nvidia/cuda:12.6.0-devel-ubuntu22.04`) and matching service in `docker-compose.yml` —
   run `docker compose up webui-gpu` to get the full Web UI dashboard with GPU-accelerated

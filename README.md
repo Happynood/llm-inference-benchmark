@@ -621,7 +621,7 @@ Replace synthetic prompts with representative HuggingFace datasets for reproduci
 
 - [x] `llm-bench pull <model-id> [--quant Q4_K_M]` — download GGUF to `~/models/` or HF snapshot to cache
 - [x] Hash verification, size-limit guard, progress bar
-- [ ] Auto-suggest downloadable versions of models that exceed local VRAM
+- [x] Auto-suggest downloadable versions of models that exceed local VRAM
 
 ---
 
