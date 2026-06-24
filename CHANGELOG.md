@@ -9,10 +9,29 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **GHCR images now publish on every release**: the release workflow lacked a disk-space
+  cleanup step, causing the GPU image build (CUDA + llama.cpp compiled from source) to
+  exhaust runner disk and fail silently — leaving GHCR stuck at v1.3.0 despite the v1.4.0
+  tag being present. A cleanup step matching `docker.yml` is now applied before any build,
+  and a `timeout-minutes: 120` guard prevents silent hangs.
+
 - **Docker release images now push correctly**: the release workflow derives the GHCR image
   path from a lowercased repository name so Docker/OCI tags never contain uppercase letters.
   Previously, tags like `ghcr.io/Happynood/llm-inference-benchmark:cpu-v1.4.0` were rejected
   with *"repository name must be lowercase"*, causing the v1.4.0 image push to fail.
+
+### Added
+
+- **`webui` and `webui-gpu` images published to GHCR on release**: the Web UI Dockerfile
+  targets (`webui`, `webui-gpu`) are now built and pushed alongside `cpu` and `gpu` on every
+  version tag.  Tags follow the same pattern: `webui-<version>` / `webui-latest` and
+  `webui-gpu-<version>` / `webui-gpu-latest`.
+
+- **`HF_TOKEN` forwarded to all Docker Compose services**: setting `HF_TOKEN` in the host
+  environment (or in a `.env` file) now passes the token into every Compose service
+  (`bench-cpu`, `bench-gpu`, `webui`, `webui-gpu`).  Required for downloading gated
+  HuggingFace models inside the container.  The variable is optional — services start
+  normally when it is unset.
 
 ### Added
 

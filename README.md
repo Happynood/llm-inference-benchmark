@@ -309,14 +309,23 @@ Full offload is **3.1× faster** than CPU-only. Partial offload (20/28) captures
 
 ## Docker
 
+Four image variants are published to GHCR on every release:
+
+| Tag pattern | Target | Use case |
+|---|---|---|
+| `cpu-<version>` / `cpu-latest` | `cpu` | llama.cpp CPU-only benchmark |
+| `gpu-<version>` / `gpu-latest` | `gpu` | llama.cpp + CUDA benchmark |
+| `webui-<version>` / `webui-latest` | `webui` | Web dashboard (CPU) |
+| `webui-gpu-<version>` / `webui-gpu-latest` | `webui-gpu` | Web dashboard + CUDA |
+
 ```bash
-docker pull ghcr.io/happynood/llm-inference-benchmark:latest
+docker pull ghcr.io/happynood/llm-inference-benchmark:cpu-latest
 
 # Mock backend — no model download
 docker run --rm \
   -v "$(pwd)/configs:/app/configs" \
   -v "$(pwd)/results:/app/results" \
-  ghcr.io/happynood/llm-inference-benchmark:latest \
+  ghcr.io/happynood/llm-inference-benchmark:cpu-latest \
   --config /app/configs/example.yaml --output /app/results/bench.csv
 
 # Transformers CPU — reuse HuggingFace cache
@@ -324,7 +333,7 @@ docker run --rm \
   -v "$(pwd)/configs:/app/configs" \
   -v "$(pwd)/results:/app/results" \
   -v "$HOME/.cache/huggingface:/root/.cache/huggingface" \
-  ghcr.io/happynood/llm-inference-benchmark:latest \
+  ghcr.io/happynood/llm-inference-benchmark:cpu-latest \
   --config /app/configs/transformers-cpu.yaml --output /app/results/bench-hf.csv
 ```
 
@@ -397,6 +406,26 @@ docker compose up webui-gpu
 ```
 
 All volume bindings are identical to `webui` — models and run results persist across restarts.
+
+### HuggingFace Token in Docker
+
+To access gated models or private datasets from inside any Compose service, set `HF_TOKEN`
+in your shell before calling `docker compose`:
+
+```bash
+export HF_TOKEN=hf_...
+docker compose up webui          # token is forwarded automatically
+docker compose run --rm bench-cpu llm-bench pull meta-llama/...
+```
+
+Or create a `.env` file in the project root:
+
+```
+HF_TOKEN=hf_...
+```
+
+Docker Compose picks up `.env` automatically.  When `HF_TOKEN` is not set, the variable is
+passed as an empty string and gated models remain inaccessible — the containers start normally.
 
 ---
 
