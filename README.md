@@ -422,6 +422,9 @@ left and a live detail panel on the right.
   (e.g. VRAM vs throughput, TTFT vs p95 latency, efficiency vs memory); the Pareto front
   is recomputed live in the browser.  A **Download PNG** button exports the chart at
   1200×700 px.
+- **Search and filter** — a filter bar above the run list lets you narrow results by keyword
+  (model name, backend, or run ID prefix) and by status (All / done / error / running /
+  pending).  The auto-refresh respects the active filter so live runs still appear.
 - **Delete** button on each run card (running runs are protected with a 409 response).
 - **Download CSV** — completed runs show a **Download CSV** button in the detail panel
   that exports all parsed metrics as a two-row CSV file, ready for analysis.
@@ -583,11 +586,12 @@ that are already cached with the correct hash.
 - [x] Docker multi-stage image (CPU + GPU), GitHub Actions CI + Release
 - [x] Real sweep evidence: RTX 3050, n_gpu_layers sweep on Llama 3.2 3B
 
-### Phase 2 — Web UI (in progress)
+### Phase 2 — Web UI (complete)
 
 - [x] `llm-bench serve` — FastAPI backend, SQLite result store, SSE streaming
 - [x] Frontend — HTMX runs table, live SSE log, bar-chart comparison, Plotly Pareto page
 - [x] Pareto chart — interactive HTML/Plotly export (`/runs/{id}/pareto.html`)
+- [x] Run search and filter — keyword search + status dropdown in sidebar; auto-refresh respects active filter
 
 ### Phase 3 — Real-World Datasets
 
