@@ -16,6 +16,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Run duration in the Web UI**: completed run cards in the sidebar now show the elapsed
+  wall-clock time (e.g. `45s`, `1m 23s`) in the meta line alongside throughput and
+  backend.  The same duration appears in the run detail panel next to the creation
+  timestamp.  Pending and running runs show no duration until they finish.
+
 - **Clone run in the Web UI**: a **Clone** button in the run detail panel opens the
   New Run modal pre-filled with the selected run's model, backend, backend-specific
   parameters (GPU layers, context size, device, etc.), and request/concurrency/warmup

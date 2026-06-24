@@ -154,6 +154,20 @@ def _now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _format_duration(created_at: str, finished_at: str | None) -> str | None:
+    if not finished_at:
+        return None
+    try:
+        start = datetime.fromisoformat(created_at)
+        end = datetime.fromisoformat(finished_at)
+        secs = max(0, int((end - start).total_seconds()))
+        if secs < 60:
+            return f"{secs}s"
+        return f"{secs // 60}m {secs % 60}s"
+    except Exception:
+        return None
+
+
 def _row_to_result(row: sqlite3.Row) -> RunResult:
     cols = row.keys()
     return RunResult(
@@ -436,6 +450,8 @@ def _render_run_detail(run: RunResult) -> str:
     lbl = run.label or ""
     detail_label_text = html.escape(lbl) if lbl else "Add label…"
     detail_label_cls = "run-label-text" if lbl else "run-label-text run-label-placeholder"
+    duration = _format_duration(run.created_at, run.finished_at)
+    duration_str = f" · {html.escape(duration)}" if duration else ""
 
     return (
         f'<div id="detail-inner" data-run-id="{rid}" data-status="{html.escape(run.status)}">\n'
@@ -448,7 +464,8 @@ def _render_run_detail(run: RunResult) -> str:
         f"{html.escape(run.status)}</span>\n"
         f"      </div>\n"
         f'      <div class="detail-meta">\n'
-        f'        <span class="detail-model">{model_display}</span> · {html.escape(created)}\n'
+        f'        <span class="detail-model">{model_display}</span>'
+        f" · {html.escape(created)}{duration_str}\n"
         f"      </div>\n"
         f'      <div class="detail-label" id="detail-lbl-{rid}"'
         f' data-label="{html.escape(lbl)}">\n'
@@ -503,9 +520,13 @@ def _render_run_list_cards(results: list[RunResult]) -> str:
         rid = run.run_id
         short_id = rid[:8]
 
+        duration = _format_duration(run.created_at, run.finished_at)
+
         meta_parts = [html.escape(backend)]
         if toks_str:
             meta_parts.append(html.escape(toks_str))
+        if duration:
+            meta_parts.append(html.escape(duration))
         meta_parts.append(html.escape(created))
 
         label = run.label or ""
