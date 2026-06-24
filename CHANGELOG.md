@@ -16,6 +16,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Clone run in the Web UI**: a **Clone** button in the run detail panel opens the
+  New Run modal pre-filled with the selected run's model, backend, backend-specific
+  parameters (GPU layers, context size, device, etc.), and request/concurrency/warmup
+  counts.  Useful for iterating on a configuration without re-entering every field.
+
 - **Run labels in the Web UI**: each benchmark run can now have a short text label (up to
   80 characters) that you set by clicking the label area on a sidebar run card or the run
   detail panel.  Labels appear inline, are saved instantly without a page reload, and are
