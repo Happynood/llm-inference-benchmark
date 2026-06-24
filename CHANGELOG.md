@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+
+- **Docker release images now push correctly**: the release workflow derives the GHCR image
+  path from a lowercased repository name so Docker/OCI tags never contain uppercase letters.
+  Previously, tags like `ghcr.io/Happynood/llm-inference-benchmark:cpu-v1.4.0` were rejected
+  with *"repository name must be lowercase"*, causing the v1.4.0 image push to fail.
+
 ### Added
 
 - **Run search and filter in the Web UI sidebar**: a compact filter bar above the run list

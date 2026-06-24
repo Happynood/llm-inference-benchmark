@@ -9,6 +9,7 @@ on:
 jobs:
   build-cpu:
     runs-on: ubuntu-latest
+    timeout-minutes: 60
     steps:
       - uses: actions/checkout@v4
 
@@ -38,6 +39,7 @@ jobs:
 
   build-gpu:
     runs-on: ubuntu-latest
+    timeout-minutes: 90
     steps:
       - uses: actions/checkout@v4
 
