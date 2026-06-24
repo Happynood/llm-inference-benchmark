@@ -265,6 +265,23 @@ button { cursor: pointer; font-family: inherit; }
 .data-table td { font-size: .8rem; padding: .4rem .75rem; border-bottom: 1px solid var(--border); }
 .ds-pull-error { color: var(--error); font-size: .72rem; }
 
+/* ── Run labels ───────────────────────────────────────────────────────────── */
+.run-card-label { margin-top: .15rem; min-height: 1.2rem; }
+.run-label-text {
+  font-size: .75rem; color: var(--accent); cursor: text;
+  border-radius: 3px; padding: .05rem .2rem; margin-left: -.2rem;
+  display: inline-block;
+}
+.run-label-text:hover { background: var(--accent-bg); }
+.run-label-placeholder { color: var(--text-dim); }
+.run-label-input {
+  width: 100%; font-size: .75rem; padding: .1rem .3rem;
+  height: 1.5rem; line-height: 1.4; display: block;
+}
+.detail-label { margin-top: .35rem; }
+.detail-label .run-label-text { font-size: .82rem; }
+.detail-label .run-label-input { font-size: .82rem; padding: .2rem .4rem; max-width: 320px; height: auto; }
+
 /* ── Misc ─────────────────────────────────────────────────────────────────── */
 .mono { font-family: var(--mono); }
 .muted { color: var(--text-muted); font-size: .82rem; padding: 1rem; }

@@ -8,9 +8,10 @@ Endpoints:
   GET  /api/models
   GET  /api/datasets
   POST /api/datasets/pull
-  GET  /api/runs
-  POST /api/runs
+  GET    /api/runs
+  POST   /api/runs
   GET    /api/runs/{run_id}
+  PATCH  /api/runs/{run_id}              update label ({"label": "…"})
   DELETE /api/runs/{run_id}
   GET    /api/runs/{run_id}/results.csv  downloadable CSV of parsed metrics
   GET    /api/runs/{run_id}/stream      Server-Sent Events
@@ -69,6 +70,8 @@ _SCHEMA = """
     )
 """
 
+_MIGRATE_LABEL = "ALTER TABLE runs ADD COLUMN label TEXT"
+
 
 def _set_db_path(path: Path) -> None:
     """Override DB path; closes any open thread-local connection (used in tests)."""
@@ -91,6 +94,10 @@ def _get_db() -> sqlite3.Connection:
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA journal_mode=WAL")
         conn.execute(_SCHEMA)
+        try:
+            conn.execute(_MIGRATE_LABEL)
+        except sqlite3.OperationalError:
+            pass  # column already exists
         conn.commit()
         _thread_local.conn = conn
     return conn
@@ -133,6 +140,11 @@ class RunResult(BaseModel):
     output: str | None = None
     created_at: str
     finished_at: str | None = None
+    label: str | None = None
+
+
+class LabelUpdate(BaseModel):
+    label: str
 
 
 # ── Core helpers ──────────────────────────────────────────────────────────────
@@ -143,6 +155,7 @@ def _now_iso() -> str:
 
 
 def _row_to_result(row: sqlite3.Row) -> RunResult:
+    cols = row.keys()
     return RunResult(
         run_id=row["id"],
         status=row["status"],
@@ -150,6 +163,7 @@ def _row_to_result(row: sqlite3.Row) -> RunResult:
         output=row["output"],
         created_at=row["created_at"],
         finished_at=row["finished_at"],
+        label=row["label"] if "label" in cols else None,
     )
 
 
@@ -419,6 +433,10 @@ def _render_run_detail(run: RunResult) -> str:
         else ""
     )
 
+    lbl = run.label or ""
+    detail_label_text = html.escape(lbl) if lbl else "Add label…"
+    detail_label_cls = "run-label-text" if lbl else "run-label-text run-label-placeholder"
+
     return (
         f'<div id="detail-inner" data-run-id="{rid}" data-status="{html.escape(run.status)}">\n'
         f'  <div class="detail-header">\n'
@@ -431,6 +449,12 @@ def _render_run_detail(run: RunResult) -> str:
         f"      </div>\n"
         f'      <div class="detail-meta">\n'
         f'        <span class="detail-model">{model_display}</span> · {html.escape(created)}\n'
+        f"      </div>\n"
+        f'      <div class="detail-label" id="detail-lbl-{rid}"'
+        f' data-label="{html.escape(lbl)}">\n'
+        f'        <span class="{detail_label_cls}"'
+        f" onclick=\"startEditLabel(event,'{rid}')\">"
+        f"{detail_label_text}</span>\n"
         f"      </div>\n"
         f"    </div>\n"
         f"  </div>\n"
@@ -482,6 +506,10 @@ def _render_run_list_cards(results: list[RunResult]) -> str:
             meta_parts.append(html.escape(toks_str))
         meta_parts.append(html.escape(created))
 
+        label = run.label or ""
+        label_text = html.escape(label) if label else "Add label…"
+        label_cls = "run-label-text" if label else "run-label-text run-label-placeholder"
+
         parts.append(
             f'<div class="run-card" data-run-id="{html.escape(rid)}"'
             f" onclick=\"selectRun('{html.escape(rid)}')\">\n"
@@ -494,6 +522,12 @@ def _render_run_list_cards(results: list[RunResult]) -> str:
             f" onclick=\"toggleCompare(event,'{html.escape(rid)}')\">\n"
             f"  </div>\n"
             f'  <div class="run-card-model">{html.escape(model_short)}</div>\n'
+            f'  <div class="run-card-label" id="lbl-{html.escape(rid)}"'
+            f' data-label="{html.escape(label)}">\n'
+            f'    <span class="{label_cls}"'
+            f" onclick=\"startEditLabel(event,'{html.escape(rid)}')\">"
+            f"{label_text}</span>\n"
+            f"  </div>\n"
             f'  <div class="run-card-meta">{" · ".join(meta_parts)}</div>\n'
             f"</div>"
         )
@@ -862,6 +896,17 @@ async def delete_run(run_id: str) -> None:
     _buffers.pop(run_id, None)
 
 
+@app.patch("/api/runs/{run_id}", status_code=204)
+async def update_run_label(run_id: str, body: LabelUpdate) -> None:
+    label: str | None = body.label.strip()[:80] or None
+    db = _get_db()
+    row = db.execute("SELECT id FROM runs WHERE id=?", (run_id,)).fetchone()
+    if row is None:
+        raise HTTPException(status_code=404, detail=f"Run {run_id!r} not found")
+    db.execute("UPDATE runs SET label=? WHERE id=?", (label, run_id))
+    db.commit()
+
+
 @app.get("/api/runs/{run_id}/results.csv")
 async def download_run_csv(run_id: str) -> Response:
     db = _get_db()
@@ -876,11 +921,13 @@ async def download_run_csv(run_id: str) -> Response:
     buf = io.StringIO()
     writer = csv.writer(buf)
     writer.writerow(
-        ["run_id", "backend", "model", "status", "created_at", "finished_at"] + _NUMERIC_METRIC_KEYS
+        ["run_id", "label", "backend", "model", "status", "created_at", "finished_at"]
+        + _NUMERIC_METRIC_KEYS
     )
     writer.writerow(
         [
             run.run_id,
+            run.label or "",
             cfg.get("backend", ""),
             cfg.get("model", ""),
             run.status,
@@ -953,6 +1000,7 @@ async def run_list_fragment(q: str | None = None, status: str | None = None) -> 
             if q_lower in (r.config or {}).get("model", "").lower()
             or q_lower in (r.config or {}).get("backend", "").lower()
             or r.run_id.startswith(q_lower)
+            or q_lower in (r.label or "").lower()
         ]
     return _render_run_list_cards(results)
 

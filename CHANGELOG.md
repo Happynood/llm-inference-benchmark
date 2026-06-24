@@ -16,6 +16,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Run labels in the Web UI**: each benchmark run can now have a short text label (up to
+  80 characters) that you set by clicking the label area on a sidebar run card or the run
+  detail panel.  Labels appear inline, are saved instantly without a page reload, and are
+  included in the sidebar keyword search so you can filter by names like "baseline" or
+  "experiment-1".  The CSV export gains a `label` column as well.
+
 - **Run search and filter in the Web UI sidebar**: a compact filter bar above the run list
   lets you narrow results by keyword (model name, backend, or run ID prefix) and by status
   (All / done / error / running / pending).  The periodic 3-second auto-refresh respects
