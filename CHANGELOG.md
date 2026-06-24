@@ -9,6 +9,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Docker `webui-gpu` service**: new `webui-gpu` build target in `Dockerfile` (based on
+  `nvidia/cuda:12.6.0-devel-ubuntu22.04`) and matching service in `docker-compose.yml` —
+  run `docker compose up webui-gpu` to get the full Web UI dashboard with GPU-accelerated
+  llama-cpp inference on port 8080.  Both the `server` and `llama-cpp` (CUDA) extras are
+  bundled into the image so benchmarks run on-GPU without any additional setup.
+  The service shares the same volumes as `webui` (named `llm-bench-data`, read-only `~/models`
+  mount) and exposes `NVIDIA_VISIBLE_DEVICES=all` and `NVIDIA_DRIVER_CAPABILITIES=compute,utility`.
+
 - **Docker `webui` service**: new `webui` build target in `Dockerfile` and matching
   `webui` service in `docker-compose.yml` — run `docker compose up webui` to start the
   `llm-bench serve` dashboard on port 8080 without any local Python installation.  Run

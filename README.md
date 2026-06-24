@@ -381,6 +381,23 @@ and the HuggingFace cache at `~/.cache/huggingface` on the host are automaticall
 inside the container via the volume bindings in `docker-compose.yml`.  Results persist in a
 named Docker volume (`llm-bench-data`) across container restarts.
 
+### Running the Web UI with Docker + GPU
+
+The `webui-gpu` build target combines the Web UI dashboard with GPU-accelerated llama-cpp
+(compiled with `GGML_CUDA=ON` against `nvidia/cuda:12.6.0-devel-ubuntu22.04`).  Requires
+the [NVIDIA Container Toolkit](https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/install-guide.html).
+
+```bash
+# Start the GPU-enabled dashboard (rebuilds the image if needed)
+docker compose up webui-gpu
+
+# Open http://localhost:8080 in your browser
+# Verify GPU is active: GET http://localhost:8080/api/capabilities
+# → {"llama_cpp_gpu": true, ...}
+```
+
+All volume bindings are identical to `webui` — models and run results persist across restarts.
+
 ---
 
 ## Web UI
