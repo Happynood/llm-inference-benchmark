@@ -463,6 +463,8 @@ def _render_run_detail(run: RunResult) -> str:
         f"  {hw_html}\n"
         f"\n"
         f'  <div class="detail-actions">\n'
+        f'    <button class="btn btn-sm btn-outline"'
+        f" onclick=\"cloneRun('{rid}')\">Clone</button>\n"
         f'    <button class="btn btn-sm btn-outline btn-danger"'
         f" onclick=\"deleteRun('{rid}')\">Delete</button>\n"
         f'    <a href="/runs/{rid}/pareto.html"'

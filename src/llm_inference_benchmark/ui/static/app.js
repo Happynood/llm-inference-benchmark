@@ -162,6 +162,73 @@ function deleteRun(runId) {
   }).catch(function(err) { alert('Delete failed: ' + err.message); });
 }
 
+/* ── Clone run ───────────────────────────────────────────────────────────── */
+
+function cloneRun(runId) {
+  fetch('/api/runs/' + runId).then(function(r) {
+    if (!r.ok) { alert('Could not load run config.'); return; }
+    return r.json();
+  }).then(function(run) {
+    if (!run) return;
+    _pendingCloneConfig = run.config || {};
+    openNewRunModal();
+  }).catch(function(err) { alert('Clone failed: ' + err.message); });
+}
+
+function applyCloneConfig(cfg) {
+  /* Set model */
+  var modelSel = document.getElementById('f-model');
+  if (modelSel && cfg.model) {
+    for (var i = 0; i < modelSel.options.length; i++) {
+      if (modelSel.options[i].value === cfg.model) {
+        modelSel.selectedIndex = i;
+        break;
+      }
+    }
+    var hintEl = document.getElementById('model-hint');
+    if (hintEl) {
+      hintEl.textContent = cfg.model.length > 60 ? '…' + cfg.model.slice(-57) : cfg.model;
+    }
+  }
+
+  /* Set backend and render its fields */
+  var backendSel = document.getElementById('f-backend');
+  if (backendSel && cfg.backend) {
+    backendSel.value = cfg.backend;
+  }
+  onBackendChange();
+
+  /* Set run settings */
+  if (cfg.requests !== undefined) {
+    var el = document.getElementById('f-requests');
+    if (el) el.value = cfg.requests;
+  }
+  if (cfg.concurrency !== undefined) {
+    var el2 = document.getElementById('f-concurrency');
+    if (el2) el2.value = cfg.concurrency;
+  }
+  if (cfg.warmup_requests !== undefined) {
+    var el3 = document.getElementById('f-warmup');
+    if (el3) el3.value = cfg.warmup_requests;
+  }
+
+  /* Set backend-specific fields */
+  var backend = (backendSel && backendSel.value) || cfg.backend || '';
+  var fields = BACKEND_FIELDS[backend] || [];
+  fields.forEach(function(f) {
+    var fieldEl = document.getElementById(f.id);
+    if (!fieldEl) return;
+    var parts = f.key.split('.');
+    var val = cfg;
+    for (var j = 0; j < parts.length; j++) {
+      val = val && val[parts[j]];
+    }
+    if (val !== undefined && val !== null) {
+      fieldEl.value = String(val);
+    }
+  });
+}
+
 /* ── Multi-run comparison ────────────────────────────────────────────────── */
 
 function toggleCompare(evt, runId) {
@@ -216,6 +283,8 @@ function overlayClick(evt) {
 
 /* ── Model loading ───────────────────────────────────────────────────────── */
 
+var _pendingCloneConfig = null;
+
 function loadModels() {
   fetch('/api/models').then(function(r) { return r.json(); }).then(function(data) {
     const sel = document.getElementById('f-model');
@@ -232,7 +301,12 @@ function loadModels() {
       const label = tag ? (disp + ' (' + tag + ')') : disp;
       return '<option value="' + esc(val) + '" data-type="' + esc(m.type) + '" title="' + esc(val) + '">' + esc(label) + '</option>';
     }).join('');
-    onModelChange();
+    if (_pendingCloneConfig) {
+      applyCloneConfig(_pendingCloneConfig);
+      _pendingCloneConfig = null;
+    } else {
+      onModelChange();
+    }
   }).catch(function() {
     document.getElementById('f-model').innerHTML = '<option value="">(failed to load)</option>';
   });

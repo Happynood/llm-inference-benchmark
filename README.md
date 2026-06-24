@@ -422,6 +422,10 @@ left and a live detail panel on the right.
   (e.g. VRAM vs throughput, TTFT vs p95 latency, efficiency vs memory); the Pareto front
   is recomputed live in the browser.  A **Download PNG** button exports the chart at
   1200×700 px.
+- **Clone run** — the **Clone** button in the run detail panel opens the New Run modal
+  pre-filled with the selected run's model, backend, backend-specific parameters, and
+  request/concurrency/warmup counts so you can iterate on a configuration with minimal
+  re-entry.
 - **Run labels** — click the label area on any sidebar run card or the detail panel to type
   a short name (up to 80 characters, e.g. "baseline" or "experiment-1").  The label saves
   instantly without a page reload and is included in the sidebar keyword search and CSV export.
@@ -596,6 +600,7 @@ that are already cached with the correct hash.
 - [x] Pareto chart — interactive HTML/Plotly export (`/runs/{id}/pareto.html`)
 - [x] Run search and filter — keyword search + status dropdown in sidebar; auto-refresh respects active filter
 - [x] Run labels — inline-editable name on every run card and detail panel; included in search and CSV export
+- [x] Clone run — pre-fills New Run modal from an existing run's config for fast iteration
 
 ### Phase 3 — Real-World Datasets
 
