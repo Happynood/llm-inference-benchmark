@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [1.4.0] - 2026-06-25
+
 ### Added
 
 - **VRAM-aware model suggestions in `llm-bench pull`**: when a requested GGUF file
