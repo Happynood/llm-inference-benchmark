@@ -24,9 +24,30 @@
     </div>
 
     <div id="tab-runs" class="tab-panel">
+      <div class="run-filter-bar">
+        <input type="text" id="run-search" name="q" class="form-input form-input-sm" placeholder="Search…"
+               hx-get="/api/ui/run-list"
+               hx-trigger="input changed delay:300ms"
+               hx-target="#run-list"
+               hx-swap="innerHTML"
+               hx-include="#run-status-filter">
+        <select id="run-status-filter" name="status" class="form-input form-input-sm"
+                hx-get="/api/ui/run-list"
+                hx-trigger="change"
+                hx-target="#run-list"
+                hx-swap="innerHTML"
+                hx-include="#run-search">
+          <option value="">All</option>
+          <option value="done">Done</option>
+          <option value="error">Error</option>
+          <option value="running">Running</option>
+          <option value="pending">Pending</option>
+        </select>
+      </div>
       <div id="run-list"
            hx-get="/api/ui/run-list"
            hx-trigger="load, every 3s"
+           hx-include="#run-search,#run-status-filter"
            hx-swap="innerHTML">
         <div class="loading">Loading…</div>
       </div>

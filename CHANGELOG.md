@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **Run search and filter in the Web UI sidebar**: a compact filter bar above the run list
+  lets you narrow results by keyword (model name, backend, or run ID prefix) and by status
+  (All / done / error / running / pending).  The periodic 3-second auto-refresh respects
+  the active filter so live runs continue to appear while the list is narrowed.
+
 ## [1.4.0] - 2026-06-25
 
 ### Added

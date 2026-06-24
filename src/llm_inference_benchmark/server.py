@@ -940,9 +940,20 @@ async def stream_run(run_id: str) -> StreamingResponse:
 
 
 @app.get("/api/ui/run-list", response_class=HTMLResponse)
-async def run_list_fragment() -> str:
+async def run_list_fragment(q: str | None = None, status: str | None = None) -> str:
     rows = _get_db().execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
     results = [_row_to_result(r) for r in rows]
+    if status:
+        results = [r for r in results if r.status == status]
+    if q:
+        q_lower = q.lower()
+        results = [
+            r
+            for r in results
+            if q_lower in (r.config or {}).get("model", "").lower()
+            or q_lower in (r.config or {}).get("backend", "").lower()
+            or r.run_id.startswith(q_lower)
+        ]
     return _render_run_list_cards(results)
 
 
