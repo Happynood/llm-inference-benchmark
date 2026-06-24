@@ -9,6 +9,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Docker `webui` service**: new `webui` build target in `Dockerfile` and matching
+  `webui` service in `docker-compose.yml` — run `docker compose up webui` to start the
+  `llm-bench serve` dashboard on port 8080 without any local Python installation.  Run
+  results persist in a named Docker volume (`llm-bench-data`); GGUF models from `~/models/`
+  on the host are mounted read-only at `/models` inside the container.
+
+- **Full local validation checklist**: `docs/quickstart.md` now includes a step-by-step
+  sequence (unit tests → `verify` → CLI smoke → Web UI health check → optional backends)
+  to validate the entire stack end-to-end before publishing a release.
+
+### Fixed
+
+- **Docker documentation**: corrected references to the non-existent `Dockerfile.cuda` and
+  `llm-bench-cuda` service — the repository uses a single multi-stage `Dockerfile` with
+  `--target cpu` / `--target gpu` targets and `bench-cpu` / `bench-gpu` compose service
+  names.
+
+- **Web UI llama-cpp GPU**: `README.md` and `docs/quickstart.md` now explain that the GPU
+  warning banner shown when `llama-cpp` is selected is expected on CPU-only installs, and
+  document the two commands to enable GPU acceleration (`make install-llama-cpp-prebuilt`
+  or `make install-llama-cpp-cuda`).
+
 - **Interactive Pareto chart axis selectors**: the `/runs/{id}/pareto.html` page now lets
   you pick any two metrics for the X and Y axes via dropdown menus — e.g. VRAM vs
   throughput, TTFT vs latency, or efficiency vs p95 latency.  The Pareto front is

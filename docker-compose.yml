@@ -29,4 +29,20 @@ services:
       - ./configs:/app/configs
       - ./results:/app/results
       - ${HOME}/models:/models:ro
-    # Example: llm-bench run --config /app/configs/llama-cpp-gpu.yaml --output /app/results/bench.csv
+    # Example: docker compose run --rm bench-gpu --config /app/configs/llama-cpp-gpu.yaml --output /app/results/bench-gpu.csv
+
+  webui:
+    build:
+      context: .
+      target: webui
+    image: llm-bench:webui
+    ports:
+      - "8080:8080"
+    volumes:
+      - llm-bench-data:/root/.llm-bench
+      - ${HOME}/.cache/huggingface:/root/.cache/huggingface
+      - ${HOME}/models:/models:ro
+    # Open http://localhost:8080 after: docker compose up webui
+
+volumes:
+  llm-bench-data:

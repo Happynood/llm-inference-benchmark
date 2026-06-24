@@ -237,3 +237,79 @@ make lint        # ruff check .
 make format      # ruff format .
 make typecheck   # pyright
 ```
+
+## Web UI
+
+Start the browser dashboard:
+
+```bash
+uv pip install 'llm-inference-benchmark[server]'
+uv run llm-bench serve
+```
+
+Open <http://localhost:8080> and use the **+ New Run** form to configure and submit benchmark runs.
+
+### llama-cpp GPU in the Web UI
+
+When you select `llama-cpp` as the backend, the dashboard shows a warning banner if
+`llama-cpp-python` was installed without CUDA support (which is the default).  The warning
+means benchmarks will run on CPU regardless of the GPU Layers setting — this is not a
+crash, just reduced performance.
+
+To fix it, reinstall with GPU support before starting `llm-bench serve`:
+
+```bash
+# Option A — Pre-built CUDA wheel (no compiler needed)
+make install-llama-cpp-prebuilt
+
+# Option B — Build from source (requires nvcc)
+make install-llama-cpp-cuda
+```
+
+Restart `llm-bench serve` after reinstalling.
+
+### Web UI via Docker
+
+Run the dashboard without a local Python installation:
+
+```bash
+docker compose up webui
+# Open http://localhost:8080
+```
+
+Run results persist across restarts in a named Docker volume (`llm-bench-data`).
+GGUF models at `~/models/` on the host are visible inside the container at `/models`.
+
+## Full local validation
+
+Run these steps end-to-end to verify the entire stack before a release:
+
+```bash
+# 1. Unit tests (no model downloads, CI-safe)
+make test
+
+# 2. Check which backends are detected
+uv run llm-bench verify
+
+# 3. Smoke-test the CLI pipeline with the mock backend
+uv run llm-bench --config configs/example.yaml --output results/local-smoke.csv
+uv run llm-bench compare results/local-smoke.csv
+
+# 4. Smoke-test the Web UI health endpoint
+uv pip install 'llm-inference-benchmark[server]'
+uv run llm-bench serve &
+sleep 2 && curl -sf http://localhost:8080/api/health && echo " OK"
+kill %1
+
+# 5. (Optional) Transformers backend — downloads sshleifer/tiny-gpt2 (~4 MB)
+uv sync --extra transformers
+uv run llm-bench --config configs/transformers-cpu.yaml --output results/local-hf.csv
+
+# 6. (Optional) llama.cpp — requires a GGUF file on disk
+uv sync --extra llama-cpp
+# edit configs/llama-cpp-cpu.yaml: set model: /path/to/model.gguf
+uv run llm-bench --config configs/llama-cpp-cpu.yaml --output results/local-llama.csv
+```
+
+Steps 1–4 are CI-safe and require no model downloads.  Steps 5–6 are optional but recommended
+before publishing a release.

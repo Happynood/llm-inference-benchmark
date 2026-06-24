@@ -67,3 +67,29 @@ RUN if [ "$SKIP_LLAMA_CPP" = "1" ]; then \
     fi
 
 CMD ["llm-bench", "--help"]
+
+# ---- webui: Web API + dashboard (llm-bench serve) ----
+FROM ubuntu:22.04 AS webui
+ENV DEBIAN_FRONTEND=noninteractive \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PATH="/app/.venv/bin:$PATH"
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential curl git python3 python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+
+WORKDIR /app
+COPY pyproject.toml uv.lock ./
+
+RUN uv sync --extra server --no-dev --frozen --no-install-project
+
+COPY src/ ./src/
+COPY README.md ./
+
+RUN uv sync --extra server --no-dev --frozen
+
+EXPOSE 8080
+CMD ["llm-bench", "serve", "--host", "0.0.0.0", "--port", "8080"]
