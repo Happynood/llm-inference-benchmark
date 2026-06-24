@@ -19,18 +19,6 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   sequence (unit tests → `verify` → CLI smoke → Web UI health check → optional backends)
   to validate the entire stack end-to-end before publishing a release.
 
-### Fixed
-
-- **Docker documentation**: corrected references to the non-existent `Dockerfile.cuda` and
-  `llm-bench-cuda` service — the repository uses a single multi-stage `Dockerfile` with
-  `--target cpu` / `--target gpu` targets and `bench-cpu` / `bench-gpu` compose service
-  names.
-
-- **Web UI llama-cpp GPU**: `README.md` and `docs/quickstart.md` now explain that the GPU
-  warning banner shown when `llama-cpp` is selected is expected on CPU-only installs, and
-  document the two commands to enable GPU acceleration (`make install-llama-cpp-prebuilt`
-  or `make install-llama-cpp-cuda`).
-
 - **Interactive Pareto chart axis selectors**: the `/runs/{id}/pareto.html` page now lets
   you pick any two metrics for the X and Y axes via dropdown menus — e.g. VRAM vs
   throughput, TTFT vs latency, or efficiency vs p95 latency.  The Pareto front is
@@ -135,6 +123,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   `False` and the Web UI always showed the GPU warning even when GPU inference was
   functional.  The endpoint now calls `_preload_nvidia_cuda_libs()` first, matching the
   behaviour of `backends/llama_cpp.py`.
+
+- **Docker documentation**: corrected references to the non-existent `Dockerfile.cuda` and
+  `llm-bench-cuda` service — the repository uses a single multi-stage `Dockerfile` with
+  `--target cpu` / `--target gpu` targets and `bench-cpu` / `bench-gpu` compose service
+  names.
+
+- **Web UI llama-cpp GPU**: `README.md` and `docs/quickstart.md` now explain that the GPU
+  warning banner shown when `llama-cpp` is selected is expected on CPU-only installs, and
+  document the two commands to enable GPU acceleration (`make install-llama-cpp-prebuilt`
+  or `make install-llama-cpp-cuda`).
 
 - **llama-cpp GPU offload warning in the UI**: when the user selects the
   **llama-cpp** backend in the New Run modal, the UI now fetches `/api/capabilities`
