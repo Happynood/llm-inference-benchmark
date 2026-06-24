@@ -4,6 +4,8 @@ services:
       context: .
       target: cpu
     image: llm-bench:cpu
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
     volumes:
       - ./configs:/app/configs
       - ./results:/app/results
@@ -25,6 +27,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - HF_TOKEN=${HF_TOKEN:-}
     volumes:
       - ./configs:/app/configs
       - ./results:/app/results
@@ -38,6 +41,8 @@ services:
     image: llm-bench:webui
     ports:
       - "8080:8080"
+    environment:
+      - HF_TOKEN=${HF_TOKEN:-}
     volumes:
       - llm-bench-data:/root/.llm-bench
       - ${HOME}/.cache/huggingface:/root/.cache/huggingface
@@ -61,6 +66,7 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - HF_TOKEN=${HF_TOKEN:-}
     volumes:
       - llm-bench-data:/root/.llm-bench
       - ${HOME}/.cache/huggingface:/root/.cache/huggingface

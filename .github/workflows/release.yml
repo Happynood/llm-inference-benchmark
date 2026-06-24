@@ -8,12 +8,19 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
+    timeout-minutes: 120
     permissions:
       contents: write
       packages: write
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /usr/share/swift /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+          sudo docker image prune -af
+          sudo apt-get clean
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
@@ -59,3 +66,27 @@ jobs:
             ${{ steps.meta.outputs.image }}:gpu-latest
           cache-from: type=gha,scope=gpu
           cache-to: type=gha,mode=max,scope=gpu
+
+      - name: Build and push Web UI image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: webui
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:webui-${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:webui-latest
+          cache-from: type=gha,scope=webui
+          cache-to: type=gha,mode=max,scope=webui
+
+      - name: Build and push Web UI GPU image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          target: webui-gpu
+          push: true
+          tags: |
+            ${{ steps.meta.outputs.image }}:webui-gpu-${{ steps.meta.outputs.version }}
+            ${{ steps.meta.outputs.image }}:webui-gpu-latest
+          cache-from: type=gha,scope=webui-gpu
+          cache-to: type=gha,mode=max,scope=webui-gpu
