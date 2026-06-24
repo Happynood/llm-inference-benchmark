@@ -1153,7 +1153,8 @@ async def test_patch_run_label_empty_string_clears_label(client: httpx.AsyncClie
     db = _get_db()
     run_id = "cccccccc-0000-0000-0000-000000000003"
     db.execute(
-        "INSERT INTO runs (id, status, config, created_at, label) VALUES (?, 'done', '{}', ?, 'old')",
+        "INSERT INTO runs (id, status, config, created_at, label)"
+        " VALUES (?, 'done', '{}', ?, 'old')",
         (run_id, _now_iso()),
     )
     db.commit()
