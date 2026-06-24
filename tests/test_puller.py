@@ -11,6 +11,7 @@ from llm_inference_benchmark.puller import (
     _sha256_file,
     pull_gguf,
     pull_transformers,
+    suggest_fitting_variants,
 )
 
 
@@ -144,6 +145,132 @@ class TestPullGguf:
 
         assert result.skipped is False
         assert downloaded.exists()
+
+
+class TestSuggestFittingVariants:
+    def _make_info(self, *files: tuple[str, int]) -> MagicMock:
+        siblings = [_sibling(name, size) for name, size in files]
+        return _model_info(*siblings)
+
+    def test_returns_files_that_fit(self) -> None:
+        gb = 1024**3
+        info = self._make_info(
+            ("model-Q4_K_M.gguf", int(1.5 * gb)),
+            ("model-Q8_0.gguf", int(4.0 * gb)),
+        )
+        with patch("llm_inference_benchmark.puller.hf_model_info", return_value=info):
+            result = suggest_fitting_variants("owner/repo", vram_gb=3.0)
+        names = [r[0] for r in result]
+        assert "model-Q4_K_M.gguf" in names
+        assert "model-Q8_0.gguf" not in names
+
+    def test_sorted_descending_by_size(self) -> None:
+        gb = 1024**3
+        info = self._make_info(
+            ("model-Q4_K_M.gguf", int(1.5 * gb)),
+            ("model-Q5_K_M.gguf", int(2.0 * gb)),
+            ("model-Q8_0.gguf", int(4.0 * gb)),
+        )
+        with patch("llm_inference_benchmark.puller.hf_model_info", return_value=info):
+            result = suggest_fitting_variants("owner/repo", vram_gb=3.0)
+        sizes = [r[1] for r in result]
+        assert sizes == sorted(sizes, reverse=True)
+
+    def test_excludes_unknown_size(self) -> None:
+        info = self._make_info(("model-Q4_K_M.gguf", 0))
+        with patch("llm_inference_benchmark.puller.hf_model_info", return_value=info):
+            result = suggest_fitting_variants("owner/repo", vram_gb=10.0)
+        assert result == []
+
+    def test_all_fit(self) -> None:
+        gb = 1024**3
+        info = self._make_info(
+            ("model-Q4_K_M.gguf", int(1.0 * gb)),
+            ("model-Q8_0.gguf", int(2.0 * gb)),
+        )
+        with patch("llm_inference_benchmark.puller.hf_model_info", return_value=info):
+            result = suggest_fitting_variants("owner/repo", vram_gb=8.0)
+        assert len(result) == 2
+
+
+def _make_hw_profile(vram_gb: float | None) -> MagicMock:
+    profile = MagicMock()
+    profile.vram_gb = vram_gb
+    return profile
+
+
+class TestWarnVram:
+    """Integration-style tests for the VRAM warning printed by pull_gguf."""
+
+    def _run_pull(
+        self,
+        tmp_path: Path,
+        file_size_bytes: int,
+        vram_gb: float | None,
+        all_files: list[tuple[str, int]],
+        capsys: pytest.CaptureFixture[str],
+    ) -> str:
+        content = b"x"
+        sha = hashlib.sha256(content).hexdigest()
+        downloaded = tmp_path / "model-Q8_0.gguf"
+
+        def fake_download(**_: object) -> str:
+            downloaded.write_bytes(content)
+            return str(downloaded)
+
+        siblings = [_sibling(name, size) for name, size in all_files]
+        info = _model_info(*siblings, _sibling("model-Q8_0.gguf", file_size_bytes, sha))
+
+        hw_patch = patch(
+            "llm_inference_benchmark.puller._hw.detect",
+            return_value=_make_hw_profile(vram_gb),
+        )
+        dl_patch = patch(
+            "llm_inference_benchmark.puller.hf_hub_download",
+            side_effect=fake_download,
+        )
+        with patch("llm_inference_benchmark.puller.hf_model_info", return_value=info):
+            with hw_patch, dl_patch:
+                pull_gguf("owner/repo", "Q8_0", dest_dir=tmp_path)
+
+        return capsys.readouterr().out
+
+    def test_no_gpu_no_warning(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        size = int(3.0 * 1024**3)
+        out = self._run_pull(tmp_path, size, None, [], capsys)
+        assert "Warning" not in out
+
+    def test_fits_no_warning(self, tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+        size = int(2.0 * 1024**3)
+        out = self._run_pull(tmp_path, size, 8.0, [], capsys)
+        assert "Warning" not in out
+
+    def test_exceeds_vram_prints_warning(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        size = int(5.0 * 1024**3)
+        out = self._run_pull(tmp_path, size, 4.0, [], capsys)
+        assert "Warning" in out
+        assert "VRAM" in out
+
+    def test_exceeds_vram_lists_alternatives(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        size = int(5.0 * 1024**3)
+        alternatives = [("model-Q4_K_M.gguf", int(2.0 * 1024**3))]
+        out = self._run_pull(tmp_path, size, 4.0, alternatives, capsys)
+        assert "Q4_K_M" in out
+        assert "llm-bench pull" in out
+
+    def test_no_fitting_alternative_no_suggestion_list(
+        self, tmp_path: Path, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        size = int(5.0 * 1024**3)
+        # All other files are also too large
+        alternatives = [("model-Q6_K.gguf", int(4.5 * 1024**3))]
+        out = self._run_pull(tmp_path, size, 4.0, alternatives, capsys)
+        assert "Warning" in out
+        assert "llm-bench pull" not in out
 
 
 class TestPullTransformers:

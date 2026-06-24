@@ -8,9 +8,14 @@ from typing import Literal
 from huggingface_hub import hf_hub_download, snapshot_download
 from huggingface_hub import model_info as hf_model_info
 
+from llm_inference_benchmark import hardware as _hw
+
 _DEFAULT_MODELS_DIR = Path.home() / "models"
 _DEFAULT_MAX_SIZE_GB = 10.0
 _BYTES_PER_GB = 1024**3
+# A GGUF file requires roughly this multiple of its file size in VRAM
+# (accounts for KV cache and runtime overhead at default context lengths).
+_VRAM_OVERHEAD_FACTOR = 1.1
 
 
 @dataclass
@@ -53,6 +58,73 @@ def _find_gguf_sibling(repo_id: str, quant: str, token: str | None) -> tuple[str
     return matches[0]
 
 
+def _list_all_gguf_files(repo_id: str, token: str | None) -> list[tuple[str, int, str | None]]:
+    """Return ``(filename, size_bytes, sha256_or_None)`` for every GGUF file in *repo_id*."""
+    info = hf_model_info(repo_id, token=token, files_metadata=True)
+    results: list[tuple[str, int, str | None]] = []
+    for sibling in info.siblings or []:
+        name: str = sibling.rfilename
+        if not name.lower().endswith(".gguf"):
+            continue
+        size: int = sibling.size or 0
+        sha256: str | None = sibling.lfs.sha256 if sibling.lfs is not None else None
+        results.append((name, size, sha256))
+    return results
+
+
+def suggest_fitting_variants(
+    repo_id: str,
+    vram_gb: float,
+    token: str | None = None,
+) -> list[tuple[str, float]]:
+    """Return GGUF variants from *repo_id* whose estimated VRAM footprint fits in *vram_gb*.
+
+    Returns a list of ``(filename, estimated_size_gb)`` sorted by descending size
+    (highest quality that still fits first).  Files with unknown size are excluded.
+    """
+    all_files = _list_all_gguf_files(repo_id, token)
+    fitting: list[tuple[str, float]] = []
+    for name, size_bytes, _ in all_files:
+        if not size_bytes:
+            continue
+        size_gb = size_bytes / _BYTES_PER_GB
+        if size_gb * _VRAM_OVERHEAD_FACTOR <= vram_gb:
+            fitting.append((name, round(size_gb, 2)))
+    fitting.sort(key=lambda t: t[1], reverse=True)
+    return fitting
+
+
+def _warn_vram(repo_id: str, filename: str, size_gb: float, token: str | None) -> None:
+    """Print a VRAM warning and fitting alternatives when *filename* won't fit in GPU memory."""
+    profile = _hw.detect()
+    vram_gb = profile.vram_gb
+    if vram_gb is None:
+        return
+    estimated_vram = size_gb * _VRAM_OVERHEAD_FACTOR
+    if estimated_vram <= vram_gb:
+        return
+
+    print(
+        f"Warning: {filename} requires ~{estimated_vram:.1f} GB VRAM "
+        f"but only {vram_gb:.1f} GB is available."
+    )
+    try:
+        variants = suggest_fitting_variants(repo_id, vram_gb, token)
+    except Exception:
+        variants = []
+    if variants:
+        print(f"Variants from this repo that fit in {vram_gb:.1f} GB VRAM:")
+        for name, sg in variants:
+            if name == filename:
+                continue
+            # Extract quant tag: last component before .gguf, upper-cased.
+            stem = Path(name).stem
+            quant_hint = stem.split("-")[-1].upper() if "-" in stem else stem.upper()
+            print(
+                f"  {quant_hint:12s} {sg:.1f} GB  →  llm-bench pull {repo_id} --quant {quant_hint}"
+            )
+
+
 def pull_gguf(
     repo_id: str,
     quant: str,
@@ -80,6 +152,7 @@ def pull_gguf(
                 f"{filename} is {size_gb:.1f} GB — exceeds --max-size-gb {max_size_gb}. "
                 "Raise the limit or choose a smaller quantization."
             )
+        _warn_vram(repo_id, filename, size_gb, token)
 
     local_path = dest / Path(filename).name
 
