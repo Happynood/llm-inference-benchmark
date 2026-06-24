@@ -128,6 +128,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **`/api/capabilities` CUDA preload**: on systems where `llama-cpp-python` was installed
+  from a prebuilt CUDA wheel (libs bundled under `site-packages/nvidia/*/lib/`), the
+  capabilities endpoint was importing `llama_cpp` directly without calling
+  `_preload_nvidia_cuda_libs()`, so `llama_supports_gpu_offload()` silently returned
+  `False` and the Web UI always showed the GPU warning even when GPU inference was
+  functional.  The endpoint now calls `_preload_nvidia_cuda_libs()` first, matching the
+  behaviour of `backends/llama_cpp.py`.
+
 - **llama-cpp GPU offload warning in the UI**: when the user selects the
   **llama-cpp** backend in the New Run modal, the UI now fetches `/api/capabilities`
   and — if GPU offload is unavailable — displays a visible warning explaining that

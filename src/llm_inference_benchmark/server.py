@@ -781,6 +781,14 @@ async def health() -> dict[str, str]:
 @app.get("/api/capabilities")
 async def capabilities() -> dict[str, bool]:
     """Return runtime capability flags for optional backends."""
+    # Preload bundled nvidia-* CUDA libs so llama_cpp's native extension can find them
+    # on driver-only systems (prebuilt CUDA wheel install).  No-op when not installed.
+    try:
+        from llm_inference_benchmark.backends.llama_cpp import _preload_nvidia_cuda_libs
+
+        _preload_nvidia_cuda_libs()
+    except Exception:
+        pass
     llama_gpu = False
     try:
         from llama_cpp import llama_supports_gpu_offload  # type: ignore[import-untyped]
