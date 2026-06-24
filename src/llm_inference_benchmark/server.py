@@ -1010,8 +1010,13 @@ async def stream_run(run_id: str) -> StreamingResponse:
 
 
 @app.get("/api/ui/run-list", response_class=HTMLResponse)
-async def run_list_fragment(q: str | None = None, status: str | None = None) -> str:
-    rows = _get_db().execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
+async def run_list_fragment(
+    q: str | None = None,
+    status: str | None = None,
+    sort: str | None = None,
+) -> str:
+    sql_order = "created_at ASC" if sort == "oldest" else "created_at DESC"
+    rows = _get_db().execute(f"SELECT * FROM runs ORDER BY {sql_order}").fetchall()
     results = [_row_to_result(r) for r in rows]
     if status:
         results = [r for r in results if r.status == status]
@@ -1025,6 +1030,8 @@ async def run_list_fragment(q: str | None = None, status: str | None = None) -> 
             or r.run_id.startswith(q_lower)
             or q_lower in (r.label or "").lower()
         ]
+    if sort == "model":
+        results.sort(key=lambda r: (r.config or {}).get("model", "").lower())
     return _render_run_list_cards(results)
 
 

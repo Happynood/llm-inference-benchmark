@@ -30,24 +30,34 @@
                hx-trigger="input changed delay:300ms"
                hx-target="#run-list"
                hx-swap="innerHTML"
-               hx-include="#run-status-filter">
+               hx-include="#run-status-filter,#run-sort">
         <select id="run-status-filter" name="status" class="form-input form-input-sm"
                 hx-get="/api/ui/run-list"
                 hx-trigger="change"
                 hx-target="#run-list"
                 hx-swap="innerHTML"
-                hx-include="#run-search">
+                hx-include="#run-search,#run-sort">
           <option value="">All</option>
           <option value="done">Done</option>
           <option value="error">Error</option>
           <option value="running">Running</option>
           <option value="pending">Pending</option>
         </select>
+        <select id="run-sort" name="sort" class="form-input form-input-sm"
+                hx-get="/api/ui/run-list"
+                hx-trigger="change"
+                hx-target="#run-list"
+                hx-swap="innerHTML"
+                hx-include="#run-search,#run-status-filter">
+          <option value="newest">Newest</option>
+          <option value="oldest">Oldest</option>
+          <option value="model">Model A→Z</option>
+        </select>
       </div>
       <div id="run-list"
            hx-get="/api/ui/run-list"
            hx-trigger="load, every 3s"
-           hx-include="#run-search,#run-status-filter"
+           hx-include="#run-search,#run-status-filter,#run-sort"
            hx-swap="innerHTML">
         <div class="loading">Loading…</div>
       </div>

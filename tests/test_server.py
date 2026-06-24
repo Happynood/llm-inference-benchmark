@@ -1215,3 +1215,53 @@ async def test_run_list_fragment_searches_label(client: httpx.AsyncClient) -> No
 
     resp2 = await client.get("/api/ui/run-list?q=nomatchwhatsoever")
     assert run_id[:8] not in resp2.text
+
+
+# ── Sort tests ────────────────────────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_run_list_sort_oldest_first(client: httpx.AsyncClient) -> None:
+    """sort=oldest returns runs in ascending created_at order."""
+    db = _get_db()
+    id_a = "ee000001-0000-0000-0000-000000000000"
+    id_b = "ff000001-0000-0000-0000-000000000000"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'done', '{}', ?)",
+        (id_a, "2024-01-01T00:00:00+00:00"),
+    )
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'done', '{}', ?)",
+        (id_b, "2025-01-01T00:00:00+00:00"),
+    )
+    db.commit()
+
+    resp = await client.get("/api/ui/run-list?sort=oldest")
+    assert resp.status_code == 200
+    # id_a was created first; with oldest-first sort it must appear before id_b
+    pos_a = resp.text.index(id_a[:8])
+    pos_b = resp.text.index(id_b[:8])
+    assert pos_a < pos_b, "oldest sort should place ee000001 (2024) before ff000001 (2025)"
+
+
+@pytest.mark.anyio
+async def test_run_list_sort_model_alpha(client: httpx.AsyncClient) -> None:
+    """sort=model returns runs sorted alphabetically by model name."""
+    db = _get_db()
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES"
+        " (?, 'done', '{\"model\":\"zzz-sort-test\"}', ?)",
+        ("ee000002-0000-0000-0000-000000000000", _now_iso()),
+    )
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES"
+        " (?, 'done', '{\"model\":\"aaa-sort-test\"}', ?)",
+        ("ee000003-0000-0000-0000-000000000000", _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.get("/api/ui/run-list?sort=model")
+    assert resp.status_code == 200
+    pos_aaa = resp.text.index("aaa-sort-test")
+    pos_zzz = resp.text.index("zzz-sort-test")
+    assert pos_aaa < pos_zzz, "model sort should place aaa-sort-test before zzz-sort-test"
