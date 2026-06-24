@@ -422,8 +422,11 @@ left and a live detail panel on the right.
   (e.g. VRAM vs throughput, TTFT vs p95 latency, efficiency vs memory); the Pareto front
   is recomputed live in the browser.  A **Download PNG** button exports the chart at
   1200×700 px.
+- **Run labels** — click the label area on any sidebar run card or the detail panel to type
+  a short name (up to 80 characters, e.g. "baseline" or "experiment-1").  The label saves
+  instantly without a page reload and is included in the sidebar keyword search and CSV export.
 - **Search and filter** — a filter bar above the run list lets you narrow results by keyword
-  (model name, backend, or run ID prefix) and by status (All / done / error / running /
+  (model name, backend, run ID prefix, or label) and by status (All / done / error / running /
   pending).  The auto-refresh respects the active filter so live runs still appear.
 - **Delete** button on each run card (running runs are protected with a 409 response).
 - **Download CSV** — completed runs show a **Download CSV** button in the detail panel
@@ -592,6 +595,7 @@ that are already cached with the correct hash.
 - [x] Frontend — HTMX runs table, live SSE log, bar-chart comparison, Plotly Pareto page
 - [x] Pareto chart — interactive HTML/Plotly export (`/runs/{id}/pareto.html`)
 - [x] Run search and filter — keyword search + status dropdown in sidebar; auto-refresh respects active filter
+- [x] Run labels — inline-editable name on every run card and detail panel; included in search and CSV export
 
 ### Phase 3 — Real-World Datasets
 

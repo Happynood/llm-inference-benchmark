@@ -1105,3 +1105,112 @@ async def test_csv_export_running_returns_409(client: httpx.AsyncClient) -> None
 
     resp = await client.get(f"/api/runs/{run_id}/results.csv")
     assert resp.status_code == 409
+
+
+# ── Run label tests ───────────────────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_patch_run_label_saves_and_returns_204(client: httpx.AsyncClient) -> None:
+    """PATCH /api/runs/{id} with a label persists it and returns 204."""
+    db = _get_db()
+    run_id = "cccccccc-0000-0000-0000-000000000001"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'done', '{}', ?)",
+        (run_id, _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.patch(f"/api/runs/{run_id}", json={"label": "baseline"})
+    assert resp.status_code == 204
+
+    row = db.execute("SELECT label FROM runs WHERE id=?", (run_id,)).fetchone()
+    assert row["label"] == "baseline"
+
+
+@pytest.mark.anyio
+async def test_patch_run_label_truncates_to_80_chars(client: httpx.AsyncClient) -> None:
+    """Labels longer than 80 characters are silently truncated."""
+    db = _get_db()
+    run_id = "cccccccc-0000-0000-0000-000000000002"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'done', '{}', ?)",
+        (run_id, _now_iso()),
+    )
+    db.commit()
+
+    long_label = "x" * 120
+    resp = await client.patch(f"/api/runs/{run_id}", json={"label": long_label})
+    assert resp.status_code == 204
+
+    row = db.execute("SELECT label FROM runs WHERE id=?", (run_id,)).fetchone()
+    assert row["label"] == "x" * 80
+
+
+@pytest.mark.anyio
+async def test_patch_run_label_empty_string_clears_label(client: httpx.AsyncClient) -> None:
+    """PATCH with an empty label clears it (stores NULL)."""
+    db = _get_db()
+    run_id = "cccccccc-0000-0000-0000-000000000003"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at, label) VALUES (?, 'done', '{}', ?, 'old')",
+        (run_id, _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.patch(f"/api/runs/{run_id}", json={"label": ""})
+    assert resp.status_code == 204
+
+    row = db.execute("SELECT label FROM runs WHERE id=?", (run_id,)).fetchone()
+    assert row["label"] is None
+
+
+@pytest.mark.anyio
+async def test_patch_run_label_not_found(client: httpx.AsyncClient) -> None:
+    """PATCH on a non-existent run returns 404."""
+    resp = await client.patch("/api/runs/no-such-id", json={"label": "x"})
+    assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_csv_export_includes_label_column(client: httpx.AsyncClient) -> None:
+    """CSV export includes a 'label' column with the run's label value."""
+    import csv
+    import io
+
+    db = _get_db()
+    run_id = "cccccccc-0000-0000-0000-000000000004"
+    db.execute(
+        "INSERT INTO runs (id, status, config, output, created_at, finished_at, label)"
+        " VALUES (?, 'done', '{}', '', ?, ?, 'my-label')",
+        (run_id, _now_iso(), _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.get(f"/api/runs/{run_id}/results.csv")
+    assert resp.status_code == 200
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    header, data = rows[0], rows[1]
+    assert "label" in header
+    label_idx = header.index("label")
+    assert data[label_idx] == "my-label"
+
+
+@pytest.mark.anyio
+async def test_run_list_fragment_searches_label(client: httpx.AsyncClient) -> None:
+    """GET /api/ui/run-list?q= matches against the run label."""
+    db = _get_db()
+    run_id = "cccccccc-0000-0000-0000-000000000005"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at, label)"
+        " VALUES (?, 'done', '{}', ?, 'prod-baseline')",
+        (run_id, _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.get("/api/ui/run-list?q=prod-baseline")
+    assert resp.status_code == 200
+    assert run_id[:8] in resp.text
+
+    resp2 = await client.get("/api/ui/run-list?q=nomatchwhatsoever")
+    assert run_id[:8] not in resp2.text

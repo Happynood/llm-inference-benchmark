@@ -424,6 +424,66 @@ function pullSelectedDataset() {
   }).catch(function(err) { statusEl.textContent = 'Error: ' + err.message; });
 }
 
+/* ── Run label inline editing ────────────────────────────────────────────── */
+
+function startEditLabel(evt, runId) {
+  evt.stopPropagation();
+  var cardContainer = document.getElementById('lbl-' + runId);
+  var detailContainer = document.getElementById('detail-lbl-' + runId);
+  var container = cardContainer || detailContainer;
+  if (!container) return;
+  var currentLabel = container.dataset.label || '';
+  container.innerHTML =
+    '<input class="run-label-input form-input form-input-sm"' +
+    ' value="' + esc(currentLabel) + '"' +
+    ' maxlength="80"' +
+    ' onclick="event.stopPropagation()"' +
+    ' onblur="saveRunLabel(event,\'' + runId + '\')"' +
+    ' onkeydown="labelKeydown(event,\'' + runId + '\')">';
+  container.querySelector('input').focus();
+  container.querySelector('input').select();
+}
+
+function labelKeydown(evt, runId) {
+  if (evt.key === 'Enter') { evt.preventDefault(); evt.target.blur(); }
+  if (evt.key === 'Escape') { cancelEditLabel(evt, runId); }
+}
+
+function cancelEditLabel(evt, runId) {
+  var cardContainer = document.getElementById('lbl-' + runId);
+  var detailContainer = document.getElementById('detail-lbl-' + runId);
+  [cardContainer, detailContainer].forEach(function(c) {
+    if (c) renderLabelSpan(c, runId, c.dataset.label || '');
+  });
+}
+
+function saveRunLabel(evt, runId) {
+  var input = evt.target;
+  var label = input.value.trim().slice(0, 80);
+  fetch('/api/runs/' + runId, {
+    method: 'PATCH',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({label: label}),
+  }).then(function(r) {
+    if (!r.ok) { alert('Failed to save label.'); cancelEditLabel(evt, runId); return; }
+    var cardContainer = document.getElementById('lbl-' + runId);
+    var detailContainer = document.getElementById('detail-lbl-' + runId);
+    [cardContainer, detailContainer].forEach(function(c) {
+      if (c) renderLabelSpan(c, runId, label);
+    });
+  }).catch(function() { alert('Failed to save label.'); cancelEditLabel(evt, runId); });
+}
+
+function renderLabelSpan(container, runId, label) {
+  var text = label || 'Add label…';
+  var cls = label ? 'run-label-text' : 'run-label-text run-label-placeholder';
+  container.dataset.label = label;
+  container.innerHTML =
+    '<span class="' + cls + '"' +
+    ' onclick="startEditLabel(event,\'' + runId + '\')">' +
+    esc(text) + '</span>';
+}
+
 /* ── Init ────────────────────────────────────────────────────────────────── */
 
 document.addEventListener('DOMContentLoaded', function() {
