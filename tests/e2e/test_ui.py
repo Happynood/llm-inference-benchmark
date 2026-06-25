@@ -410,6 +410,16 @@ def test_compare_table_loads_in_main_panel(page: Page, live_server: str) -> None
     expect(page.locator(".detail-title")).to_contain_text("Metric Comparison")
 
 
+def test_compare_chart_loads_in_main_panel(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    _check_two_cards(page)
+    expect(page.locator("#compare-bar")).to_be_visible()
+    page.locator('button:has-text("Chart")').click()
+    page.wait_for_selector("#cmp-chart-div", timeout=8000)
+    expect(page.locator("#cmp-chart-div")).to_be_visible()
+    expect(page.locator(".detail-title")).to_contain_text("Metric Chart")
+
+
 def test_compare_checkboxes_survive_htmx_refresh(page: Page, live_server: str) -> None:
     page.goto(live_server)
     rid0, rid1 = _check_two_cards(page)

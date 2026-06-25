@@ -630,7 +630,7 @@ that are already cached with the correct hash.
 ### Phase 2 — Web UI (complete)
 
 - [x] `llm-bench serve` — FastAPI backend, SQLite result store, SSE streaming
-- [x] Frontend — HTMX runs table, live SSE log, bar-chart comparison, Plotly Pareto page
+- [x] Frontend — HTMX runs table, live SSE log, grouped bar-chart comparison, Plotly Pareto page
 - [x] Pareto chart — interactive HTML/Plotly export (`/runs/{id}/pareto.html`)
 - [x] Run search and filter — keyword search + status dropdown in sidebar; auto-refresh respects active filter
 - [x] Run labels — inline-editable name on every run card and detail panel; included in search and CSV export

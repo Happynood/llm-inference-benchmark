@@ -9,6 +9,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Bar-chart comparison view in the Web UI**: selecting 2 or more runs and clicking the new
+  **Chart** button in the compare bar loads an interactive Plotly grouped bar chart in the
+  main panel.  Each metric is a group of bars (one per run), all normalised to 0–100 % so
+  metrics with different units can be compared on the same axis (100 % = best in the
+  selection).  Hovering a bar shows the actual measured value (e.g. `120.5 tok/s`).  Plotly
+  is loaded lazily from CDN only on the first Chart click, so the dashboard page load is
+  unaffected.
+
 - **Metric comparison table in the Web UI**: selecting 2 or more runs and clicking the new
   **Table** button in the compare bar loads a side-by-side metric table in the main panel.
   Each row is a key metric (throughput, latency, TTFT, VRAM, energy, etc.) and each column

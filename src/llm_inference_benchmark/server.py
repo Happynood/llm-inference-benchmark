@@ -20,6 +20,7 @@ Endpoints:
   GET  /api/ui/runs-table            HTMX HTML fragment — legacy table rows
   GET  /api/ui/datasets-table        HTMX HTML fragment
   GET  /api/ui/compare-table         HTMX HTML fragment — side-by-side metric comparison
+  GET  /api/ui/compare-chart         HTMX HTML fragment — normalised bar chart comparison
   GET  /runs/{run_id}/pareto.html    interactive Plotly scatter page
   GET  /runs/pareto                  multi-run Pareto page
 """
@@ -379,7 +380,7 @@ _DISPLAY_METRICS: list[tuple[str, str, Any]] = [
     ("sanity_pass_rate", "Sanity", lambda v: f"{v * 100:.0f}%"),
 ]
 
-# (key, label, formatter, higher_is_better)
+# (key, short label, formatter, higher_is_better) — used for both table and chart
 _COMPARE_METRICS: list[tuple[str, str, Any, bool]] = [
     ("tokens_per_second", "Throughput", lambda v: f"{v:.1f} tok/s", True),
     ("p50_latency_ms", "p50 Latency", lambda v: f"{v:.0f} ms", False),
@@ -483,6 +484,117 @@ def _render_compare_table(runs: list[RunResult]) -> str:
         f"<thead>{header_row}</thead>\n"
         f"<tbody>{table_body}</tbody>\n"
         f"</table></div>\n"
+        f"</div>\n"
+    )
+
+
+_CHART_METRICS: list[tuple[str, str, str, bool]] = [
+    ("tokens_per_second", "Throughput", "{:.1f} tok/s", True),
+    ("p50_latency_ms", "p50 Lat", "{:.0f} ms", False),
+    ("p95_latency_ms", "p95 Lat", "{:.0f} ms", False),
+    ("p50_ttft_ms", "TTFT", "{:.0f} ms", False),
+    ("peak_vram_memory_mb", "VRAM", "{:.0f} MB", False),
+    ("energy_joules", "Energy", "{:.1f} J", False),
+]
+
+_CHART_COLORS = [
+    "#6366f1",
+    "#f59e0b",
+    "#10b981",
+    "#ef4444",
+    "#8b5cf6",
+    "#ec4899",
+    "#0ea5e9",
+    "#84cc16",
+]
+
+
+def _render_compare_chart(runs: list[RunResult]) -> str:
+    """Return HTML fragment with an embedded Plotly grouped bar chart."""
+    if len(runs) < 2:
+        return "<p class='muted'>Select at least 2 runs to compare.</p>"
+
+    all_metrics = [_parse_metrics_from_output(r.output) for r in runs]
+
+    active: list[tuple[str, str, str, bool, list[float | None]]] = []
+    for key, label, fmt, hib in _CHART_METRICS:
+        vals: list[float | None] = [m.get(key) for m in all_metrics]
+        if any(v is not None for v in vals):
+            active.append((key, label, fmt, hib, vals))
+
+    if not active:
+        run_ids = " vs ".join(r.run_id[:8] for r in runs)
+        return (
+            f"<div id='detail-inner' class='compare-table-wrap'>"
+            f"<div class='detail-header'><div><div class='detail-title'>Metric Chart</div>"
+            f"<div class='detail-meta muted'>{html.escape(run_ids)}</div></div></div>"
+            f"<p class='muted' style='padding:1.5rem'>No metrics available for chart.</p>"
+            f"</div>"
+        )
+
+    traces: list[dict[str, Any]] = []
+    for i, run in enumerate(runs):
+        cfg = run.config or {}
+        model = str(cfg.get("model", "—")).split("/")[-1]
+        backend = str(cfg.get("backend", "—"))
+        run_label = run.label or f"{model}/{backend}"
+        short_id = run.run_id[:8]
+        color = _CHART_COLORS[i % len(_CHART_COLORS)]
+
+        x_labels: list[str] = []
+        y_vals: list[float | None] = []
+        hover: list[str] = []
+
+        for key, label, fmt, hib, all_vals in active:
+            val = all_metrics[i].get(key)
+            valid = [v for v in all_vals if v is not None and v > 0]
+            x_labels.append(label)
+            if val is None or not valid:
+                y_vals.append(None)
+                hover.append("—")
+                continue
+            norm = (val / max(valid) * 100) if hib else (min(valid) / val * 100)
+            y_vals.append(round(norm, 1))
+            hover.append(fmt.format(val))
+
+        traces.append(
+            {
+                "type": "bar",
+                "name": f"{run_label} [{short_id}]",
+                "x": x_labels,
+                "y": y_vals,
+                "text": hover,
+                "hovertemplate": "%{text}<extra>%{fullData.name}</extra>",
+                "marker": {"color": color},
+            }
+        )
+
+    layout: dict[str, Any] = {
+        "barmode": "group",
+        "yaxis": {
+            "title": "Normalised score — higher is better",
+            "range": [0, 115],
+            "ticksuffix": "%",
+        },
+        "legend": {"orientation": "h", "y": -0.25},
+        "margin": {"t": 20, "b": 80, "l": 55, "r": 20},
+        "plot_bgcolor": "#f8f9fa",
+        "paper_bgcolor": "#ffffff",
+    }
+
+    traces_json = html.escape(json.dumps(traces))
+    layout_json = html.escape(json.dumps(layout))
+    run_ids = " vs ".join(r.run_id[:8] for r in runs)
+
+    return (
+        f"<div id='detail-inner' class='compare-table-wrap'>\n"
+        f"<div class='detail-header'><div>"
+        f"<div class='detail-title'>Metric Chart</div>"
+        f"<div class='detail-meta muted'>{html.escape(run_ids)}</div>"
+        f"</div></div>\n"
+        f"<div id='cmp-chart-div' style='width:100%;height:420px'"
+        f" data-traces='{traces_json}'"
+        f" data-layout='{layout_json}'></div>\n"
         f"</div>\n"
     )
 
@@ -1167,6 +1279,30 @@ async def compare_table_fragment(
     id_order = {rid: i for i, rid in enumerate(id_list)}
     results.sort(key=lambda r: id_order.get(r.run_id, 999))
     return _render_compare_table(results)
+
+
+@app.get("/api/ui/compare-chart", response_class=HTMLResponse)
+async def compare_chart_fragment(
+    ids: str = Query(..., description="Comma-separated run IDs"),
+) -> str:
+    id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    if len(id_list) < 2:
+        raise HTTPException(status_code=400, detail="Provide at least 2 run IDs via ?ids=")
+    placeholders = ",".join("?" * len(id_list))
+    rows = (
+        _get_db()
+        .execute(
+            f"SELECT * FROM runs WHERE id IN ({placeholders})",
+            id_list,
+        )
+        .fetchall()
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="No matching runs found")
+    results = [_row_to_result(r) for r in rows]
+    id_order = {rid: i for i, rid in enumerate(id_list)}
+    results.sort(key=lambda r: id_order.get(r.run_id, 999))
+    return _render_compare_chart(results)
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
