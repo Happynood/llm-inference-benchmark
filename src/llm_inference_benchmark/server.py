@@ -1236,7 +1236,7 @@ async def capabilities() -> dict[str, bool]:
         # ggml_backend_cuda_get_device_count as the primary probe — it only exists
         # in CUDA builds and returns the actual device count.
         try:
-            _fn = _llama_cpp._lib.ggml_backend_cuda_get_device_count
+            _fn = _llama_cpp._lib.ggml_backend_cuda_get_device_count  # type: ignore[attr-defined]
             _fn.restype = _ctypes.c_int
             llama_gpu = _fn() > 0
         except AttributeError:

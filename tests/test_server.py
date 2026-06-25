@@ -79,8 +79,8 @@ def _make_llama_cpp_mock(*, cuda_device_count: int | None, legacy_gpu: bool) -> 
         type(mock_lib).__getattr__ = lambda self, name: (_ for _ in ()).throw(AttributeError(name))
 
     mock_mod = types.ModuleType("llama_cpp")
-    mock_mod._lib = mock_lib
-    mock_mod.llama_supports_gpu_offload = lambda: legacy_gpu
+    mock_mod._lib = mock_lib  # type: ignore[attr-defined]
+    mock_mod.llama_supports_gpu_offload = lambda: legacy_gpu  # type: ignore[attr-defined]
     return mock_mod
 
 
@@ -94,8 +94,8 @@ async def test_capabilities_cuda_primary_probe_true(client: httpx.AsyncClient) -
 async def test_capabilities_cuda_fallback_to_legacy(client: httpx.AsyncClient) -> None:
     mock_lib = MagicMock(spec=[])  # no ggml_backend_cuda_get_device_count attribute
     mock_mod = types.ModuleType("llama_cpp")
-    mock_mod._lib = mock_lib
-    mock_mod.llama_supports_gpu_offload = lambda: True
+    mock_mod._lib = mock_lib  # type: ignore[attr-defined]
+    mock_mod.llama_supports_gpu_offload = lambda: True  # type: ignore[attr-defined]
     with patch.dict(sys.modules, {"llama_cpp": mock_mod}):
         resp = await client.get("/api/capabilities")
     assert resp.json()["llama_cpp_gpu"] is True
@@ -104,8 +104,8 @@ async def test_capabilities_cuda_fallback_to_legacy(client: httpx.AsyncClient) -
 async def test_capabilities_cuda_no_gpu(client: httpx.AsyncClient) -> None:
     mock_lib = MagicMock(spec=[])  # no ggml_backend_cuda_get_device_count
     mock_mod = types.ModuleType("llama_cpp")
-    mock_mod._lib = mock_lib
-    mock_mod.llama_supports_gpu_offload = lambda: False
+    mock_mod._lib = mock_lib  # type: ignore[attr-defined]
+    mock_mod.llama_supports_gpu_offload = lambda: False  # type: ignore[attr-defined]
     with patch.dict(sys.modules, {"llama_cpp": mock_mod}):
         resp = await client.get("/api/capabilities")
     assert resp.json()["llama_cpp_gpu"] is False
