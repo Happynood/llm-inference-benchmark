@@ -53,6 +53,32 @@ uv run llm-bench verify --format json
 
 Run `verify` again after installing each new backend to confirm it is detected correctly.
 
+## GPU Quick Start
+
+Got an NVIDIA GPU and want to run the Web UI with GPU inference in as few steps as possible:
+
+```bash
+# 1. Install all backends (includes CPU llama-cpp-python)
+uv sync --extra all-backends
+
+# 2. Replace the CPU wheel with a pre-built CUDA wheel (run AFTER sync, not before)
+make install-llama-cpp-prebuilt
+
+# 3. Start the Web UI
+uv run llm-bench serve
+```
+
+> **Warning:** If you run `uv sync` again after step 2, it may revert the CUDA wheel back
+> to the CPU build. Re-run `make install-llama-cpp-prebuilt` after any `uv sync` to restore
+> GPU support.
+
+For a fully automated single command, `make setup-gpu` detects your GPU and installs the
+CUDA wheel automatically:
+
+```bash
+make setup-gpu && make webui-gpu
+```
+
 ## Transformers backend (CPU)
 
 ```bash
@@ -243,11 +269,19 @@ make typecheck   # pyright
 Start the browser dashboard:
 
 ```bash
-uv pip install 'llm-inference-benchmark[server]'
 uv run llm-bench serve
+# or the Makefile shortcut:
+make webui
 ```
 
 Open <http://localhost:8080> and use the **+ New Run** form to configure and submit benchmark runs.
+
+**Key features:**
+
+- **Leaderboard** — sidebar button that shows the single best run for each key metric
+  (Throughput, p50/p95 Latency, TTFT, VRAM, Energy) at a glance.
+- **Compare bar** — appears above the run list when two or more runs are selected; use the
+  Table / Chart / Trend / Pareto / CSV buttons to switch between views.
 
 ### llama-cpp GPU in the Web UI
 
