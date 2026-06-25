@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **Metric comparison table in the Web UI**: selecting 2 or more runs and clicking the new
+  **Table** button in the compare bar loads a side-by-side metric table in the main panel.
+  Each row is a key metric (throughput, latency, TTFT, VRAM, energy, etc.) and each column
+  is a selected run.  Non-reference columns show a colour-coded percentage delta (green = better,
+  red = worse) relative to the first selected run.  The **Pareto** button (previously labelled
+  "Compare") continues to open the interactive Pareto scatter chart in a new tab.
+
 ### Fixed
 
 - **GHCR images now publish on every release**: the release workflow lacked a disk-space
