@@ -67,42 +67,55 @@ async def test_capabilities_returns_llama_cpp_gpu_flag(client: httpx.AsyncClient
     assert isinstance(data["llama_cpp_gpu"], bool)
 
 
-def _make_llama_cpp_mock(*, cuda_device_count: int, legacy_gpu: bool) -> types.ModuleType:
-    """Build a minimal llama_cpp module stub for GPU detection tests."""
+def _make_llama_cpp_patches(
+    *, cuda_device_count: int, legacy_gpu: bool
+) -> dict[str, types.ModuleType]:
+    """Return sys.modules patches for both llama_cpp and llama_cpp.llama_cpp.
+
+    The capabilities endpoint imports the inner module (llama_cpp.llama_cpp) to
+    reach ggml_backend_cuda_get_device_count; patching only the outer module leaves
+    the real inner module in sys.modules and makes the mock ineffective.
+    """
     mock_fn = MagicMock(return_value=cuda_device_count)
     mock_fn.restype = None
     mock_lib = MagicMock()
     mock_lib.ggml_backend_cuda_get_device_count = mock_fn
 
-    mock_mod = types.ModuleType("llama_cpp")
-    mock_mod._lib = mock_lib  # type: ignore[attr-defined]
-    mock_mod.llama_supports_gpu_offload = lambda: legacy_gpu  # type: ignore[attr-defined]
-    return mock_mod
+    mock_outer = types.ModuleType("llama_cpp")
+    mock_outer.llama_supports_gpu_offload = lambda: legacy_gpu  # type: ignore[attr-defined]
+
+    mock_inner = types.ModuleType("llama_cpp.llama_cpp")
+    mock_inner._lib = mock_lib  # type: ignore[attr-defined]
+
+    return {"llama_cpp": mock_outer, "llama_cpp.llama_cpp": mock_inner}
 
 
 async def test_capabilities_cuda_primary_probe_true(client: httpx.AsyncClient) -> None:
-    mock_llama = _make_llama_cpp_mock(cuda_device_count=1, legacy_gpu=False)
-    with patch.dict(sys.modules, {"llama_cpp": mock_llama}):
+    patches = _make_llama_cpp_patches(cuda_device_count=1, legacy_gpu=False)
+    with patch.dict(sys.modules, patches):
         resp = await client.get("/api/capabilities")
     assert resp.json()["llama_cpp_gpu"] is True
 
 
 async def test_capabilities_cuda_fallback_to_legacy(client: httpx.AsyncClient) -> None:
-    mock_lib = MagicMock(spec=[])  # no ggml_backend_cuda_get_device_count attribute
-    mock_mod = types.ModuleType("llama_cpp")
-    mock_mod._lib = mock_lib  # type: ignore[attr-defined]
-    mock_mod.llama_supports_gpu_offload = lambda: True  # type: ignore[attr-defined]
-    with patch.dict(sys.modules, {"llama_cpp": mock_mod}):
+    # _lib has no ggml_backend_cuda_get_device_count → AttributeError → legacy fallback
+    mock_lib = MagicMock(spec=[])
+    mock_outer = types.ModuleType("llama_cpp")
+    mock_outer.llama_supports_gpu_offload = lambda: True  # type: ignore[attr-defined]
+    mock_inner = types.ModuleType("llama_cpp.llama_cpp")
+    mock_inner._lib = mock_lib  # type: ignore[attr-defined]
+    with patch.dict(sys.modules, {"llama_cpp": mock_outer, "llama_cpp.llama_cpp": mock_inner}):
         resp = await client.get("/api/capabilities")
     assert resp.json()["llama_cpp_gpu"] is True
 
 
 async def test_capabilities_cuda_no_gpu(client: httpx.AsyncClient) -> None:
-    mock_lib = MagicMock(spec=[])  # no ggml_backend_cuda_get_device_count
-    mock_mod = types.ModuleType("llama_cpp")
-    mock_mod._lib = mock_lib  # type: ignore[attr-defined]
-    mock_mod.llama_supports_gpu_offload = lambda: False  # type: ignore[attr-defined]
-    with patch.dict(sys.modules, {"llama_cpp": mock_mod}):
+    mock_lib = MagicMock(spec=[])
+    mock_outer = types.ModuleType("llama_cpp")
+    mock_outer.llama_supports_gpu_offload = lambda: False  # type: ignore[attr-defined]
+    mock_inner = types.ModuleType("llama_cpp.llama_cpp")
+    mock_inner._lib = mock_lib  # type: ignore[attr-defined]
+    with patch.dict(sys.modules, {"llama_cpp": mock_outer, "llama_cpp.llama_cpp": mock_inner}):
         resp = await client.get("/api/capabilities")
     assert resp.json()["llama_cpp_gpu"] is False
 
