@@ -1233,10 +1233,13 @@ async def capabilities() -> dict[str, bool]:
 
         # llama_supports_gpu_offload() was deprecated in llama_cpp ≥0.3 and returns
         # False even when the library is compiled with CUDA. Use
-        # ggml_backend_cuda_get_device_count as the primary probe — it only exists
+        # ggml_backend_cuda_get_device_count via the ctypes handle — it only exists
         # in CUDA builds and returns the actual device count.
+        # The ctypes handle lives in the llama_cpp.llama_cpp submodule, not the top-level package.
         try:
-            _fn = _llama_cpp._lib.ggml_backend_cuda_get_device_count  # type: ignore[attr-defined]
+            import llama_cpp.llama_cpp as _llama_cpp_inner  # type: ignore[import]
+            _lib = _llama_cpp_inner._lib  # type: ignore[attr-defined]
+            _fn = _lib.ggml_backend_cuda_get_device_count
             _fn.restype = _ctypes.c_int
             llama_gpu = _fn() > 0
         except AttributeError:
