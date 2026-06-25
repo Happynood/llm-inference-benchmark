@@ -20,6 +20,7 @@
   <aside class="sidebar">
     <div class="sidebar-tabs">
       <button class="tab-btn active" id="tab-btn-runs" onclick="showTab('runs')">Runs</button>
+      <button class="tab-btn" id="tab-btn-leaderboard" onclick="showTab('leaderboard')">Leaderboard</button>
       <button class="tab-btn" id="tab-btn-datasets" onclick="showTab('datasets')">Datasets</button>
     </div>
 
@@ -71,6 +72,8 @@
         <button class="btn btn-sm btn-outline" onclick="clearComparison()" aria-label="Clear selection">✕</button>
       </div>
     </div>
+
+    <div id="tab-leaderboard" class="tab-panel" hidden></div>
 
     <div id="tab-datasets" class="tab-panel" hidden>
       <div class="dataset-pull-row">

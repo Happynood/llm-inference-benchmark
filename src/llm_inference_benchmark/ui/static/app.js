@@ -64,7 +64,7 @@ const compareSet = new Set();
 /* ── Tab switching ───────────────────────────────────────────────────────── */
 
 function showTab(name) {
-  ['runs', 'datasets'].forEach(function(t) {
+  ['runs', 'datasets', 'leaderboard'].forEach(function(t) {
     const panel = document.getElementById('tab-' + t);
     const btn   = document.getElementById('tab-btn-' + t);
     if (panel) panel.hidden = (t !== name);
@@ -72,6 +72,9 @@ function showTab(name) {
   });
   if (name === 'datasets') {
     loadDatasetNames();
+  }
+  if (name === 'leaderboard') {
+    htmx.ajax('GET', '/api/ui/leaderboard', {target: '#run-detail', swap: 'innerHTML'});
   }
 }
 

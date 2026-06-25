@@ -459,3 +459,16 @@ def test_compare_checkboxes_survive_htmx_refresh(page: Page, live_server: str) -
         timeout=6000,
     )
     expect(page.locator("#compare-bar")).to_be_visible()
+
+
+def test_leaderboard_button_visible_in_sidebar(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    expect(page.locator("#tab-btn-leaderboard")).to_be_visible()
+    expect(page.locator("#tab-btn-leaderboard")).to_contain_text("Leaderboard")
+
+
+def test_leaderboard_panel_loads_on_click(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.locator("#tab-btn-leaderboard").click()
+    page.wait_for_selector(".detail-title", timeout=8000)
+    expect(page.locator(".detail-title")).to_contain_text("Leaderboard")
