@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Fixed
 
+- **Compare action bar position**: the compare bar (Table / Chart / Trend / Pareto / CSV / ✕)
+  now appears above the run list so users no longer need to scroll to the bottom to access
+  comparison actions.  The bar also gains `position: sticky` so it stays visible while
+  scrolling through a long run list.
+
 - **llama-cpp CUDA capability detection**: `llama_supports_gpu_offload()` was deprecated in
   llama_cpp ≥0.3.x and always returned `False` even when the library was compiled with CUDA,
   causing the Web UI to incorrectly show a "GPU unavailable" warning on CUDA-capable builds.

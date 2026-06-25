@@ -107,6 +107,7 @@ button { cursor: pointer; font-family: inherit; }
   display: flex; align-items: center; gap: .5rem; flex-shrink: 0;
   padding: .6rem .9rem; border-top: 1px solid var(--border);
   background: var(--accent-bg);
+  position: sticky; top: 0; z-index: 10;
 }
 .compare-bar[hidden] { display: none; }
 .compare-count { font-size: .82rem; flex: 1; color: var(--accent); font-weight: 500; }
