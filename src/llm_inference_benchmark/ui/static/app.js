@@ -111,6 +111,15 @@ document.addEventListener('htmx:afterSettle', function(evt) {
         startSSE(runId);
       }
     }
+
+    const chartDiv = document.getElementById('cmp-chart-div');
+    if (chartDiv && typeof Plotly !== 'undefined') {
+      try {
+        var traces = JSON.parse(chartDiv.dataset.traces || '[]');
+        var layout = JSON.parse(chartDiv.dataset.layout || '{}');
+        Plotly.newPlot(chartDiv, traces, layout, {responsive: true});
+      } catch (_e) { /* malformed data — ignore */ }
+    }
   }
 });
 
@@ -265,6 +274,25 @@ function openCompareTable() {
     target: '#run-detail',
     swap: 'innerHTML'
   });
+}
+
+function openCompareChart() {
+  if (compareSet.size < 2) return;
+  var ids = Array.from(compareSet).join(',');
+  function doLoad() {
+    htmx.ajax('GET', '/api/ui/compare-chart?ids=' + ids, {
+      target: '#run-detail',
+      swap: 'innerHTML'
+    });
+  }
+  if (typeof Plotly !== 'undefined') {
+    doLoad();
+  } else {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.plot.ly/plotly-2.32.0.min.js';
+    s.onload = doLoad;
+    document.head.appendChild(s);
+  }
 }
 
 function clearComparison() {
