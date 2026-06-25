@@ -1359,3 +1359,83 @@ async def test_run_list_sort_model_alpha(client: httpx.AsyncClient) -> None:
     pos_aaa = resp.text.index("aaa-sort-test")
     pos_zzz = resp.text.index("zzz-sort-test")
     assert pos_aaa < pos_zzz, "model sort should place aaa-sort-test before zzz-sort-test"
+
+
+# ── Compare-trend endpoint ─────────────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_compare_trend_returns_200_with_valid_ids(client: httpx.AsyncClient) -> None:
+    """GET /api/ui/compare-trend?ids=… returns 200 with Metric Trend header for 2 done runs."""
+    db = _get_db()
+    ids = [
+        "trend-test-0000-0000-0000-000000000001",
+        "trend-test-0000-0000-0000-000000000002",
+    ]
+    metrics_output = (
+        "=== Benchmark Results ===\n  tokens_per_second: 100.00\n  p95_latency_ms: 250.00\n"
+    )
+    for i, rid in enumerate(ids):
+        db.execute(
+            "INSERT INTO runs (id, status, config, output, created_at, finished_at)"
+            ' VALUES (?, \'done\', \'{"backend":"mock","model":"m"}\', ?, ?, ?)',
+            (rid, metrics_output, f"2025-01-0{i + 1}T00:00:00+00:00", _now_iso()),
+        )
+    db.commit()
+
+    resp = await client.get(f"/api/ui/compare-trend?ids={','.join(ids)}")
+    assert resp.status_code == 200
+    assert "Metric Trend" in resp.text
+    assert "cmp-trend-div" in resp.text
+
+
+@pytest.mark.anyio
+async def test_compare_trend_missing_ids_returns_422(client: httpx.AsyncClient) -> None:
+    """GET /api/ui/compare-trend with no ids param returns 422 (FastAPI required param)."""
+    resp = await client.get("/api/ui/compare-trend")
+    assert resp.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_compare_trend_single_id_returns_400(client: httpx.AsyncClient) -> None:
+    """GET /api/ui/compare-trend with only 1 id returns 400."""
+    db = _get_db()
+    rid = "trend-single-0000-0000-000000000001"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'done', '{}', ?)",
+        (rid, _now_iso()),
+    )
+    db.commit()
+    resp = await client.get(f"/api/ui/compare-trend?ids={rid}")
+    assert resp.status_code == 400
+
+
+@pytest.mark.anyio
+async def test_compare_trend_unknown_ids_returns_404(client: httpx.AsyncClient) -> None:
+    """GET /api/ui/compare-trend?ids=unknown,ids returns 404."""
+    resp = await client.get("/api/ui/compare-trend?ids=does-not-exist-a,does-not-exist-b")
+    assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_compare_trend_orders_by_created_at(client: httpx.AsyncClient) -> None:
+    """The trend chart x-axis labels follow chronological order regardless of ids param order."""
+    db = _get_db()
+    id_early = "aaaaaaaa-0000-0000-0000-000000000001"
+    id_late = "zzzzzzzz-0000-0000-0000-000000000002"
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'done', '{}', ?)",
+        (id_early, "2024-01-01T00:00:00+00:00"),
+    )
+    db.execute(
+        "INSERT INTO runs (id, status, config, created_at) VALUES (?, 'done', '{}', ?)",
+        (id_late, "2025-06-01T00:00:00+00:00"),
+    )
+    db.commit()
+
+    # Pass late before early in the query string; chart should still show early first.
+    resp = await client.get(f"/api/ui/compare-trend?ids={id_late},{id_early}")
+    assert resp.status_code == 200
+    pos_early = resp.text.index(id_early[:8])
+    pos_late = resp.text.index(id_late[:8])
+    assert pos_early < pos_late, "earlier run should appear first on trend x-axis"

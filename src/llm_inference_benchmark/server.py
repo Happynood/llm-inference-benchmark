@@ -600,6 +600,99 @@ def _render_compare_chart(runs: list[RunResult]) -> str:
     )
 
 
+def _render_compare_trend(runs: list[RunResult]) -> str:
+    """Return HTML fragment with a Plotly line+scatter metric trend chart."""
+    if len(runs) < 2:
+        return "<p class='muted'>Select at least 2 runs to compare.</p>"
+
+    sorted_runs = sorted(runs, key=lambda r: r.created_at)
+    all_metrics = [_parse_metrics_from_output(r.output) for r in sorted_runs]
+
+    x_labels: list[str] = []
+    for r in sorted_runs:
+        lbl = f" · {r.label}" if r.label else ""
+        x_labels.append(f"{r.run_id[:8]}{lbl}")
+
+    traces: list[dict[str, Any]] = []
+    metric_labels: list[str] = []
+    for key, label, fmt, _hib in _COMPARE_METRICS:
+        vals: list[float | None] = [m.get(key) for m in all_metrics]
+        if all(v is None for v in vals):
+            continue
+        hover_text = [fmt(v) if v is not None else "—" for v in vals]
+        traces.append(
+            {
+                "type": "scatter",
+                "mode": "lines+markers",
+                "name": label,
+                "x": x_labels,
+                "y": vals,
+                "text": hover_text,
+                "hovertemplate": "%{text}<extra>%{fullData.name}</extra>",
+                "visible": len(traces) == 0,
+                "connectgaps": False,
+                "line": {"width": 2},
+                "marker": {"size": 8},
+            }
+        )
+        metric_labels.append(label)
+
+    if not traces:
+        run_ids = " → ".join(r.run_id[:8] for r in sorted_runs)
+        return (
+            f"<div id='detail-inner' class='compare-table-wrap'>"
+            f"<div class='detail-header'><div><div class='detail-title'>Metric Trend</div>"
+            f"<div class='detail-meta muted'>{html.escape(run_ids)}</div></div></div>"
+            f"<p class='muted' style='padding:1.5rem'>No metrics available for trend chart.</p>"
+            f"</div>"
+        )
+
+    buttons: list[dict[str, Any]] = []
+    for i, lbl in enumerate(metric_labels):
+        vis = [j == i for j in range(len(traces))]
+        buttons.append(
+            {
+                "label": lbl,
+                "method": "update",
+                "args": [{"visible": vis}, {"yaxis.title.text": lbl}],
+            }
+        )
+
+    layout: dict[str, Any] = {
+        "xaxis": {"title": "Run (chronological)", "tickangle": -25},
+        "yaxis": {"title": metric_labels[0]},
+        "margin": {"t": 60, "b": 100, "l": 60, "r": 20},
+        "plot_bgcolor": "#f8f9fa",
+        "paper_bgcolor": "#ffffff",
+        "updatemenus": [
+            {
+                "type": "buttons",
+                "direction": "left",
+                "x": 0.0,
+                "y": 1.15,
+                "showactive": True,
+                "buttons": buttons,
+            }
+        ],
+    }
+
+    traces_json = html.escape(json.dumps(traces))
+    layout_json = html.escape(json.dumps(layout))
+    run_ids = " → ".join(r.run_id[:8] for r in sorted_runs)
+
+    return (
+        f"<div id='detail-inner' class='compare-table-wrap'>\n"
+        f"<div class='detail-header'><div>"
+        f"<div class='detail-title'>Metric Trend</div>"
+        f"<div class='detail-meta muted'>{html.escape(run_ids)}</div>"
+        f"</div></div>\n"
+        f"<div id='cmp-trend-div' style='width:100%;height:460px'"
+        f" data-traces='{traces_json}'"
+        f" data-layout='{layout_json}'></div>\n"
+        f"</div>\n"
+    )
+
+
 def _render_hw_info(hw: dict[str, str]) -> str:
     if not hw:
         return ""
@@ -1346,6 +1439,30 @@ async def compare_chart_fragment(
     id_order = {rid: i for i, rid in enumerate(id_list)}
     results.sort(key=lambda r: id_order.get(r.run_id, 999))
     return _render_compare_chart(results)
+
+
+@app.get("/api/ui/compare-trend", response_class=HTMLResponse)
+async def compare_trend_fragment(
+    ids: str = Query(..., description="Comma-separated run IDs"),
+) -> str:
+    id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    if len(id_list) < 2:
+        raise HTTPException(status_code=400, detail="Provide at least 2 run IDs via ?ids=")
+    placeholders = ",".join("?" * len(id_list))
+    rows = (
+        _get_db()
+        .execute(
+            f"SELECT * FROM runs WHERE id IN ({placeholders})",
+            id_list,
+        )
+        .fetchall()
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="No matching runs found")
+    results = [_row_to_result(r) for r in rows]
+    id_order = {rid: i for i, rid in enumerate(id_list)}
+    results.sort(key=lambda r: id_order.get(r.run_id, 999))
+    return _render_compare_trend(results)
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────

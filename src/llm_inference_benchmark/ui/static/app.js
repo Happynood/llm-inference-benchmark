@@ -120,6 +120,15 @@ document.addEventListener('htmx:afterSettle', function(evt) {
         Plotly.newPlot(chartDiv, traces, layout, {responsive: true});
       } catch (_e) { /* malformed data — ignore */ }
     }
+
+    const trendDiv = document.getElementById('cmp-trend-div');
+    if (trendDiv && typeof Plotly !== 'undefined') {
+      try {
+        var tTraces = JSON.parse(trendDiv.dataset.traces || '[]');
+        var tLayout = JSON.parse(trendDiv.dataset.layout || '{}');
+        Plotly.newPlot(trendDiv, tTraces, tLayout, {responsive: true});
+      } catch (_e) { /* malformed data — ignore */ }
+    }
   }
 });
 
@@ -286,6 +295,25 @@ function openCompareChart() {
   var ids = Array.from(compareSet).join(',');
   function doLoad() {
     htmx.ajax('GET', '/api/ui/compare-chart?ids=' + ids, {
+      target: '#run-detail',
+      swap: 'innerHTML'
+    });
+  }
+  if (typeof Plotly !== 'undefined') {
+    doLoad();
+  } else {
+    var s = document.createElement('script');
+    s.src = 'https://cdn.plot.ly/plotly-2.32.0.min.js';
+    s.onload = doLoad;
+    document.head.appendChild(s);
+  }
+}
+
+function openCompareTrend() {
+  if (compareSet.size < 2) return;
+  var ids = Array.from(compareSet).join(',');
+  function doLoad() {
+    htmx.ajax('GET', '/api/ui/compare-trend?ids=' + ids, {
       target: '#run-detail',
       swap: 'innerHTML'
     });
