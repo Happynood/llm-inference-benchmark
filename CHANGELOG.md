@@ -17,6 +17,9 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   CUDA wheel warning) and an updated **Web UI** section describing the Leaderboard panel and
   Compare bar. `docs/metrics.md` adds definitions for `p50_ttft_ms`, `p95_ttft_ms`, and
   `itl_stddev_ms`.
+- **README**: rewritten from 716 to ~320 lines — star-attracting focus with quick install,
+  GPU in 2 steps, backends table, Web UI features, CLI examples, benchmark results, and
+  configuration example; verbose design rationale and roadmap moved to docs/.
 
 ### Fixed
 
