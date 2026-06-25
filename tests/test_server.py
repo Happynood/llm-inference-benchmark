@@ -1439,3 +1439,119 @@ async def test_compare_trend_orders_by_created_at(client: httpx.AsyncClient) -> 
     pos_early = resp.text.index(id_early[:8])
     pos_late = resp.text.index(id_late[:8])
     assert pos_early < pos_late, "earlier run should appear first on trend x-axis"
+
+
+# ── Leaderboard ───────────────────────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_leaderboard_fragment_returns_200_with_empty_db(
+    client: httpx.AsyncClient,
+) -> None:
+    """GET /api/ui/leaderboard on an empty DB returns 200 with no-data message."""
+    resp = await client.get("/api/ui/leaderboard")
+    assert resp.status_code == 200
+    assert "Leaderboard" in resp.text
+    assert "No completed runs" in resp.text
+
+
+@pytest.mark.anyio
+async def test_leaderboard_fragment_returns_200_with_data(
+    client: httpx.AsyncClient,
+) -> None:
+    """GET /api/ui/leaderboard with a done run returns 200 with metric rows."""
+    db = _get_db()
+    rid = "lb-data-0000-0000-0000-000000000001"
+    db.execute(
+        "INSERT INTO runs (id, status, config, output, created_at, finished_at)"
+        ' VALUES (?, \'done\', \'{"backend":"mock","model":"test/m1"}\', ?, ?, ?)',
+        (
+            rid,
+            "=== Benchmark Results ===\n  tokens_per_second: 120.50\n",
+            "2025-01-01T00:00:00+00:00",
+            _now_iso(),
+        ),
+    )
+    db.commit()
+
+    resp = await client.get("/api/ui/leaderboard")
+    assert resp.status_code == 200
+    assert "Leaderboard" in resp.text
+    assert "Throughput" in resp.text
+    assert "120.5 tok/s" in resp.text
+    assert rid[:8] in resp.text
+
+
+def test_render_leaderboard_excludes_non_done_runs() -> None:
+    """Runs with status != 'done' are excluded from leaderboard rankings."""
+    from llm_inference_benchmark.server import RunResult, _render_leaderboard
+
+    run_done = RunResult(
+        run_id="aaaaaaaa-done-0000-0000-000000000001",
+        status="done",
+        config={"backend": "mock", "model": "m"},
+        output="=== Benchmark Results ===\n  tokens_per_second: 80.00\n",
+        created_at="2025-01-01T00:00:00+00:00",
+    )
+    run_pending = RunResult(
+        run_id="bbbbbbbb-pend-0000-0000-000000000002",
+        status="pending",
+        config={"backend": "mock", "model": "m"},
+        output="=== Benchmark Results ===\n  tokens_per_second: 999.00\n",
+        created_at="2025-01-02T00:00:00+00:00",
+    )
+    out = _render_leaderboard([run_done, run_pending])
+    assert "aaaaaaaa" in out
+    assert "bbbbbbbb" not in out
+
+
+def test_render_leaderboard_correct_winner_higher_is_better() -> None:
+    """For Throughput (higher-is-better), the run with the highest value wins."""
+    from llm_inference_benchmark.server import RunResult, _render_leaderboard
+
+    runs = [
+        RunResult(
+            run_id="slowrun0-0000-0000-0000-000000000001",
+            status="done",
+            config={"backend": "mock", "model": "m"},
+            output="=== Benchmark Results ===\n  tokens_per_second: 40.00\n",
+            created_at="2025-01-01T00:00:00+00:00",
+        ),
+        RunResult(
+            run_id="fastrun0-0000-0000-0000-000000000002",
+            status="done",
+            config={"backend": "mock", "model": "m"},
+            output="=== Benchmark Results ===\n  tokens_per_second: 200.00\n",
+            created_at="2025-01-02T00:00:00+00:00",
+        ),
+    ]
+    out = _render_leaderboard(runs)
+    assert "200.0 tok/s" in out
+    assert "fastrun0" in out
+    assert "slowrun0" not in out
+
+
+def test_render_leaderboard_correct_winner_lower_is_better() -> None:
+    """For p50 Latency (lower-is-better), the run with the lowest value wins."""
+    from llm_inference_benchmark.server import RunResult, _render_leaderboard
+
+    runs = [
+        RunResult(
+            run_id="highlat0-0000-0000-0000-000000000001",
+            status="done",
+            config={"backend": "mock", "model": "m"},
+            output="=== Benchmark Results ===\n  p50_latency_ms: 500.00\n",
+            created_at="2025-01-01T00:00:00+00:00",
+        ),
+        RunResult(
+            run_id="lowlat00-0000-0000-0000-000000000002",
+            status="done",
+            config={"backend": "mock", "model": "m"},
+            output="=== Benchmark Results ===\n  p50_latency_ms: 25.00\n",
+            created_at="2025-01-02T00:00:00+00:00",
+        ),
+    ]
+    out = _render_leaderboard(runs)
+    assert "25 ms" in out
+    assert "lowlat00" in out
+    assert "500 ms" not in out

@@ -9,6 +9,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Leaderboard panel in the Web UI**: a new **Leaderboard** button in the sidebar toolbar
+  (between **Runs** and **Datasets**) loads an at-a-glance panel in the main area showing the
+  single best run for each key metric (Throughput, p50/p95 Latency, TTFT, VRAM, Energy).
+  Each row shows the metric name, best recorded value with units, a linked short run ID, model
+  name, backend, and run date.  Only completed (`status = done`) runs with a non-null value
+  are ranked.  Metrics with no qualifying data are omitted automatically.  Powered by the new
+  `GET /api/ui/leaderboard` HTMX endpoint; no new CDN dependencies.
+
 - **Metric trend chart in the Web UI**: selecting 2 or more runs and clicking the new
   **Trend** button in the compare bar loads an interactive Plotly line+scatter chart in the
   main panel.  Runs are placed on the X axis in chronological order (labelled with their

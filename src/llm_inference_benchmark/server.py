@@ -22,6 +22,7 @@ Endpoints:
   GET  /api/ui/datasets-table        HTMX HTML fragment
   GET  /api/ui/compare-table         HTMX HTML fragment — side-by-side metric comparison
   GET  /api/ui/compare-chart         HTMX HTML fragment — normalised bar chart comparison
+  GET  /api/ui/leaderboard           HTMX HTML fragment — top-runs leaderboard panel
   GET  /runs/{run_id}/pareto.html    interactive Plotly scatter page
   GET  /runs/pareto                  multi-run Pareto page
 """
@@ -689,6 +690,88 @@ def _render_compare_trend(runs: list[RunResult]) -> str:
         f"<div id='cmp-trend-div' style='width:100%;height:460px'"
         f" data-traces='{traces_json}'"
         f" data-layout='{layout_json}'></div>\n"
+        f"</div>\n"
+    )
+
+
+_LEADERBOARD_METRICS: list[tuple[str, str, Any, bool]] = [
+    ("tokens_per_second", "Throughput", lambda v: f"{v:.1f} tok/s", True),
+    ("p50_latency_ms", "p50 Latency", lambda v: f"{v:.0f} ms", False),
+    ("p95_latency_ms", "p95 Latency", lambda v: f"{v:.0f} ms", False),
+    ("p50_ttft_ms", "TTFT p50", lambda v: f"{v:.0f} ms", False),
+    ("peak_vram_memory_mb", "VRAM Usage", lambda v: f"{v:.0f} MB", False),
+    ("energy_joules", "Energy", lambda v: f"{v:.1f} J", False),
+]
+
+
+def _render_leaderboard(runs: list[RunResult]) -> str:
+    """Return HTML fragment for the top-runs leaderboard panel."""
+    done_runs = [r for r in runs if r.status == "done"]
+
+    table_rows: list[str] = []
+    for key, label, fmt, higher_is_better in _LEADERBOARD_METRICS:
+        candidates: list[tuple[float, RunResult]] = []
+        for run in done_runs:
+            val = _parse_metrics_from_output(run.output).get(key)
+            if val is not None:
+                candidates.append((val, run))
+
+        if not candidates:
+            continue
+
+        best_val, best_run = (
+            max(candidates, key=lambda x: x[0])
+            if higher_is_better
+            else min(candidates, key=lambda x: x[0])
+        )
+
+        cfg = best_run.config or {}
+        model = str(cfg.get("model", "—")).split("/")[-1]
+        backend = str(cfg.get("backend", "—"))
+        short_id = best_run.run_id[:8]
+        date_str = best_run.created_at[:10] if best_run.created_at else "—"
+        run_label = best_run.label or ""
+        display_id = f"{short_id} · {run_label}" if run_label else short_id
+
+        table_rows.append(
+            f"<tr>"
+            f"<td class='lb-metric'>{html.escape(label)}</td>"
+            f"<td class='lb-value mono'>{html.escape(fmt(best_val))}</td>"
+            f"<td class='lb-run'>"
+            f"<a class='mono' href='#' "
+            f"onclick='selectRun(\"{html.escape(best_run.run_id)}\"); return false;'>"
+            f"{html.escape(display_id)}"
+            f"</a>"
+            f"</td>"
+            f"<td class='lb-model'>{html.escape(model)}</td>"
+            f"<td class='lb-backend'>{html.escape(backend)}</td>"
+            f"<td class='lb-date muted'>{html.escape(date_str)}</td>"
+            f"</tr>"
+        )
+
+    if not table_rows:
+        body = (
+            "<tr><td colspan='6' class='muted'>"
+            "No completed runs with recorded metrics yet."
+            "</td></tr>"
+        )
+    else:
+        body = "\n".join(table_rows)
+
+    return (
+        f"<div id='detail-inner' class='compare-table-wrap'>\n"
+        f"<div class='detail-header'><div>"
+        f"<div class='detail-title'>Leaderboard</div>"
+        f"<div class='detail-meta muted'>Best run per metric — completed runs only</div>"
+        f"</div></div>\n"
+        f"<div class='compare-table-scroll'>"
+        f"<table class='data-table'>"
+        f"<thead><tr>"
+        f"<th>Metric</th><th>Best Value</th><th>Run</th>"
+        f"<th>Model</th><th>Backend</th><th>Date</th>"
+        f"</tr></thead>"
+        f"<tbody>{body}</tbody>"
+        f"</table></div>\n"
         f"</div>\n"
     )
 
@@ -1463,6 +1546,13 @@ async def compare_trend_fragment(
     id_order = {rid: i for i, rid in enumerate(id_list)}
     results.sort(key=lambda r: id_order.get(r.run_id, 999))
     return _render_compare_trend(results)
+
+
+@app.get("/api/ui/leaderboard", response_class=HTMLResponse)
+async def leaderboard_fragment() -> str:
+    rows = _get_db().execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
+    results = [_row_to_result(r) for r in rows]
+    return _render_leaderboard(results)
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
