@@ -282,6 +282,20 @@ button { cursor: pointer; font-family: inherit; }
 .detail-label .run-label-text { font-size: .82rem; }
 .detail-label .run-label-input { font-size: .82rem; padding: .2rem .4rem; max-width: 320px; height: auto; }
 
+/* ── Compare table ────────────────────────────────────────────────────────── */
+.compare-table-wrap { padding: 1rem 1.25rem; overflow: hidden; }
+.compare-table-scroll { overflow-x: auto; margin-top: .75rem; }
+.cmp-table { min-width: 100%; white-space: nowrap; }
+.cmp-metric-hd { text-align: left; min-width: 9rem; }
+.cmp-col { text-align: center; min-width: 10rem; font-weight: 500; vertical-align: top; padding: .5rem .75rem; }
+.cmp-model { font-size: .8rem; color: var(--text); display: block; }
+.cmp-backend { font-size: .72rem; color: var(--text-muted); }
+.cmp-id { font-size: .7rem; color: var(--text-dim); }
+.cmp-metric-cell { font-size: .8rem; font-weight: 500; white-space: nowrap; }
+.cmp-val { text-align: center; font-size: .82rem; }
+.delta-good { color: #16a34a; font-size: .72rem; font-weight: 600; }
+.delta-bad  { color: #dc2626; font-size: .72rem; font-weight: 600; }
+
 /* ── Misc ─────────────────────────────────────────────────────────────────── */
 .mono { font-family: var(--mono); }
 .muted { color: var(--text-muted); font-size: .82rem; padding: 1rem; }

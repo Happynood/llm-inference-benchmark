@@ -443,9 +443,13 @@ left and a live detail panel on the right.
 - **Dataset selector** — choose from any cached real-world dataset (pulled via
   `llm-bench datasets pull <name>`) directly in the modal; "Default prompts" preserves
   the existing synthetic-prompt behaviour.
-- **Multi-run comparison** — check ≥ 2 run cards and click **Compare N runs** to open
-  an interactive Pareto scatter plot comparing throughput vs. latency across the selected
-  runs.  Checkbox selection survives the automatic sidebar refresh.
+- **Multi-run comparison** — check ≥ 2 run cards to reveal the compare bar.
+  Click **Table** to load a side-by-side metric comparison table in the main panel:
+  each row is a metric (throughput, latency, TTFT, VRAM, energy, efficiency) and each
+  column is a selected run.  Non-reference columns show a colour-coded percentage delta
+  (green = better, red = worse) versus the first selected run.
+  Click **Pareto** to open an interactive Pareto scatter plot in a new tab.
+  Checkbox selection survives the automatic sidebar refresh.
 - **Pareto chart axis selectors** — click **Pareto Chart** on any completed run to open
   `/runs/{id}/pareto.html`.  X and Y axis dropdowns let you explore any metric pair
   (e.g. VRAM vs throughput, TTFT vs p95 latency, efficiency vs memory); the Pareto front
@@ -514,6 +518,7 @@ detected.
 | `GET` | `/api/runs/{run_id}/stream` | Server-Sent Events streaming stdout of a running benchmark |
 | `DELETE` | `/api/runs/{run_id}` | Delete a completed or errored run; returns 409 if still running |
 | `GET` | `/api/ui/runs-table` | HTMX HTML fragment for the runs table |
+| `GET` | `/api/ui/compare-table?ids=id1,id2,...` | HTMX HTML fragment — side-by-side metric comparison table |
 | `GET` | `/runs/{run_id}/pareto.html` | Interactive Plotly Pareto scatter page |
 
 Results are persisted in a local SQLite database at `~/.llm-bench/results.db`.

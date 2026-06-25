@@ -258,6 +258,15 @@ function openComparison() {
   window.open('/runs/pareto?ids=' + Array.from(compareSet).join(','), '_blank');
 }
 
+function openCompareTable() {
+  if (compareSet.size < 2) return;
+  var ids = Array.from(compareSet).join(',');
+  htmx.ajax('GET', '/api/ui/compare-table?ids=' + ids, {
+    target: '#run-detail',
+    swap: 'innerHTML'
+  });
+}
+
 function clearComparison() {
   compareSet.clear();
   document.querySelectorAll('.compare-cb').forEach(function(cb) { cb.checked = false; });

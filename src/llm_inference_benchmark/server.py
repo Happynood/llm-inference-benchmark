@@ -19,6 +19,7 @@ Endpoints:
   GET  /api/ui/run-detail/{run_id}   HTMX HTML fragment — run detail panel
   GET  /api/ui/runs-table            HTMX HTML fragment — legacy table rows
   GET  /api/ui/datasets-table        HTMX HTML fragment
+  GET  /api/ui/compare-table         HTMX HTML fragment — side-by-side metric comparison
   GET  /runs/{run_id}/pareto.html    interactive Plotly scatter page
   GET  /runs/pareto                  multi-run Pareto page
 """
@@ -378,6 +379,20 @@ _DISPLAY_METRICS: list[tuple[str, str, Any]] = [
     ("sanity_pass_rate", "Sanity", lambda v: f"{v * 100:.0f}%"),
 ]
 
+# (key, label, formatter, higher_is_better)
+_COMPARE_METRICS: list[tuple[str, str, Any, bool]] = [
+    ("tokens_per_second", "Throughput", lambda v: f"{v:.1f} tok/s", True),
+    ("p50_latency_ms", "p50 Latency", lambda v: f"{v:.0f} ms", False),
+    ("p95_latency_ms", "p95 Latency", lambda v: f"{v:.0f} ms", False),
+    ("p50_ttft_ms", "TTFT p50", lambda v: f"{v:.0f} ms", False),
+    ("model_load_ms", "Load Time", lambda v: f"{v:.0f} ms", False),
+    ("peak_vram_memory_mb", "VRAM", lambda v: f"{v:.0f} MB", False),
+    ("peak_cuda_memory_mb", "CUDA Mem", lambda v: f"{v:.0f} MB", False),
+    ("energy_joules", "Energy", lambda v: f"{v:.1f} J", False),
+    ("tokens_per_joule", "Efficiency", lambda v: f"{v:.2f} tok/J", True),
+    ("sanity_pass_rate", "Sanity", lambda v: f"{v * 100:.0f}%", True),
+]
+
 
 def _render_metric_cards(metrics: dict[str, float | None]) -> str:
     cards = []
@@ -395,6 +410,81 @@ def _render_metric_cards(metrics: dict[str, float | None]) -> str:
     if not cards:
         return ""
     return f'<div class="metric-grid">{"".join(cards)}</div>'
+
+
+def _render_compare_table(runs: list[RunResult]) -> str:
+    """Return HTML fragment for the side-by-side metric comparison table."""
+    if len(runs) < 2:
+        return "<p class='muted'>Select at least 2 runs to compare.</p>"
+
+    all_metrics = [_parse_metrics_from_output(r.output) for r in runs]
+
+    def _col_header(r: RunResult) -> str:
+        cfg = r.config or {}
+        model = str(cfg.get("model", "—")).split("/")[-1]
+        backend = str(cfg.get("backend", "—"))
+        label = r.label or ""
+        short_id = r.run_id[:8]
+        lbl_html = f"<br><em>{html.escape(label)}</em>" if label else ""
+        return (
+            f"<th class='cmp-col'>"
+            f"<span class='cmp-model'>{html.escape(model)}</span>"
+            f"<br><span class='cmp-backend'>{html.escape(backend)}</span>"
+            f"{lbl_html}"
+            f"<br><span class='mono cmp-id'>{html.escape(short_id)}</span>"
+            f"</th>"
+        )
+
+    header_cells = "".join(_col_header(r) for r in runs)
+    header_row = f"<tr><th class='cmp-metric-hd'>Metric</th>{header_cells}</tr>"
+
+    ref_metrics = all_metrics[0]
+    rows_html: list[str] = []
+
+    for key, label, fmt, higher_is_better in _COMPARE_METRICS:
+        if all(m.get(key) is None for m in all_metrics):
+            continue
+        ref_val = ref_metrics.get(key)
+        cells: list[str] = [f"<td class='cmp-metric-cell'>{html.escape(label)}</td>"]
+        for i, m in enumerate(all_metrics):
+            val = m.get(key)
+            if val is None:
+                cells.append("<td class='cmp-val muted'>—</td>")
+                continue
+            val_str = fmt(val)
+            if i == 0 or ref_val is None or ref_val == 0:
+                cells.append(f"<td class='cmp-val'>{html.escape(val_str)}</td>")
+            else:
+                delta = (val - ref_val) / abs(ref_val) * 100
+                good = (delta > 0) == higher_is_better
+                delta_cls = "delta-good" if good else "delta-bad"
+                sign = "+" if delta >= 0 else ""
+                delta_str = f"{sign}{delta:.1f}%"
+                cells.append(
+                    f"<td class='cmp-val'>{html.escape(val_str)}"
+                    f" <span class='{delta_cls}'>{html.escape(delta_str)}</span></td>"
+                )
+        rows_html.append(f"<tr>{''.join(cells)}</tr>")
+
+    if not rows_html:
+        table_body = "<tr><td colspan='99' class='muted'>No metrics available yet.</td></tr>"
+    else:
+        table_body = "\n".join(rows_html)
+
+    run_ids = " vs ".join(r.run_id[:8] for r in runs)
+    return (
+        f"<div id='detail-inner' class='compare-table-wrap'>\n"
+        f"<div class='detail-header'><div>"
+        f"<div class='detail-title'>Metric Comparison</div>"
+        f"<div class='detail-meta muted'>{html.escape(run_ids)}</div>"
+        f"</div></div>\n"
+        f"<div class='compare-table-scroll'>"
+        f"<table class='cmp-table data-table'>\n"
+        f"<thead>{header_row}</thead>\n"
+        f"<tbody>{table_body}</tbody>\n"
+        f"</table></div>\n"
+        f"</div>\n"
+    )
 
 
 def _render_hw_info(hw: dict[str, str]) -> str:
@@ -1053,6 +1143,30 @@ async def runs_table_fragment() -> str:
 @app.get("/api/ui/datasets-table", response_class=HTMLResponse)
 async def datasets_table_fragment() -> str:
     return _render_datasets_table(_dataset_statuses())
+
+
+@app.get("/api/ui/compare-table", response_class=HTMLResponse)
+async def compare_table_fragment(
+    ids: str = Query(..., description="Comma-separated run IDs"),
+) -> str:
+    id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    if len(id_list) < 2:
+        raise HTTPException(status_code=400, detail="Provide at least 2 run IDs via ?ids=")
+    placeholders = ",".join("?" * len(id_list))
+    rows = (
+        _get_db()
+        .execute(
+            f"SELECT * FROM runs WHERE id IN ({placeholders})",
+            id_list,
+        )
+        .fetchall()
+    )
+    if not rows:
+        raise HTTPException(status_code=404, detail="No matching runs found")
+    results = [_row_to_result(r) for r in rows]
+    id_order = {rid: i for i, rid in enumerate(id_list)}
+    results.sort(key=lambda r: id_order.get(r.run_id, 999))
+    return _render_compare_table(results)
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────
