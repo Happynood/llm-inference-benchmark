@@ -9,6 +9,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Metric trend chart in the Web UI**: selecting 2 or more runs and clicking the new
+  **Trend** button in the compare bar loads an interactive Plotly line+scatter chart in the
+  main panel.  Runs are placed on the X axis in chronological order (labelled with their
+  short ID and optional label), and the Y axis shows one numeric metric at a time.  Plotly
+  buttons across the top of the chart let you switch between metrics (throughput, latency,
+  TTFT, VRAM, energy, efficiency, etc.) without re-requesting data from the server.  Runs
+  that have no value for the active metric show a gap in the line.  Plotly is lazy-loaded
+  from CDN only on the first Chart or Trend click.
+
 - **Multi-run CSV export from the compare bar**: selecting 2 or more runs now shows a **CSV**
   button in the compare bar.  Clicking it downloads a single `compare_runs.csv` file with one
   row per selected run.  Columns match the per-run CSV (`run_id`, `label`, `backend`, `model`,
