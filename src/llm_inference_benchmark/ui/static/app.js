@@ -427,14 +427,13 @@ function appendLlamaCppGpuWarning() {
   const warn = document.createElement('div');
   warn.className = 'gpu-warning';
   warn.innerHTML =
-    '<strong>GPU offload unavailable.</strong> ' +
-    'The installed llama-cpp-python was built without CUDA support — ' +
+    '<strong>GPU acceleration unavailable.</strong> ' +
+    'llama-cpp-python was not compiled with CUDA support — ' +
     'the model will run on CPU regardless of the GPU Layers setting. ' +
-    'To enable GPU acceleration, reinstall with CUDA: ' +
-    '<code>pip install llama-cpp-python ' +
-    '--extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu121</code>' +
-    ' or build from source: ' +
-    '<code>CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp</code>';
+    'To enable GPU, run: <code>make install-llama-cpp-prebuilt</code> ' +
+    '(no compiler needed — installs a pre-built cu124 wheel). ' +
+    'Or build from source if you have the CUDA toolkit: ' +
+    '<code>make install-llama-cpp-cuda</code>';
   container.appendChild(warn);
 }
 
