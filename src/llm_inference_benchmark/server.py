@@ -1238,6 +1238,7 @@ async def capabilities() -> dict[str, bool]:
         # The ctypes handle lives in the llama_cpp.llama_cpp submodule, not the top-level package.
         try:
             import llama_cpp.llama_cpp as _llama_cpp_inner  # type: ignore[import]
+
             _lib = _llama_cpp_inner._lib  # type: ignore[attr-defined]
             _fn = _lib.ggml_backend_cuda_get_device_count
             _fn.restype = _ctypes.c_int

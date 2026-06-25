@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import random
 import statistics
 import time
@@ -56,6 +57,20 @@ def _resolve_prompt_sequence(prompts: list[str], n: int, seed: int | None) -> li
 _RunResult = tuple[
     list[RequestMetrics], list[str], list[str], float, list[float], list[float], list[float]
 ]
+
+
+def _run_async(coro: asyncio.coroutines.CoroutineType) -> _RunResult:  # type: ignore[type-arg]
+    """Run a coroutine, safe whether or not an event loop is already running.
+
+    Uses a thread when called from within a running loop (e.g. from pytest-asyncio
+    fixtures or Jupyter notebooks) to avoid RuntimeError from nested asyncio.run().
+    """
+    try:
+        asyncio.get_running_loop()
+    except RuntimeError:
+        return asyncio.run(coro)
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+        return pool.submit(asyncio.run, coro).result()
 
 
 async def _run_concurrent(
@@ -202,7 +217,7 @@ def run_benchmark(
                 ttft_values,
                 tpot_values,
                 itl_values,
-            ) = asyncio.run(_run_open_loop(backend, config, sequence))
+            ) = _run_async(_run_open_loop(backend, config, sequence))
         elif config.concurrency > 1:
             (
                 results,
@@ -212,7 +227,7 @@ def run_benchmark(
                 ttft_values,
                 tpot_values,
                 itl_values,
-            ) = asyncio.run(_run_concurrent(backend, config, sequence))
+            ) = _run_async(_run_concurrent(backend, config, sequence))
         else:
             for i in range(config.requests):
                 prompt = sequence[i]

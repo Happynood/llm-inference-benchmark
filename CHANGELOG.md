@@ -7,6 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+
+- **Concurrent runner (asyncio)**: `asyncio.run()` raised `RuntimeError` when called
+  from inside a running event loop (e.g. after Playwright e2e tests or from a Jupyter
+  notebook). The runner now detects an existing loop and offloads async work to a
+  thread-pool executor, making `--concurrency` and `--arrival-rate` work correctly in
+  all contexts.
+- **CUDA capability test mock**: `test_capabilities_cuda_primary_probe_true` and the
+  related GPU-detection tests were not patching `sys.modules["llama_cpp.llama_cpp"]`
+  (the inner module that the capabilities endpoint imports). The mocks now cover both
+  the outer and inner modules, making the tests deterministic across CPU-only and
+  GPU-enabled environments.
+
 ## [1.5.0] - 2026-06-26
 
 ### Added
