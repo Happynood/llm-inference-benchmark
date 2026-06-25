@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import ctypes
 import sys
 import types
 from collections.abc import AsyncGenerator, Generator
