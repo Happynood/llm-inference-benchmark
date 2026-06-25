@@ -7,6 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **`docs/cli.md`**: added reference sections for five previously undocumented subcommands —
+  `sweep`, `pull`, `datasets pull/list`, `pipeline`, and `verify` — each with an options
+  table and usage examples.
+- **`docs/cli.md`**: documented the `--arrival-rate`, `--dataset`, `--base-url`, and
+  `--api-key` global flags in the "Default mode" options table, with open-loop load mode
+  examples.
+- **`docs/cli.md`**: added `arrival_rate_rps` to the Config YAML reference table.
+
 ### Fixed
 
 - **Concurrent runner (asyncio)**: `asyncio.run()` raised `RuntimeError` when called
