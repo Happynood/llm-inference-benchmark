@@ -4,6 +4,7 @@
         run run-hf run-gpu run-matrix \
         run-llama-cpp-cpu run-llama-cpp-gpu \
         run-quant-compare \
+        webui webui-gpu setup-gpu \
         clean
 
 # ── Dependencies ─────────────────────────────────────────────────────────────
@@ -85,6 +86,17 @@ run-llama-cpp-gpu:
 run-quant-compare:
 	uv run llm-bench matrix --config configs/llama-cpp-quant-compare.yaml
 	uv run llm-bench compare results/quant-q4km.csv results/quant-q8.csv
+
+# ── Web UI ───────────────────────────────────────────────────────────────────
+
+webui:
+	uv run llm-bench serve
+
+webui-gpu:
+	$(MAKE) install-llama-cpp-prebuilt && uv run llm-bench serve
+
+setup-gpu:
+	bash scripts/setup-gpu.sh
 
 # ── Cleanup ───────────────────────────────────────────────────────────────────
 

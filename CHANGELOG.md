@@ -7,6 +7,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **`scripts/setup-gpu.sh`**: one-command GPU setup script — detects the NVIDIA GPU via
+  `nvidia-smi` and installs the CUDA-enabled llama-cpp-python wheel automatically.
+- **Makefile shortcuts**: `make webui` (start Web UI), `make webui-gpu` (install CUDA wheel
+  then start Web UI), and `make setup-gpu` (run the GPU setup script).
+
 ### Fixed
 
 - **Compare action bar position**: the compare bar (Table / Chart / Trend / Pareto / CSV / ✕)
