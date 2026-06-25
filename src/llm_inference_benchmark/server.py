@@ -1225,11 +1225,23 @@ async def capabilities() -> dict[str, bool]:
         _preload_nvidia_cuda_libs()
     except Exception:
         pass
+    import ctypes as _ctypes
+
     llama_gpu = False
     try:
-        from llama_cpp import llama_supports_gpu_offload  # type: ignore[import-untyped]
+        import llama_cpp as _llama_cpp
 
-        llama_gpu = bool(llama_supports_gpu_offload())
+        # llama_supports_gpu_offload() was deprecated in llama_cpp ≥0.3 and returns
+        # False even when the library is compiled with CUDA. Use
+        # ggml_backend_cuda_get_device_count as the primary probe — it only exists
+        # in CUDA builds and returns the actual device count.
+        try:
+            _fn = _llama_cpp._lib.ggml_backend_cuda_get_device_count
+            _fn.restype = _ctypes.c_int
+            llama_gpu = _fn() > 0
+        except AttributeError:
+            # Fallback for older builds that don't expose the GGML backend API
+            llama_gpu = bool(_llama_cpp.llama_supports_gpu_offload())  # type: ignore[attr-defined]
     except Exception:
         pass
     return {"llama_cpp_gpu": llama_gpu}

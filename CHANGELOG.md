@@ -7,6 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Fixed
+
+- **llama-cpp CUDA capability detection**: `llama_supports_gpu_offload()` was deprecated in
+  llama_cpp ≥0.3.x and always returned `False` even when the library was compiled with CUDA,
+  causing the Web UI to incorrectly show a "GPU unavailable" warning on CUDA-capable builds.
+  The detection now probes `ggml_backend_cuda_get_device_count` (a symbol present only in
+  CUDA builds) with a fallback to the legacy function for older installs.  The warning message
+  in the Web UI has also been updated to recommend `make install-llama-cpp-prebuilt` as the
+  simplest fix.
+
 ### Added
 
 - **Leaderboard panel in the Web UI**: a new **Leaderboard** button in the sidebar toolbar
