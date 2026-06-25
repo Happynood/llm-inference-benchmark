@@ -9,6 +9,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **Multi-run CSV export from the compare bar**: selecting 2 or more runs now shows a **CSV**
+  button in the compare bar.  Clicking it downloads a single `compare_runs.csv` file with one
+  row per selected run.  Columns match the per-run CSV (`run_id`, `label`, `backend`, `model`,
+  `status`, `created_at`, `finished_at`, plus all numeric metric keys).  Rows are ordered by
+  selection sequence.  Powered by the new `GET /api/runs/export.csv?ids=…` endpoint.
+
 - **Bar-chart comparison view in the Web UI**: selecting 2 or more runs and clicking the new
   **Chart** button in the compare bar loads an interactive Plotly grouped bar chart in the
   main panel.  Each metric is a group of bars (one per run), all normalised to 0–100 % so

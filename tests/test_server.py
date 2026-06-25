@@ -1197,6 +1197,100 @@ async def test_csv_export_includes_label_column(client: httpx.AsyncClient) -> No
     assert data[label_idx] == "my-label"
 
 
+# ── Multi-run CSV export ──────────────────────────────────────────────────────
+
+
+@pytest.mark.anyio
+async def test_compare_csv_returns_200_with_valid_ids(client: httpx.AsyncClient) -> None:
+    """GET /api/runs/export.csv?ids=… returns 200 with CSV content for valid run IDs."""
+    import csv
+    import io
+
+    db = _get_db()
+    ids = [
+        "export-csv-0000-0000-0000-000000000001",
+        "export-csv-0000-0000-0000-000000000002",
+    ]
+    for rid in ids:
+        db.execute(
+            "INSERT INTO runs (id, status, config, output, created_at, finished_at)"
+            ' VALUES (?, \'done\', \'{"backend":"mock","model":"m"}\', \'\', ?, ?)',
+            (rid, _now_iso(), _now_iso()),
+        )
+    db.commit()
+
+    resp = await client.get(f"/api/runs/export.csv?ids={','.join(ids)}")
+    assert resp.status_code == 200
+    assert "text/csv" in resp.headers["content-type"]
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    assert len(rows) == 3  # header + 2 data rows
+    assert rows[0][0] == "run_id"
+    assert rows[1][0] == ids[0]
+    assert rows[2][0] == ids[1]
+
+
+@pytest.mark.anyio
+async def test_compare_csv_missing_ids_returns_400(client: httpx.AsyncClient) -> None:
+    """GET /api/runs/export.csv with no ids query param returns 422."""
+    resp = await client.get("/api/runs/export.csv")
+    assert resp.status_code == 422
+
+
+@pytest.mark.anyio
+async def test_compare_csv_unknown_ids_returns_404(client: httpx.AsyncClient) -> None:
+    """GET /api/runs/export.csv?ids=unknown returns 404."""
+    resp = await client.get("/api/runs/export.csv?ids=does-not-exist")
+    assert resp.status_code == 404
+
+
+@pytest.mark.anyio
+async def test_compare_csv_preserves_selection_order(client: httpx.AsyncClient) -> None:
+    """Rows in the exported CSV follow the order of the ids query parameter."""
+    import csv
+    import io
+
+    db = _get_db()
+    id_a = "export-ord-0000-0000-0000-000000000001"
+    id_b = "export-ord-0000-0000-0000-000000000002"
+    for rid in (id_a, id_b):
+        db.execute(
+            "INSERT INTO runs (id, status, config, output, created_at, finished_at)"
+            " VALUES (?, 'done', '{}', '', ?, ?)",
+            (rid, _now_iso(), _now_iso()),
+        )
+    db.commit()
+
+    # Request b before a — CSV should reflect that order.
+    resp = await client.get(f"/api/runs/export.csv?ids={id_b},{id_a}")
+    assert resp.status_code == 200
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    assert rows[1][0] == id_b
+    assert rows[2][0] == id_a
+
+
+@pytest.mark.anyio
+async def test_compare_csv_includes_label_column(client: httpx.AsyncClient) -> None:
+    """The combined CSV export includes the label column."""
+    import csv
+    import io
+
+    db = _get_db()
+    rid = "export-lbl-0000-0000-0000-000000000001"
+    db.execute(
+        "INSERT INTO runs (id, status, config, output, created_at, finished_at, label)"
+        " VALUES (?, 'done', '{}', '', ?, ?, 'export-label')",
+        (rid, _now_iso(), _now_iso()),
+    )
+    db.commit()
+
+    resp = await client.get(f"/api/runs/export.csv?ids={rid}")
+    assert resp.status_code == 200
+    rows = list(csv.reader(io.StringIO(resp.text)))
+    header = rows[0]
+    assert "label" in header
+    assert rows[1][header.index("label")] == "export-label"
+
+
 @pytest.mark.anyio
 async def test_run_list_fragment_searches_label(client: httpx.AsyncClient) -> None:
     """GET /api/ui/run-list?q= matches against the run label."""
