@@ -267,6 +267,11 @@ function openComparison() {
   window.open('/runs/pareto?ids=' + Array.from(compareSet).join(','), '_blank');
 }
 
+function openCompareExport() {
+  if (compareSet.size < 1) return;
+  window.location.href = '/api/runs/export.csv?ids=' + Array.from(compareSet).join(',');
+}
+
 function openCompareTable() {
   if (compareSet.size < 2) return;
   var ids = Array.from(compareSet).join(',');

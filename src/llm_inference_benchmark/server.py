@@ -10,6 +10,7 @@ Endpoints:
   POST /api/datasets/pull
   GET    /api/runs
   POST   /api/runs
+  GET    /api/runs/export.csv        downloadable combined CSV for selected runs (?ids=…)
   GET    /api/runs/{run_id}
   PATCH  /api/runs/{run_id}              update label ({"label": "…"})
   DELETE /api/runs/{run_id}
@@ -1095,6 +1096,48 @@ async def submit_run(body: RunRequest, background_tasks: BackgroundTasks) -> Run
     db.commit()
     background_tasks.add_task(_do_run, run_id, body.config, dataset=body.dataset)
     return RunSubmitted(run_id=run_id)
+
+
+@app.get("/api/runs/export.csv")
+async def download_compare_csv(
+    ids: str = Query(..., description="Comma-separated run IDs"),
+) -> Response:
+    id_list = [i.strip() for i in ids.split(",") if i.strip()]
+    if not id_list:
+        raise HTTPException(status_code=400, detail="Provide at least one run ID via ?ids=")
+    placeholders = ",".join("?" * len(id_list))
+    rows = _get_db().execute(f"SELECT * FROM runs WHERE id IN ({placeholders})", id_list).fetchall()
+    if not rows:
+        raise HTTPException(status_code=404, detail="No matching runs found")
+    results = [_row_to_result(r) for r in rows]
+    id_order = {rid: i for i, rid in enumerate(id_list)}
+    results.sort(key=lambda r: id_order.get(r.run_id, 999))
+    buf = io.StringIO()
+    writer = csv.writer(buf)
+    writer.writerow(
+        ["run_id", "label", "backend", "model", "status", "created_at", "finished_at"]
+        + _NUMERIC_METRIC_KEYS
+    )
+    for run in results:
+        metrics = _parse_metrics_from_output(run.output)
+        cfg = run.config or {}
+        writer.writerow(
+            [
+                run.run_id,
+                run.label or "",
+                cfg.get("backend", ""),
+                cfg.get("model", ""),
+                run.status,
+                run.created_at,
+                run.finished_at or "",
+            ]
+            + [("" if metrics.get(k) is None else metrics[k]) for k in _NUMERIC_METRIC_KEYS]
+        )
+    return Response(
+        content=buf.getvalue(),
+        media_type="text/csv",
+        headers={"Content-Disposition": 'attachment; filename="compare_runs.csv"'},
+    )
 
 
 @app.get("/api/runs/{run_id}")
