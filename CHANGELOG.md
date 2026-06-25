@@ -13,6 +13,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   `nvidia-smi` and installs the CUDA-enabled llama-cpp-python wheel automatically.
 - **Makefile shortcuts**: `make webui` (start Web UI), `make webui-gpu` (install CUDA wheel
   then start Web UI), and `make setup-gpu` (run the GPU setup script).
+- **docs**: `docs/quickstart.md` gains a **GPU Quick Start** section (3-command path with
+  CUDA wheel warning) and an updated **Web UI** section describing the Leaderboard panel and
+  Compare bar. `docs/metrics.md` adds definitions for `p50_ttft_ms`, `p95_ttft_ms`, and
+  `itl_stddev_ms`.
 
 ### Fixed
 

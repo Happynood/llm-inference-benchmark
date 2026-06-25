@@ -37,6 +37,9 @@
 | `hw_gpu` | string | GPU name from `nvidia-smi`; blank on CPU-only machines |
 | `hw_vram_gb` | GB | Total VRAM from `nvidia-smi`, rounded to one decimal; blank on CPU-only machines |
 | `hw_os` | string | OS string from `platform.platform()` |
+| `p50_ttft_ms` | ms | p50 Time to First Token across requests; blank unless `stream: true` was set in the config (v1.1.0) |
+| `p95_ttft_ms` | ms | p95 Time to First Token across requests; blank unless `stream: true` was set in the config (v1.1.0) |
+| `itl_stddev_ms` | ms | Standard deviation of inter-token latency across all generated tokens; blank unless `stream: true` was set (v1.1.0) |
 | `mean_reasoning_tokens` | tokens | Mean estimated tokens inside `<think>…</think>` per request; blank unless `reasoning_start_tag` / `reasoning_end_tag` are set |
 | `mean_answer_tokens` | tokens | Mean estimated tokens outside the reasoning block per request; blank unless reasoning tags are set |
 | `reasoning_fraction` | ratio [0, 1] | Mean fraction of output tokens attributed to reasoning; blank unless reasoning tags are set |
