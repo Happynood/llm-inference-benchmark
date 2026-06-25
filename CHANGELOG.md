@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [1.5.0] - 2026-06-26
+
 ### Added
 
 - **`scripts/setup-gpu.sh`**: one-command GPU setup script — detects the NVIDIA GPU via
