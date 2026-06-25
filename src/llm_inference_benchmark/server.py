@@ -1229,7 +1229,7 @@ async def capabilities() -> dict[str, bool]:
 
     llama_gpu = False
     try:
-        import llama_cpp as _llama_cpp
+        import llama_cpp as _llama_cpp  # type: ignore[import]
 
         # llama_supports_gpu_offload() was deprecated in llama_cpp ≥0.3 and returns
         # False even when the library is compiled with CUDA. Use
