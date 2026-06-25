@@ -25,14 +25,18 @@ llm-bench [OPTIONS]
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| `--config PATH` | path (required) | — | YAML benchmark config file |
+| `--config PATH` | path | — | YAML benchmark config file. Required unless `--base-url` is given |
 | `--format` | choice | `table` | Output format: `table` = human-readable text, `json` = machine-readable JSON object |
 | `--output PATH` | path | — | Write results to this path (`--format table` → CSV, `--format json` → JSON file) |
 | `--manifest PATH` | path | — | Write JSON environment fingerprint to this path |
 | `--requests N` | int ≥ 1 | — | Override `requests` from the config |
 | `--warmup-requests N` | int ≥ 0 | — | Override `warmup_requests` from the config |
 | `--concurrency N` | int ≥ 1 | — | Override `concurrency` from the config |
+| `--arrival-rate RPS` | float > 0 | — | Open-loop mode: dispatch requests at a constant rate (req/s), regardless of response time. Overrides `--concurrency`. Reveals queuing latency under sustained load |
 | `--seed N` | int | — | Override `seed` from the config for reproducible prompt sampling |
+| `--dataset NAME` | string | — | Use a cached real-world dataset as the prompt source instead of `prompts_file`. Pull first with `llm-bench datasets pull <name>` |
+| `--base-url URL` | string | — | Base URL of an OpenAI-compatible endpoint (e.g. `http://localhost:11434/v1`). Sets backend to `openai` and makes `--config` optional; use `--set model=<name>` to specify the model |
+| `--api-key KEY` | string | — | API key for `--base-url`. Omit for local servers that do not require authentication |
 | `--set KEY=VALUE` | str (repeatable) | — | Override any config field via dot-path, e.g. `--set llama_cpp.max_tokens=200`. Values are parsed as YAML scalars (int, float, bool, str). Can be repeated. |
 
 **Examples**
@@ -67,6 +71,15 @@ llm-bench --config configs/llama-cpp-cpu.yaml --set llama_cpp.max_tokens=200 --s
 
 # Reproducible run with a fixed seed for prompt sampling
 llm-bench --config configs/example.yaml --seed 42 --requests 20
+
+# Open-loop mode: dispatch 5 requests/second regardless of response time
+llm-bench --config configs/example.yaml --arrival-rate 5 --requests 50
+
+# Test any OpenAI-compatible server without a config file
+llm-bench --base-url http://localhost:11434/v1 --set model=llama3.2:3b
+
+# Use a real-world dataset instead of the default prompts file (pull it first)
+llm-bench --config configs/example.yaml --dataset lmsys-chat
 ```
 
 The YAML config file controls which backend is used, the model, request count, and all
@@ -372,6 +385,41 @@ include its output in bug reports and result comparisons.
 
 ---
 
+## verify
+
+Check which backends are installed and run a smoke test on the mock backend.
+
+```
+llm-bench verify [OPTIONS]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--format` | choice | `table` | Output format: `table` = human-readable, `json` = machine-readable JSON array |
+
+Runs a minimal inference call on the `mock` backend (always available) and checks whether
+optional backend dependencies (`transformers`, `llama-cpp-python`, `optimum`, `vllm`) are
+installed. Use this to confirm your environment is working before running expensive benchmarks.
+
+Exits **0** when all installed backends pass, **1** if any backend reports a failure.
+
+**Examples**
+
+```bash
+llm-bench verify
+llm-bench verify --format json
+```
+
+```
+BACKEND        STATUS     LATENCY  NOTES
+----------------------------------------------------
+mock           PASS        10.0 ms  smoke test OK
+transformers   PASS        98.2 ms  OK
+llama-cpp      NOT_INSTALLED  N/A   llama_cpp package not found
+```
+
+---
+
 ## matrix
 
 Execute all benchmark runs defined in a matrix config file.
@@ -435,6 +483,202 @@ llm-bench compare results/*.csv --sort p95
 
 ---
 
+## pipeline
+
+Run a full benchmark study: all matrix cells followed by compare, Pareto, and recommend.
+
+```
+llm-bench pipeline [OPTIONS]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--config PATH` | path (required) | — | YAML pipeline config file |
+| `--dry-run` | flag | off | Print the full run plan and exit without executing |
+| `--continue-on-error` | flag | off | Continue remaining cells after a failure; run post-processing on successful CSVs; exits 1 when any cell failed |
+| `--format` | choice | `table` | Terminal progress format: `table` = human-readable, `json` = machine-readable |
+
+A pipeline config is a superset of the matrix config format. After all matrix cells complete,
+the pipeline automatically writes comparison tables, a Pareto chart, and a recommendation to
+`results_dir/`. This is the recommended way to run a multi-model study end-to-end.
+
+**Examples**
+
+```bash
+# Preview the full plan
+llm-bench pipeline --config configs/pipeline-example.yaml --dry-run
+
+# Execute all cells
+llm-bench pipeline --config configs/pipeline-example.yaml
+
+# Continue past cell failures, post-process successful results
+llm-bench pipeline --config configs/pipeline-example.yaml --continue-on-error
+```
+
+---
+
+## sweep
+
+Ramp concurrency and emit a throughput-vs-latency curve.
+
+```
+llm-bench sweep [OPTIONS]
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--config PATH` | path (required) | — | Base YAML benchmark config file |
+| `--concurrency-range LIST` | string (required) | — | Comma-separated concurrency levels to test, e.g. `1,2,4,8` |
+| `--max-p95-ms FLOAT` | float | — | Stop the sweep early when p95 latency exceeds this threshold (ms); exits 1 |
+| `--requests N` | int | — | Override requests count per level (overrides config) |
+| `--output PATH` | string | `sweep_results.csv` | Path for the combined sweep CSV |
+
+Runs the benchmark once at each concurrency level, loads the model only once, and writes a
+combined CSV with one row per level plus columns for `concurrency` and `throughput_rps`. After
+all levels complete it prints a summary table and annotates the **knee point** (highest
+requests/second across all levels).
+
+Use `--max-p95-ms` as a latency SLA: the sweep stops when the p95 threshold is exceeded and
+exits with code 1, making it usable as a CI gate.
+
+**Examples**
+
+```bash
+# Sweep concurrency 1 → 2 → 4 → 8
+llm-bench sweep --config configs/example.yaml --concurrency-range 1,2,4,8
+
+# Stop when p95 exceeds 5 seconds
+llm-bench sweep --config configs/example.yaml --concurrency-range 1,2,4,8 --max-p95-ms 5000
+
+# Save results to a custom path
+llm-bench sweep --config configs/example.yaml --concurrency-range 1,2,4 --output results/sweep.csv
+```
+
+**Sweep summary output**
+
+```
+=== Sweep Summary ===
+ Concurrency       RPS    p50 ms    p95 ms     tok/s
+-----------------------------------------------------
+           1     0.098    1050.0    1200.0      49.1
+           2     0.183    1080.0    1350.0      91.5  <- knee
+           4     0.201    1950.0    2800.0      99.8
+
+Knee point: concurrency=2  rps=0.183  p95=1350.0 ms
+```
+
+---
+
+## pull
+
+Download a model from HuggingFace Hub.
+
+```
+llm-bench pull [OPTIONS] REPO_ID
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `REPO_ID` | string (required) | — | HuggingFace repository ID, e.g. `Qwen/Qwen2.5-Coder-7B-Instruct-GGUF` |
+| `--quant QUANT` | string | — | GGUF quantization suffix to download (e.g. `Q4_K_M`). Required when `--backend gguf` |
+| `--backend` | choice | auto | Download backend: `gguf` or `transformers`. Defaults to `gguf` when `--quant` is given, otherwise `transformers` |
+| `--dest PATH` | path | `~/models/` | Destination directory for GGUF files |
+| `--max-size-gb FLOAT` | float | `10.0` | Abort if the remote file exceeds this size in GB |
+| `--token TOKEN` | string | `$HF_TOKEN` | HuggingFace access token for gated models |
+
+Downloads to `~/models/` for GGUF files and to the HuggingFace cache
+(`~/.cache/huggingface/hub/`) for Transformers models. If the file is already cached the
+command prints "Already cached" and exits 0 without re-downloading.
+
+Requires `huggingface-hub` (installed by default with `llm-inference-benchmark`).
+
+**Examples**
+
+```bash
+# Download a GGUF quantisation
+llm-bench pull Qwen/Qwen2.5-Coder-7B-Instruct-GGUF --quant Q4_K_M
+
+# Download a Transformers model to HF cache
+llm-bench pull HuggingFaceTB/SmolLM2-360M-Instruct --backend transformers
+
+# Limit download size and use a custom destination
+llm-bench pull Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF --quant Q5_K_M --max-size-gb 5 --dest ~/my-models/
+
+# Gated model — pass a HF token
+llm-bench pull meta-llama/Meta-Llama-3-8B-Instruct --backend transformers --token hf_xxx
+```
+
+---
+
+## datasets
+
+Manage cached real-world prompt datasets for benchmarking.
+
+```
+llm-bench datasets COMMAND
+```
+
+### datasets pull
+
+Download and cache a real-world prompt dataset.
+
+```
+llm-bench datasets pull [OPTIONS] NAME
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `NAME` | string (required) | — | Dataset name (see table below) |
+| `--max-samples N` | int ≥ 1 | per-dataset | Override the maximum number of samples to download |
+| `--token TOKEN` | string | `$HF_TOKEN` | HuggingFace access token (required for gated datasets) |
+
+Supported dataset names:
+
+| Name | Source | Description | Default samples | Gated |
+|------|--------|-------------|-----------------|-------|
+| `wildchat` | `allenai/WildChat-1M` | Real-world user chat turns | 500 | No |
+| `lmsys-chat` | `lmsys/lmsys-chat-1m` | Real multi-turn chat (first user turn) | 500 | Yes |
+| `hermes-fn` | `NousResearch/hermes-function-calling-v1` | Function-calling prompts | 200 | No |
+| `long-context-4k` | `allenai/c4` (en) | ~4 k-token passages for prefill profiling | 100 | No |
+| `long-context-16k` | `allenai/c4` (en) | ~16 k-token passages | 50 | No |
+| `long-context-64k` | `allenai/c4` (en) | ~64 k-token passages | 10 | No |
+
+Samples are cached as a `.jsonl` file in `~/.llm-bench/datasets/`. Pass the dataset name to
+`llm-bench` with `--dataset <name>` to use it as the prompt source for a benchmark run.
+
+Requires the `datasets` package: `uv pip install datasets`.
+
+**Examples**
+
+```bash
+llm-bench datasets pull wildchat
+llm-bench datasets pull lmsys-chat --token hf_xxx
+llm-bench datasets pull long-context-4k --max-samples 20
+```
+
+### datasets list
+
+List locally cached datasets and their sample counts.
+
+```
+llm-bench datasets list
+```
+
+No options.
+
+```bash
+llm-bench datasets list
+```
+
+```
+Dataset               Samples
+------------------------------
+wildchat              500
+long-context-4k       100
+```
+
+---
+
 ## validate-config
 
 Validate a benchmark config file and print a summary of resolved settings.
@@ -488,7 +732,8 @@ All fields are optional unless marked required.
 | `backend` | string | `mock` | Backend to use: `mock`, `transformers`, `llama-cpp`, `openai` |
 | `model` | string | `mock-gpt2` | Model identifier (path or HuggingFace repo ID) |
 | `requests` | int ≥ 1 | `20` | Number of benchmark requests (excluding warmup) |
-| `concurrency` | int ≥ 1 | `1` | Maximum number of requests in-flight at once |
+| `concurrency` | int ≥ 1 | `1` | Maximum number of requests in-flight at once (closed-loop mode) |
+| `arrival_rate_rps` | float > 0 | — | Open-loop mode: dispatch requests at this rate (req/s) regardless of response time. Mutually exclusive with `concurrency`; set via `--arrival-rate` on the CLI |
 | `warmup_requests` | int ≥ 0 | `2` | Warmup requests (excluded from metrics) |
 | `repeats` | int ≥ 1 | `1` | Repeat the full benchmark loop N times; p95/tok/s become the median |
 | `seed` | int | — | Random seed for stochastic sampling (`temperature > 0`). Applied per-request in `transformers` (`torch.manual_seed`) and at model load in `llama-cpp`. For `openai`, the value is forwarded as a best-effort hint — server support varies. Has no effect on greedy decoding (`temperature: 0.0`). |
