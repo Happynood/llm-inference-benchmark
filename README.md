@@ -208,6 +208,23 @@ Full metric definitions: **[docs/metrics.md](docs/metrics.md)** · Curated repor
 - **Real-world datasets** — pull and cache HuggingFace prompt sets for contamination-resistant runs
 - **Model downloads** — `llm-bench pull` downloads GGUF or HF snapshots with hash verification
 - **Docker images** — CPU, GPU, Web UI, and Web UI + GPU variants on GHCR
+- **HTML reports** — `llm-bench report` generates a shareable, self-contained HTML page from one or more CSVs
+
+---
+
+## Shareable Reports
+
+Generate a single HTML file from any benchmark CSV — no server needed:
+
+```bash
+llm-bench report result.csv                              # → report.html
+llm-bench report run1.csv run2.csv --output compare.html
+llm-bench report *.csv --title "Llama-3.2 Quant Sweep"
+```
+
+The report includes an interactive Plotly chart (throughput vs p95 latency), a full metrics
+table with Pareto-optimal runs highlighted, and optional hardware details.  Open it in any
+browser or attach it to a GitHub issue.
 
 ---
 
