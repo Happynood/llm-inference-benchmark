@@ -472,3 +472,35 @@ def test_leaderboard_panel_loads_on_click(page: Page, live_server: str) -> None:
     page.locator("#tab-btn-leaderboard").click()
     page.wait_for_selector(".detail-title", timeout=8000)
     expect(page.locator(".detail-title")).to_contain_text("Leaderboard")
+
+
+# ── Recommend panel ────────────────────────────────────────────────────────────
+
+
+def test_recommend_button_visible_in_sidebar(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    expect(page.locator("#tab-btn-recommend")).to_be_visible()
+    expect(page.locator("#tab-btn-recommend")).to_contain_text("Recommend")
+
+
+def test_recommend_empty_form_shows_result_panel(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.locator("#tab-btn-recommend").click()
+    page.wait_for_selector("#recommend-form", timeout=5000)
+    page.locator("#recommend-form button[type='submit']").click()
+    page.wait_for_selector(".detail-title", timeout=8000)
+    expect(page.locator(".detail-title")).to_contain_text("Recommend")
+
+
+def test_recommend_tight_constraint_shows_no_qualifying_message(
+    page: Page, live_server: str
+) -> None:
+    page.goto(live_server)
+    page.locator("#tab-btn-recommend").click()
+    page.wait_for_selector("#rec-p95", timeout=5000)
+    page.fill("#rec-p95", "1")
+    page.locator("#recommend-form button[type='submit']").click()
+    page.wait_for_selector(".rec-empty, .detail-title", timeout=8000)
+    detail = page.locator("#run-detail")
+    content = detail.inner_text()
+    assert "qualifying" in content.lower() or "Recommend" in content

@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **Recommend panel in the Web UI**: a new **Recommend** tab in the sidebar toolbar lets
+  users specify hardware and quality constraints (max VRAM, max p95 latency, max TTFT,
+  min sanity rate, min quality rate) and get an instant constraint-based recommendation
+  from all stored benchmark runs. The result panel shows the winning run with key metrics,
+  up to four runners-up, and a count of excluded runs. Powered by the new
+  `GET /api/ui/recommend` HTMX endpoint; no new dependencies.
+
 ## [1.5.1] - 2026-06-26
 
 ### Added

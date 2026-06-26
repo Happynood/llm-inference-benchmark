@@ -297,6 +297,34 @@ button { cursor: pointer; font-family: inherit; }
 .delta-good { color: #16a34a; font-size: .72rem; font-weight: 600; }
 .delta-bad  { color: #dc2626; font-size: .72rem; font-weight: 600; }
 
+/* ── Recommend panel ──────────────────────────────────────────────────────── */
+.recommend-form { padding: .75rem .75rem 0; display: flex; flex-direction: column; gap: .5rem; }
+.recommend-form .form-group { margin-bottom: 0; }
+.rec-winner {
+  margin: 1rem 1.25rem; padding: 1rem 1.25rem;
+  border: 1px solid var(--border); border-radius: var(--radius);
+  background: var(--accent-bg);
+}
+.rec-winner-header { display: flex; align-items: center; gap: .5rem; margin-bottom: .35rem; }
+.rec-winner-label { font-weight: 700; font-size: .9rem; }
+.lb-badge {
+  display: inline-block; font-size: .68rem; font-weight: 600; letter-spacing: .02em;
+  padding: .1rem .4rem; border-radius: 99px;
+  background: var(--success-bg); color: var(--success);
+}
+.rec-winner-model { font-size: 1rem; font-weight: 600; word-break: break-all; }
+.rec-winner-backend { font-size: .8rem; margin-top: .1rem; }
+.rec-winner-metrics { display: flex; flex-wrap: wrap; gap: .35rem; margin-top: .6rem; }
+.metric-pill {
+  display: inline-block; font-size: .75rem; font-family: var(--mono);
+  padding: .1rem .45rem; border-radius: 99px;
+  background: var(--surface); border: 1px solid var(--border);
+}
+.rec-why { margin-top: .6rem; font-size: .78rem; }
+.rec-empty { padding: 2rem 1.25rem; text-align: center; }
+.rec-section-title { font-weight: 600; font-size: .82rem; padding: .75rem 1.25rem 0; }
+.rec-excluded { padding: .5rem 1.25rem 1rem; font-size: .78rem; }
+
 /* ── Misc ─────────────────────────────────────────────────────────────────── */
 .mono { font-family: var(--mono); }
 .muted { color: var(--text-muted); font-size: .82rem; padding: 1rem; }

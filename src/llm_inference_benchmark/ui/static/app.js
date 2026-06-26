@@ -64,7 +64,7 @@ const compareSet = new Set();
 /* ── Tab switching ───────────────────────────────────────────────────────── */
 
 function showTab(name) {
-  ['runs', 'datasets', 'leaderboard'].forEach(function(t) {
+  ['runs', 'datasets', 'leaderboard', 'recommend'].forEach(function(t) {
     const panel = document.getElementById('tab-' + t);
     const btn   = document.getElementById('tab-btn-' + t);
     if (panel) panel.hidden = (t !== name);
@@ -76,6 +76,22 @@ function showTab(name) {
   if (name === 'leaderboard') {
     htmx.ajax('GET', '/api/ui/leaderboard', {target: '#run-detail', swap: 'innerHTML'});
   }
+  if (name === 'recommend') {
+    document.getElementById('run-detail').innerHTML =
+      '<div class="empty-state"><p class="empty-sub">Fill in constraints above and click <strong>Find Best Run</strong>.</p></div>';
+  }
+}
+
+function submitRecommend(event) {
+  event.preventDefault();
+  const form = document.getElementById('recommend-form');
+  const params = new URLSearchParams();
+  ['max_vram_mb', 'max_p95_ms', 'max_ttft_ms', 'min_sanity', 'min_quality'].forEach(function(k) {
+    const el = form.elements[k];
+    if (el && el.value !== '') params.append(k, el.value);
+  });
+  const url = '/api/ui/recommend' + (params.toString() ? '?' + params.toString() : '');
+  htmx.ajax('GET', url, {target: '#run-detail', swap: 'innerHTML'});
 }
 
 /* ── Run list ────────────────────────────────────────────────────────────── */
