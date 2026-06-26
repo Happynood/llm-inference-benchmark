@@ -869,6 +869,52 @@ def diff_cmd(
             sys.exit(1)
 
 
+@main.command("report")
+@click.argument("csv_files", nargs=-1, required=True, type=click.Path(exists=True))
+@click.option(
+    "--output",
+    "output_path",
+    default="report.html",
+    show_default=True,
+    type=click.Path(),
+    help="Output HTML file path",
+)
+@click.option(
+    "--title",
+    "title",
+    default="Benchmark Report",
+    show_default=True,
+    help="Report title shown in the HTML page header",
+)
+def report_cmd(csv_files: tuple[str, ...], output_path: str, title: str) -> None:
+    """Generate a self-contained HTML report from benchmark CSV files.
+
+    Reads one or more benchmark CSV output files and writes a single HTML file
+    containing a metrics summary table and an interactive Plotly scatter chart
+    (throughput vs p95 latency).  Pareto-optimal runs are highlighted.
+
+    The report can be opened in any browser without running the server.
+
+    Examples:
+
+        llm-bench report result.csv
+        llm-bench report run1.csv run2.csv --output comparison.html
+        llm-bench report *.csv --title "Llama-3.2 Quant Comparison"
+    """
+    from llm_inference_benchmark.report import build_report_html, load_runs
+
+    try:
+        rows = load_runs(list(csv_files))
+    except (FileNotFoundError, ValueError) as exc:
+        raise click.ClickException(str(exc)) from exc
+
+    html_text = build_report_html(rows, title=title)
+    out = Path(output_path)
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text(html_text, encoding="utf-8")
+    click.echo(f"Report written to {out}  ({len(rows)} run(s))")
+
+
 @main.command("profiles")
 @click.option(
     "--format",

@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **`llm-bench report`**: new command that reads one or more benchmark CSV output files and
+  generates a self-contained HTML report containing an interactive Plotly scatter chart
+  (throughput vs p95 latency with Pareto-optimal runs highlighted) and a full metrics summary
+  table.  The report can be opened in any browser without running the server — useful for sharing
+  results in GitHub PRs, issues, or wikis.
+
+  ```bash
+  llm-bench report result.csv
+  llm-bench report run1.csv run2.csv --output comparison.html
+  llm-bench report *.csv --title "Llama-3.2 Quant Comparison"
+  ```
+
 ## [1.7.0] - 2026-06-26
 
 ### Added

@@ -22,6 +22,7 @@ htmlcov/
 benchmark.csv
 benchmark_*.csv
 benchmark-*.csv
+report.html
 results/
 # docs/results/ contains curated markdown reports (not generated CSV/JSON)
 !docs/results/
