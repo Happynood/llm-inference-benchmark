@@ -38,7 +38,8 @@ ARG SKIP_LLAMA_CPP=0
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH" \
+    LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LIBRARY_PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake curl git python3 python3-dev \
@@ -99,7 +100,8 @@ FROM nvidia/cuda:12.6.0-devel-ubuntu22.04 AS webui-gpu
 ENV DEBIAN_FRONTEND=noninteractive \
     PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PATH="/app/.venv/bin:$PATH"
+    PATH="/app/.venv/bin:$PATH" \
+    LIBRARY_PATH=/usr/local/cuda/lib64/stubs:$LIBRARY_PATH
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential cmake curl git python3 python3-dev \
