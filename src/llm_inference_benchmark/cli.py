@@ -1864,6 +1864,55 @@ def datasets_list() -> None:
         click.echo(f"{name:<20}  {count}")
 
 
+@datasets_group.command("info")
+@click.argument("name")
+@click.option(
+    "--samples",
+    "n_samples",
+    default=5,
+    show_default=True,
+    type=click.IntRange(min=0),
+    help="Number of example prompts to show (0 to skip)",
+)
+def datasets_info(name: str, n_samples: int) -> None:
+    """Show metadata and example prompts for a dataset.
+
+    Prints HuggingFace repo, description, sample limit, cached status,
+    and up to --samples example prompts from the local cache.
+
+    Example:
+
+        llm-bench datasets info wildchat
+        llm-bench datasets info lmsys-chat --samples 3
+    """
+    from llm_inference_benchmark.datasets import REGISTRY, dataset_info
+
+    if name not in REGISTRY:
+        known = ", ".join(sorted(REGISTRY))
+        raise click.UsageError(f"Unknown dataset {name!r}. Known datasets: {known}")
+
+    info = dataset_info(name, n_samples=n_samples)
+
+    cached_str = f"✓  ({info['sample_count']} samples)" if info["cached"] else "✗  (not cached)"
+    click.echo(f"Dataset   : {info['name']}")
+    click.echo(f"HF repo   : {info['hf_repo']}")
+    click.echo(f"Description: {info['description']}")
+    click.echo(f"Max samples: {info['max_samples']}")
+    click.echo(f"Cached    : {cached_str}")
+
+    if not info["cached"]:
+        click.echo(f"\nRun to cache:  llm-bench datasets pull {name}")
+        return
+
+    if n_samples > 0 and info["samples"]:
+        click.echo(f"\nSample prompts ({len(info['samples'])} of {info['sample_count']}):")
+        for i, prompt in enumerate(info["samples"], 1):
+            preview = prompt[:120].replace("\n", " ")
+            if len(prompt) > 120:
+                preview += "…"
+            click.echo(f"  [{i}] {preview}")
+
+
 def _build_backend(cfg: BenchmarkConfig, api_key: str | None = None) -> Backend:
     if cfg.backend == "mock":
         return MockBackend(

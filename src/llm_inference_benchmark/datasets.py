@@ -205,6 +205,42 @@ _EXTRACTORS = {
 }
 
 
+def dataset_info(name: str, n_samples: int = 5, seed: int = 0) -> dict:
+    """Return a metadata dict for *name*.
+
+    Keys:
+    - ``name``, ``hf_repo``, ``description``, ``max_samples``
+    - ``cached``: bool
+    - ``sample_count``: int or None (None when not cached)
+    - ``samples``: list[str] of up to *n_samples* prompts (empty when not cached)
+    """
+    if name not in REGISTRY:
+        raise ValueError(f"Unknown dataset {name!r}. Known: {', '.join(sorted(REGISTRY))}")
+
+    spec = REGISTRY[name]
+    path = cache_dir() / f"{name}.jsonl"
+    cached = path.exists() and path.stat().st_size > 0
+
+    sample_count: int | None = None
+    samples: list[str] = []
+    if cached:
+        all_prompts = load_prompts(name)
+        sample_count = len(all_prompts)
+        rng = random.Random(seed)
+        picks = rng.sample(all_prompts, min(n_samples, len(all_prompts)))
+        samples = picks
+
+    return {
+        "name": name,
+        "hf_repo": spec["hf_repo"],
+        "description": spec["description"],
+        "max_samples": spec["max_samples"],
+        "cached": cached,
+        "sample_count": sample_count,
+        "samples": samples,
+    }
+
+
 def pull(name: str, hf_token: str | None = None, max_samples: int | None = None) -> Path:
     """Download up to *max_samples* prompts for *name* and write them to the JSONL cache.
 
