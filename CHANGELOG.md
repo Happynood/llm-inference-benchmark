@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [1.7.0] - 2026-06-26
+
 ### Added
 
 - **`llm-bench datasets info <name>`**: new subcommand that prints dataset metadata (HF repo,
