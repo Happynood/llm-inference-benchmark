@@ -716,3 +716,132 @@ def test_matrix_config_non_dict_input_raises_validation_error() -> None:
 
     with pytest.raises(ValidationError):
         MatrixConfig.model_validate("not-a-dict")
+
+
+# ---------------------------------------------------------------------------
+# dataset field
+# ---------------------------------------------------------------------------
+
+
+def test_matrix_run_config_accepts_known_dataset() -> None:
+    r = MatrixRunConfig(name="r", config="c.yaml", dataset="wildchat")
+    assert r.dataset == "wildchat"
+
+
+def test_matrix_run_config_dataset_none_by_default() -> None:
+    r = MatrixRunConfig(name="r", config="c.yaml")
+    assert r.dataset is None
+
+
+def test_matrix_run_config_rejects_unknown_dataset() -> None:
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="Unknown dataset"):
+        MatrixRunConfig(name="r", config="c.yaml", dataset="no-such-dataset")
+
+
+def test_load_matrix_with_dataset_field(tmp_path: Path) -> None:
+    f = tmp_path / "matrix.yaml"
+    f.write_text("runs:\n  - name: r1\n    config: configs/example.yaml\n    dataset: wildchat\n")
+    mc = load_matrix(f)
+    assert mc.runs[0].dataset == "wildchat"
+
+
+def test_load_matrix_invalid_dataset_fails(tmp_path: Path) -> None:
+    from pydantic import ValidationError
+
+    f = tmp_path / "matrix.yaml"
+    f.write_text("runs:\n  - name: r1\n    config: c.yaml\n    dataset: bogus\n")
+    with pytest.raises(ValidationError, match="Unknown dataset"):
+        load_matrix(f)
+
+
+def test_cli_matrix_dry_run_shows_dataset(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(tmp_path / "results"),
+        [{"name": "chat", "config": str(cfg), "dataset": "wildchat"}],
+    )
+
+    result = CliRunner().invoke(main, ["matrix", "--config", str(matrix), "--dry-run"])
+    assert result.exit_code == 0, result.output
+    assert "wildchat" in result.output
+
+
+def test_cli_matrix_dry_run_json_includes_dataset(tmp_path: Path) -> None:
+    prompts = tmp_path / "p.txt"
+    prompts.write_text("Hello\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts)
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(tmp_path / "results"),
+        [{"name": "chat", "config": str(cfg), "dataset": "wildchat"}],
+    )
+
+    result = CliRunner().invoke(
+        main, ["matrix", "--config", str(matrix), "--dry-run", "--format", "json"]
+    )
+    assert result.exit_code == 0, result.output
+    data = json.loads(result.output)
+    assert data["runs"][0]["dataset"] == "wildchat"
+
+
+def test_cli_matrix_uses_dataset_prompts(tmp_path: Path) -> None:
+    """When dataset is set, matrix runner loads prompts from the cached JSONL."""
+    from unittest.mock import patch
+
+    prompts_file = tmp_path / "p.txt"
+    prompts_file.write_text("fallback prompt\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts_file, requests=2)
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(results_dir),
+        [{"name": "ds-run", "config": str(cfg), "dataset": "wildchat"}],
+    )
+
+    dataset_prompts = ["Dataset prompt one", "Dataset prompt two"]
+    with patch(
+        "llm_inference_benchmark.datasets.load_prompts", return_value=dataset_prompts
+    ) as mock_load:
+        result = CliRunner().invoke(main, ["matrix", "--config", str(matrix)])
+
+    assert result.exit_code == 0, result.output
+    mock_load.assert_called_once()
+    assert mock_load.call_args[0][0] == "wildchat"
+    assert (results_dir / "ds-run.csv").exists()
+
+
+def test_cli_matrix_dataset_not_cached_fails(tmp_path: Path) -> None:
+    """A dataset that is registered but not yet cached gives a clear ClickException."""
+    from unittest.mock import patch
+
+    prompts_file = tmp_path / "p.txt"
+    prompts_file.write_text("fallback\n")
+    cfg = tmp_path / "config.yaml"
+    _write_mock_config(cfg, prompts_file)
+    results_dir = tmp_path / "results"
+    matrix = tmp_path / "matrix.yaml"
+    _write_matrix(
+        matrix,
+        str(results_dir),
+        [{"name": "ds-run", "config": str(cfg), "dataset": "wildchat"}],
+    )
+
+    with patch(
+        "llm_inference_benchmark.datasets.load_prompts",
+        side_effect=FileNotFoundError("Dataset 'wildchat' is not cached"),
+    ):
+        result = CliRunner().invoke(main, ["matrix", "--config", str(matrix)])
+
+    assert result.exit_code != 0
+    assert "not cached" in result.output.lower() or "wildchat" in result.output

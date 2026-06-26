@@ -21,6 +21,7 @@ class MatrixRunConfig(BaseModel):
     config: str
     workload_profile: str | None = None
     overrides: dict[str, Any] = Field(default_factory=dict)
+    dataset: str | None = None
 
     @field_validator("name")
     @classmethod
@@ -31,6 +32,18 @@ class MatrixRunConfig(BaseModel):
                 "contain only letters, digits, dots, underscores, and hyphens "
                 "(no path separators or special characters)."
             )
+        return v
+
+    @field_validator("dataset")
+    @classmethod
+    def _validate_dataset(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        from llm_inference_benchmark.datasets import REGISTRY
+
+        if v not in REGISTRY:
+            known = ", ".join(sorted(REGISTRY))
+            raise ValueError(f"Unknown dataset {v!r}. Known datasets: {known}")
         return v
 
     @model_validator(mode="after")

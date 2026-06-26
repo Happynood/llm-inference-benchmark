@@ -7,6 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **`dataset` field in matrix/pipeline run entries**: each run in a `matrix` or `pipeline`
+  YAML config can now set `dataset: <name>` to load prompts from a cached real-world dataset
+  (`~/.cache/llm-bench/datasets/<name>.jsonl`) instead of the config's `prompts_file`.
+  This enables apples-to-apples backend comparisons on the same real-world prompt set in a
+  single matrix sweep.  Pull the dataset first with `llm-bench datasets pull <name>`, then:
+
+  ```yaml
+  runs:
+    - name: llama-cpp-lmsys
+      config: configs/llama-cpp-cpu.yaml
+      dataset: lmsys-chat
+    - name: transformers-lmsys
+      config: configs/transformers-cpu.yaml
+      dataset: lmsys-chat
+  ```
+
+  `--dry-run` prints the dataset name alongside the run config.  Unknown or uncached datasets
+  fail fast with a clear error message before any benchmark runs start.
+
 ## [1.6.0] - 2026-06-26
 
 ### Added

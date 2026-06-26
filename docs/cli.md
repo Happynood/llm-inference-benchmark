@@ -445,6 +445,7 @@ runs:
   - name: mock-chat
     config: configs/example.yaml
     workload_profile: short_chat   # optional: override config's profile
+    dataset: lmsys-chat            # optional: use a cached real-world dataset as prompt source
     overrides:                     # optional: dot-path overrides of config fields
       mock.latency_ms: 5
       mock.tokens_per_response: 50
@@ -452,6 +453,11 @@ runs:
     config: configs/example.yaml
     workload_profile: code_completion
 ```
+
+`dataset` must be one of the names in `llm-bench datasets list`.  Pull the dataset before running
+the matrix: `llm-bench datasets pull <name>`.  When `dataset` is set the run ignores
+`prompts_file` from the config and loads prompts from `~/.cache/llm-bench/datasets/<name>.jsonl`
+instead.
 
 **Parameter sweep shorthand** (`base_config` + `sweep`):
 
