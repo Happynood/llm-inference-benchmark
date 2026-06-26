@@ -55,29 +55,36 @@ Run `verify` again after installing each new backend to confirm it is detected c
 
 ## GPU Quick Start
 
-Got an NVIDIA GPU and want to run the Web UI with GPU inference in as few steps as possible:
+Got an NVIDIA GPU and want to run the Web UI with GPU inference?
+
+**Requirements:** NVIDIA driver ≥ 520 · CUDA 12.x compatible GPU · no CUDA toolkit needed
+
+### One-command setup
+
+```bash
+make setup-gpu   # detects GPU, installs CUDA wheel, creates required symlinks
+make webui-gpu   # starts the Web UI at http://localhost:8080
+```
+
+### Manual step-by-step
 
 ```bash
 # 1. Install all backends (includes CPU llama-cpp-python)
 uv sync --extra all-backends
 
-# 2. Replace the CPU wheel with a pre-built CUDA wheel (run AFTER sync, not before)
+# 2. Replace the CPU wheel with a pre-built CUDA wheel and set up runtime libs
+#    (creates libcudart.so.12 / libcublas.so.12 symlinks — no LD_LIBRARY_PATH needed)
 make install-llama-cpp-prebuilt
 
 # 3. Start the Web UI
 uv run llm-bench serve
 ```
 
-> **Warning:** If you run `uv sync` again after step 2, it may revert the CUDA wheel back
-> to the CPU build. Re-run `make install-llama-cpp-prebuilt` after any `uv sync` to restore
-> GPU support.
+After starting the server, open `http://localhost:8080` and check the **Capabilities** indicator.
+`llama_cpp_gpu: true` confirms GPU inference is active.
 
-For a fully automated single command, `make setup-gpu` detects your GPU and installs the
-CUDA wheel automatically:
-
-```bash
-make setup-gpu && make webui-gpu
-```
+> **Note:** `uv sync` may revert the CUDA wheel back to the CPU build. Re-run
+> `make install-llama-cpp-prebuilt` after any `uv sync` to restore GPU support.
 
 ## Transformers backend (CPU)
 
@@ -114,10 +121,19 @@ huggingface-cli download bartowski/Llama-3.2-3B-Instruct-GGUF \
 ## llama.cpp backend (GPU, pre-built CUDA wheel)
 
 ```bash
-make install-llama-cpp-prebuilt   # pre-built cu124 wheel, no nvcc required
+# Installs cu124 pre-built wheel + creates CUDA lib symlinks (no nvcc or LD_LIBRARY_PATH needed)
+make install-llama-cpp-prebuilt
 # Edit configs/llama-cpp-gpu.yaml: set model: /path/to/model.gguf and n_gpu_layers
 uv run llm-bench --config configs/llama-cpp-gpu.yaml --output results/llama-gpu.csv
 ```
+
+**Choosing `n_gpu_layers`** — set to `99` to offload all layers; reduce if you hit VRAM limits:
+
+| GPU VRAM | Model             | Recommended `n_gpu_layers` |
+|----------|-------------------|---------------------------|
+| 4 GB     | Llama 3.2 3B Q4   | 28 (all layers)            |
+| 4 GB     | Llama 3 8B Q4     | 20–24                      |
+| 8 GB     | Llama 3 8B Q4     | 32 (all layers)            |
 
 If you have the CUDA toolkit installed (`nvcc` on PATH), build from source instead:
 ```bash

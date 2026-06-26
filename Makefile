@@ -23,11 +23,23 @@ install-llama-cpp-cuda:
 	CMAKE_ARGS="-DGGML_CUDA=on" uv sync --extra llama-cpp
 
 # Install a pre-built CUDA wheel (no nvcc required — works with driver-only setups).
-# GPU driver ≥ 520 and CUDA 12.4 compatible hardware required.
+# GPU driver ≥ 520 and CUDA 12.x compatible hardware required.
+# After installing the wheel, symlinks are created so libggml-cuda.so can find
+# libcudart.so.12 / libcublas.so.12 via its $ORIGIN rpath without LD_LIBRARY_PATH.
 install-llama-cpp-prebuilt:
 	uv pip install "llama-cpp-python>=0.2" \
 	  --extra-index-url https://abetlen.github.io/llama-cpp-python/whl/cu124
 	uv pip install nvidia-cublas-cu12 nvidia-cuda-runtime-cu12
+	uv run python -c "\
+import site, os, pathlib; \
+sp = pathlib.Path(site.getsitepackages()[0]); \
+llama_lib = sp / 'llama_cpp' / 'lib'; \
+cuda_rt = sp / 'nvidia' / 'cuda_runtime' / 'lib'; \
+cublas   = sp / 'nvidia' / 'cublas' / 'lib'; \
+pairs = [('libcudart.so.12', cuda_rt), ('libcublas.so.12', cublas), ('libcublasLt.so.12', cublas)]; \
+[os.symlink(src_dir / name, llama_lib / name) for name, src_dir in pairs \
+   if (src_dir / name).exists() and not (llama_lib / name).exists()]; \
+print('CUDA symlinks OK')"
 
 # On Ubuntu 26.04, Playwright does not ship a native Chromium binary yet.
 # Pinning to the Ubuntu 24.04 build is the supported workaround.

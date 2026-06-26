@@ -3,20 +3,20 @@ services:
     build:
       context: .
       target: cpu
-    image: llm-bench:cpu
+    image: ghcr.io/happynood/llm-inference-benchmark:cpu-latest
     environment:
       - HF_TOKEN=${HF_TOKEN:-}
     volumes:
       - ./configs:/app/configs
       - ./results:/app/results
       - ${HOME}/models:/models:ro
-    # Example: llm-bench run --config /app/configs/llama-cpp-cpu.yaml --output /app/results/bench.csv
+    # Example: docker compose run --rm bench-cpu --config /app/configs/example.yaml --output /app/results/bench.csv
 
   bench-gpu:
     build:
       context: .
       target: gpu
-    image: llm-bench:gpu
+    image: ghcr.io/happynood/llm-inference-benchmark:gpu-latest
     deploy:
       resources:
         reservations:
@@ -38,7 +38,7 @@ services:
     build:
       context: .
       target: webui
-    image: llm-bench:webui
+    image: ghcr.io/happynood/llm-inference-benchmark:webui-latest
     ports:
       - "8080:8080"
     environment:
@@ -53,7 +53,7 @@ services:
     build:
       context: .
       target: webui-gpu
-    image: llm-bench:webui-gpu
+    image: ghcr.io/happynood/llm-inference-benchmark:webui-gpu-latest
     ports:
       - "8080:8080"
     deploy:

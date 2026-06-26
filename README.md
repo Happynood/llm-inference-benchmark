@@ -35,14 +35,23 @@ Open **http://localhost:8080** and submit your first benchmark from the **+ New 
 
 ## GPU Quick Start (NVIDIA CUDA)
 
+**Requirements:** NVIDIA driver ≥ 520 · CUDA 12.x GPU · no CUDA toolkit / nvcc needed
+
 ```bash
-uv sync --extra all-backends          # installs all backends, CPU llama-cpp included
-make install-llama-cpp-prebuilt       # replaces CPU wheel with pre-built CUDA wheel
+make setup-gpu    # detect GPU, install CUDA wheel, wire up runtime libs
+make webui-gpu    # start the Web UI at http://localhost:8080
+```
+
+Or step by step:
+
+```bash
+uv sync --extra all-backends          # install all backends
+make install-llama-cpp-prebuilt       # pre-built CUDA wheel + runtime symlinks
 uv run llm-bench serve                # or: make webui-gpu
 ```
 
 > After any `uv sync`, re-run `make install-llama-cpp-prebuilt` to restore GPU support.
-> See **[docs/quickstart.md](docs/quickstart.md)** for full options and the `make setup-gpu` shortcut.
+> See **[docs/quickstart.md](docs/quickstart.md)** for per-backend GPU setup details.
 
 ---
 
