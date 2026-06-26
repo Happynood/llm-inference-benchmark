@@ -1094,6 +1094,7 @@ def matrix_cmd(
                                 "name": run.name,
                                 "config": run.config,
                                 "workload_profile": run.workload_profile,
+                                "dataset": run.dataset,
                                 "overrides": run.overrides or {},
                                 "output": str(results_dir / f"{run.name}.csv"),
                                 "manifest": str(results_dir / f"{run.name}.manifest.json"),
@@ -1110,6 +1111,8 @@ def matrix_cmd(
             click.echo(f"        config: {run.config}")
             if run.workload_profile:
                 click.echo(f"        workload_profile: {run.workload_profile}")
+            if run.dataset:
+                click.echo(f"        dataset: {run.dataset}")
             if run.overrides:
                 overrides_str = ", ".join(f"{k}={v}" for k, v in run.overrides.items())
                 click.echo(f"        overrides: {overrides_str}")
@@ -1137,11 +1140,21 @@ def matrix_cmd(
             _t0 = time.perf_counter()
             backend = _build_backend(cfg)
             model_load_ms = (time.perf_counter() - _t0) * 1000.0
-            prompts = load_prompts(cfg.resolve_prompts_file())
+            if run.dataset:
+                from llm_inference_benchmark.datasets import load_prompts as _ds_load
+
+                try:
+                    prompts = _ds_load(run.dataset, n=cfg.requests, seed=cfg.seed)
+                except FileNotFoundError as exc:
+                    raise click.ClickException(str(exc)) from exc
+            else:
+                prompts = load_prompts(cfg.resolve_prompts_file())
             click.echo(
                 f"  Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}",
                 err=_json,
             )
+            if run.dataset:
+                click.echo(f"  Dataset: {run.dataset}", err=_json)
             report = run_repeated(backend, cfg, prompts, model_load_ms=model_load_ms)
 
             csv_path = results_dir / f"{run.name}.csv"
@@ -1333,11 +1346,21 @@ def pipeline_cmd(
             _t0 = time.perf_counter()
             backend = _build_backend(cfg)
             model_load_ms = (time.perf_counter() - _t0) * 1000.0
-            prompts = load_prompts(cfg.resolve_prompts_file())
+            if run.dataset:
+                from llm_inference_benchmark.datasets import load_prompts as _ds_load
+
+                try:
+                    prompts = _ds_load(run.dataset, n=cfg.requests, seed=cfg.seed)
+                except FileNotFoundError as exc:
+                    raise click.ClickException(str(exc)) from exc
+            else:
+                prompts = load_prompts(cfg.resolve_prompts_file())
             click.echo(
                 f"  Backend: {cfg.backend}  Model: {cfg.model}  Requests: {cfg.requests}",
                 err=_json,
             )
+            if run.dataset:
+                click.echo(f"  Dataset: {run.dataset}", err=_json)
             report = run_repeated(backend, cfg, prompts, model_load_ms=model_load_ms)
 
             csv_path = results_dir / f"{run.name}.csv"
