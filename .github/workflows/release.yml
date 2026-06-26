@@ -8,7 +8,7 @@ on:
 jobs:
   release:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     permissions:
       contents: write
       packages: write
@@ -39,9 +39,11 @@ jobs:
 
       - name: Extract version tag and image name
         id: meta
+        env:
+          GH_REPOSITORY: ${{ github.repository }}
         run: |
           echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
-          echo "image=ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          echo "image=ghcr.io/$(echo "${GH_REPOSITORY}" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - name: Build and push CPU image
         uses: docker/build-push-action@v6
