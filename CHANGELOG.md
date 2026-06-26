@@ -7,6 +7,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [1.8.1] - 2026-06-27
+
+### Fixed
+
+- **Docker GPU image build (complete fix)**: the previous fix (`LIBRARY_PATH` + `libcuda.so.1`
+  symlink) was insufficient — cmake generates its own link commands that do not propagate the
+  shell `LIBRARY_PATH`. The linker therefore could not satisfy the `libcuda.so.1` SONAME
+  dependency of `libggml-cuda.so` when building executables. Added
+  `--allow-shlib-undefined` via `CMAKE_EXE_LINKER_FLAGS` and `CMAKE_SHARED_LINKER_FLAGS`
+  in the cmake invocation for the `gpu` and `webui-gpu` Dockerfile stages. The real CUDA
+  driver is provided by NVIDIA Container Toolkit at container runtime.
+
+- **`make install-llama-cpp-prebuilt` GPU setup (local uv workflow)**: pre-built cu124 wheels
+  ship `libggml-cuda.so` with `$ORIGIN` rpath. The CUDA 12 runtime libs
+  (`libcudart.so.12`, `libcublas.so.12`, `libcublasLt.so.12`) installed by
+  `nvidia-cublas-cu12` / `nvidia-cuda-runtime-cu12` land in separate `nvidia/*/lib` dirs
+  inside site-packages. Without symlinks, `LD_LIBRARY_PATH` was required manually. The
+  Makefile target and `scripts/setup-gpu.sh` now create the three symlinks automatically
+  into `llama_cpp/lib/` so GPU inference works out of the box with just
+  `make setup-gpu && make webui-gpu`.
+
+- **docker-compose.yml**: changed service `image:` fields from local-only names
+  (`llm-bench:webui-gpu`) to GHCR paths
+  (`ghcr.io/happynood/llm-inference-benchmark:webui-gpu-latest`) so `docker compose up`
+  pulls the pre-built image on a fresh clone instead of compiling from source.
+
 ## [1.8.0] - 2026-06-26
 
 ### Added
