@@ -531,3 +531,113 @@ def test_humaneval_registry_entry() -> None:
     assert spec["split"] == "test"
     assert spec["max_samples"] == 164
     assert spec["extractor"] == "humaneval"
+
+
+# ── Unit tests: dataset_info ──────────────────────────────────────────────────
+
+
+def test_dataset_info_unknown_name_raises() -> None:
+    from llm_inference_benchmark.datasets import dataset_info
+
+    with pytest.raises(ValueError, match="Unknown dataset"):
+        dataset_info("no-such-dataset")
+
+
+def test_dataset_info_not_cached(tmp_path: Path) -> None:
+    from llm_inference_benchmark.datasets import dataset_info
+
+    with patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path):
+        info = dataset_info("wildchat")
+
+    assert info["name"] == "wildchat"
+    assert info["hf_repo"] == "allenai/WildChat-1M"
+    assert info["cached"] is False
+    assert info["sample_count"] is None
+    assert info["samples"] == []
+    assert "max_samples" in info
+    assert "description" in info
+
+
+def test_dataset_info_cached_returns_samples(tmp_path: Path) -> None:
+    from llm_inference_benchmark.datasets import dataset_info
+
+    prompts = [f"Prompt number {i}" for i in range(20)]
+    _write_jsonl(tmp_path / "wildchat.jsonl", prompts)
+
+    with patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path):
+        info = dataset_info("wildchat", n_samples=3)
+
+    assert info["cached"] is True
+    assert info["sample_count"] == 20
+    assert len(info["samples"]) == 3
+    assert all(s in prompts for s in info["samples"])
+
+
+def test_dataset_info_samples_reproducible(tmp_path: Path) -> None:
+    from llm_inference_benchmark.datasets import dataset_info
+
+    prompts = [f"Prompt {i}" for i in range(30)]
+    _write_jsonl(tmp_path / "wildchat.jsonl", prompts)
+
+    with patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path):
+        info1 = dataset_info("wildchat", n_samples=5, seed=7)
+        info2 = dataset_info("wildchat", n_samples=5, seed=7)
+
+    assert info1["samples"] == info2["samples"]
+
+
+def test_dataset_info_n_samples_zero_returns_empty(tmp_path: Path) -> None:
+    from llm_inference_benchmark.datasets import dataset_info
+
+    prompts = ["A", "B", "C"]
+    _write_jsonl(tmp_path / "wildchat.jsonl", prompts)
+
+    with patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path):
+        info = dataset_info("wildchat", n_samples=0)
+
+    assert info["cached"] is True
+    assert info["sample_count"] == 3
+    assert info["samples"] == []
+
+
+# ── CLI tests: datasets info ──────────────────────────────────────────────────
+
+
+def test_cli_datasets_info_unknown_name_fails() -> None:
+    runner = CliRunner()
+    result = runner.invoke(main, ["datasets", "info", "no-such"])
+    assert result.exit_code != 0
+    assert "Unknown dataset" in result.output
+
+
+def test_cli_datasets_info_not_cached(tmp_path: Path) -> None:
+    runner = CliRunner()
+    with patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path):
+        result = runner.invoke(main, ["datasets", "info", "wildchat"])
+    assert result.exit_code == 0
+    assert "wildchat" in result.output
+    assert "allenai/WildChat-1M" in result.output
+    assert "not cached" in result.output.lower() or "✗" in result.output
+    assert "llm-bench datasets pull wildchat" in result.output
+
+
+def test_cli_datasets_info_cached_shows_samples(tmp_path: Path) -> None:
+    prompts = [f"Example prompt number {i}" for i in range(10)]
+    _write_jsonl(tmp_path / "wildchat.jsonl", prompts)
+    runner = CliRunner()
+    with patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path):
+        result = runner.invoke(main, ["datasets", "info", "wildchat"])
+    assert result.exit_code == 0
+    assert "wildchat" in result.output
+    assert "✓" in result.output
+    assert "Sample prompts" in result.output
+
+
+def test_cli_datasets_info_samples_zero_skips_sample_section(tmp_path: Path) -> None:
+    prompts = ["Hello", "World"]
+    _write_jsonl(tmp_path / "wildchat.jsonl", prompts)
+    runner = CliRunner()
+    with patch("llm_inference_benchmark.datasets.cache_dir", return_value=tmp_path):
+        result = runner.invoke(main, ["datasets", "info", "wildchat", "--samples", "0"])
+    assert result.exit_code == 0
+    assert "Sample prompts" not in result.output

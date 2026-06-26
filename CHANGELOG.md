@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **`llm-bench datasets info <name>`**: new subcommand that prints dataset metadata (HF repo,
+  description, max samples, cache status) and a configurable number of example prompts from the
+  local cache.  Use `--samples N` to control how many prompts are shown (default 5; 0 to skip).
+  When the dataset is not cached, the command prints a pull hint instead of samples.
+
 - **`dataset` field in matrix/pipeline run entries**: each run in a `matrix` or `pipeline`
   YAML config can now set `dataset: <name>` to load prompts from a cached real-world dataset
   (`~/.cache/llm-bench/datasets/<name>.jsonl`) instead of the config's `prompts_file`.

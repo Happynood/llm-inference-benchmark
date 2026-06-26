@@ -683,6 +683,40 @@ wildchat              500
 long-context-4k       100
 ```
 
+### datasets info
+
+Show metadata and example prompts for a dataset.
+
+```
+llm-bench datasets info [OPTIONS] NAME
+```
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--samples N` | int | `5` | Number of example prompts to show from the local cache (0 to skip) |
+
+Prints the dataset's HuggingFace repo, description, maximum sample count, and whether it is
+cached locally.  When cached, up to `--samples` prompts are shown (randomly sampled,
+truncated at 120 characters).  When not cached, a pull hint is printed instead.
+
+```bash
+llm-bench datasets info wildchat
+llm-bench datasets info gsm8k --samples 10
+llm-bench datasets info lmsys-chat --samples 0
+```
+
+```
+Dataset   : wildchat
+HF repo   : allenai/WildChat-1M
+Description: allenai/WildChat-1M — public real-world chat dataset (no gating)
+Max samples: 500
+Cached    : ✓  (487 samples)
+
+Sample prompts (5 of 487):
+  [1] Can you explain how transformers work in NLP?
+  ...
+```
+
 ---
 
 ## validate-config
