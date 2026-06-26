@@ -55,7 +55,7 @@ COPY pyproject.toml uv.lock ./
 RUN if [ "$SKIP_LLAMA_CPP" = "1" ]; then \
       uv sync --no-dev --frozen --no-install-project; \
     else \
-      CMAKE_ARGS="-DGGML_CUDA=ON" FORCE_CMAKE=1 \
+      CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined -DCMAKE_SHARED_LINKER_FLAGS=-Wl,--allow-shlib-undefined" FORCE_CMAKE=1 \
         uv sync --extra llama-cpp --no-dev --frozen --no-install-project; \
     fi
 
@@ -65,7 +65,7 @@ COPY README.md ./
 RUN if [ "$SKIP_LLAMA_CPP" = "1" ]; then \
       uv sync --no-dev --frozen; \
     else \
-      CMAKE_ARGS="-DGGML_CUDA=ON" FORCE_CMAKE=1 \
+      CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined -DCMAKE_SHARED_LINKER_FLAGS=-Wl,--allow-shlib-undefined" FORCE_CMAKE=1 \
         uv sync --extra llama-cpp --no-dev --frozen; \
     fi
 
@@ -116,13 +116,13 @@ COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
 WORKDIR /app
 COPY pyproject.toml uv.lock ./
 
-RUN CMAKE_ARGS="-DGGML_CUDA=ON" FORCE_CMAKE=1 \
+RUN CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined -DCMAKE_SHARED_LINKER_FLAGS=-Wl,--allow-shlib-undefined" FORCE_CMAKE=1 \
     uv sync --extra server --extra llama-cpp --no-dev --frozen --no-install-project
 
 COPY src/ ./src/
 COPY README.md ./
 
-RUN CMAKE_ARGS="-DGGML_CUDA=ON" FORCE_CMAKE=1 \
+RUN CMAKE_ARGS="-DGGML_CUDA=ON -DCMAKE_EXE_LINKER_FLAGS=-Wl,--allow-shlib-undefined -DCMAKE_SHARED_LINKER_FLAGS=-Wl,--allow-shlib-undefined" FORCE_CMAKE=1 \
     uv sync --extra server --extra llama-cpp --no-dev --frozen
 
 EXPOSE 8080
