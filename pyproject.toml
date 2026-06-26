@@ -1,6 +1,6 @@
 [project]
 name = "llm-inference-benchmark"
-version = "1.5.0"
+version = "1.5.1"
 description = "Reproducible LLM inference benchmark across backends and quantization modes"
 readme = "README.md"
 requires-python = ">=3.11"
