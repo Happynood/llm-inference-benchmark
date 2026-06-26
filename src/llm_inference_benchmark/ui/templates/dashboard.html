@@ -21,6 +21,7 @@
     <div class="sidebar-tabs">
       <button class="tab-btn active" id="tab-btn-runs" onclick="showTab('runs')">Runs</button>
       <button class="tab-btn" id="tab-btn-leaderboard" onclick="showTab('leaderboard')">Leaderboard</button>
+      <button class="tab-btn" id="tab-btn-recommend" onclick="showTab('recommend')">Recommend</button>
       <button class="tab-btn" id="tab-btn-datasets" onclick="showTab('datasets')">Datasets</button>
     </div>
 
@@ -74,6 +75,32 @@
     </div>
 
     <div id="tab-leaderboard" class="tab-panel" hidden></div>
+
+    <div id="tab-recommend" class="tab-panel" hidden>
+      <form id="recommend-form" class="recommend-form" onsubmit="submitRecommend(event)">
+        <div class="form-group">
+          <label class="form-label" for="rec-vram">Max VRAM (MB)</label>
+          <input type="number" id="rec-vram" name="max_vram_mb" class="form-input form-input-sm" placeholder="e.g. 4096" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rec-p95">Max p95 Latency (ms)</label>
+          <input type="number" id="rec-p95" name="max_p95_ms" class="form-input form-input-sm" placeholder="e.g. 2000" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rec-ttft">Max TTFT p50 (ms)</label>
+          <input type="number" id="rec-ttft" name="max_ttft_ms" class="form-input form-input-sm" placeholder="e.g. 500" min="0">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rec-sanity">Min Sanity Rate (0–1)</label>
+          <input type="number" id="rec-sanity" name="min_sanity" class="form-input form-input-sm" placeholder="e.g. 0.9" min="0" max="1" step="0.01">
+        </div>
+        <div class="form-group">
+          <label class="form-label" for="rec-quality">Min Quality Rate (0–1)</label>
+          <input type="number" id="rec-quality" name="min_quality" class="form-input form-input-sm" placeholder="e.g. 0.8" min="0" max="1" step="0.01">
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm" style="width:100%">Find Best Run</button>
+      </form>
+    </div>
 
     <div id="tab-datasets" class="tab-panel" hidden>
       <div class="dataset-pull-row">

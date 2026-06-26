@@ -22,7 +22,9 @@ Endpoints:
   GET  /api/ui/datasets-table        HTMX HTML fragment
   GET  /api/ui/compare-table         HTMX HTML fragment — side-by-side metric comparison
   GET  /api/ui/compare-chart         HTMX HTML fragment — normalised bar chart comparison
+  GET  /api/ui/compare-trend         HTMX HTML fragment — metric trend chart
   GET  /api/ui/leaderboard           HTMX HTML fragment — top-runs leaderboard panel
+  GET  /api/ui/recommend             HTMX HTML fragment — constraint-based recommendation
   GET  /runs/{run_id}/pareto.html    interactive Plotly scatter page
   GET  /runs/pareto                  multi-run Pareto page
 """
@@ -44,7 +46,10 @@ import uuid
 from collections.abc import AsyncGenerator
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from llm_inference_benchmark.compare import RunRow
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, Response, StreamingResponse
@@ -772,6 +777,210 @@ def _render_leaderboard(runs: list[RunResult]) -> str:
         f"</tr></thead>"
         f"<tbody>{body}</tbody>"
         f"</table></div>\n"
+        f"</div>\n"
+    )
+
+
+def _run_result_to_run_row(run: RunResult) -> RunRow | None:
+    """Convert a completed RunResult to a RunRow for the recommendation engine.
+
+    Returns None when the run lacks the required latency / throughput metrics.
+    """
+    from llm_inference_benchmark.compare import RunRow
+
+    if run.status != "done" or not run.output or not run.config:
+        return None
+
+    m = _parse_metrics_from_output(run.output)
+    hw = _parse_hw_from_output(run.output)
+
+    backend = str(run.config.get("backend", ""))
+    model = str(run.config.get("model", ""))
+    p95 = m.get("p95_latency_ms")
+    toks = m.get("tokens_per_second")
+    p50 = m.get("p50_latency_ms")
+    cpu_mem = m.get("peak_cpu_memory_mb")
+
+    if not backend or not model or p95 is None or toks is None or p50 is None or cpu_mem is None:
+        return None
+
+    req_count_raw = m.get("request_count")
+
+    hw_cpu_cores: int | None = None
+    if "hw_cpu_cores" in hw:
+        try:
+            hw_cpu_cores = int(hw["hw_cpu_cores"])
+        except ValueError:
+            pass
+
+    hw_ram_gb: float | None = None
+    if "hw_ram_gb" in hw:
+        try:
+            hw_ram_gb = float(hw["hw_ram_gb"])
+        except ValueError:
+            pass
+
+    hw_vram_gb: float | None = None
+    if "hw_vram_gb" in hw:
+        try:
+            hw_vram_gb = float(hw["hw_vram_gb"])
+        except ValueError:
+            pass
+
+    return RunRow(
+        backend=backend,
+        model=model,
+        request_count=int(req_count_raw) if req_count_raw is not None else 0,
+        p50_latency_ms=p50,
+        p95_latency_ms=p95,
+        tokens_per_second=toks,
+        peak_cpu_memory_mb=cpu_mem,
+        peak_cuda_memory_mb=m.get("peak_cuda_memory_mb"),
+        peak_vram_memory_mb=m.get("peak_vram_memory_mb"),
+        sanity_pass_rate=m.get("sanity_pass_rate"),
+        task_quality_pass_rate=m.get("task_quality_pass_rate"),
+        model_load_ms=m.get("model_load_ms"),
+        p50_ttft_ms=m.get("p50_ttft_ms"),
+        p95_ttft_ms=m.get("p95_ttft_ms"),
+        mean_input_tokens=m.get("mean_input_tokens"),
+        mean_output_tokens=m.get("mean_output_tokens"),
+        decode_tokens_per_second=m.get("decode_tokens_per_second"),
+        tokens_per_joule=m.get("tokens_per_joule"),
+        energy_joules=m.get("energy_joules"),
+        thermal_throttle_pct=m.get("thermal_throttle_pct"),
+        hw_cpu=hw.get("hw_cpu"),
+        hw_cpu_cores=hw_cpu_cores,
+        hw_ram_gb=hw_ram_gb,
+        hw_gpu=hw.get("hw_gpu"),
+        hw_vram_gb=hw_vram_gb,
+        hw_os=hw.get("hw_os"),
+    )
+
+
+def _render_recommend_panel(
+    runs: list[RunResult],
+    max_vram_mb: float | None,
+    max_p95_ms: float | None,
+    max_ttft_ms: float | None,
+    min_sanity: float | None,
+    min_quality: float | None,
+) -> str:
+    """Return HTML fragment for the constraint-based recommendation panel."""
+    from llm_inference_benchmark.recommend import Constraints, recommend
+
+    rows: list[RunRow] = []
+    for r in runs:
+        row = _run_result_to_run_row(r)
+        if row is not None:
+            rows.append(row)
+
+    constraints = Constraints(
+        max_vram_mb=max_vram_mb,
+        max_p95_ms=max_p95_ms,
+        max_ttft_ms=max_ttft_ms,
+        min_sanity=min_sanity,
+        min_quality=min_quality,
+    )
+
+    result = recommend(rows, constraints)
+
+    def _fmt_ms(v: float | None) -> str:
+        return "—" if v is None else f"{v:.0f} ms"
+
+    def _fmt_toks(v: float) -> str:
+        return f"{v:.1f} tok/s"
+
+    def _fmt_mb(v: float | None) -> str:
+        return "—" if v is None else f"{v:.0f} MB"
+
+    def _model_name(m: str) -> str:
+        from pathlib import Path as _P
+
+        return _P(m).name if "/" in m or "\\" in m else m
+
+    # ── winner block ──────────────────────────────────────────────────────────
+
+    if result.winner is not None:
+        w = result.winner
+        pareto_badge = (
+            "<span class='lb-badge'>Pareto-optimal</span>" if result.is_pareto_optimal else ""
+        )
+        n_cand = len(result.candidates)
+        short_model = html.escape(_model_name(w.model))
+        winner_html = (
+            f"<div class='rec-winner'>"
+            f"<div class='rec-winner-header'>"
+            f"<span class='rec-winner-label'>Recommendation</span>"
+            f"{pareto_badge}"
+            f"</div>"
+            f"<div class='rec-winner-model'>{short_model}</div>"
+            f"<div class='rec-winner-backend muted'>{html.escape(w.backend)}</div>"
+            f"<div class='rec-winner-metrics'>"
+            f"<span class='metric-pill'>{html.escape(_fmt_toks(w.tokens_per_second))}</span>"
+            f"<span class='metric-pill'>p95 {html.escape(_fmt_ms(w.p95_latency_ms))}</span>"
+            f"<span class='metric-pill'>TTFT {html.escape(_fmt_ms(w.p50_ttft_ms))}</span>"
+            f"<span class='metric-pill'>VRAM {html.escape(_fmt_mb(w.peak_vram_memory_mb))}</span>"
+            f"</div>"
+            f"<div class='muted rec-why'>Lowest p95 latency among "
+            f"{n_cand} qualifying run(s)</div>"
+            f"</div>"
+        )
+    else:
+        winner_html = (
+            "<div class='rec-empty muted'>"
+            "No qualifying runs — relax your constraints or run more benchmarks."
+            "</div>"
+        )
+
+    # ── runners-up table ──────────────────────────────────────────────────────
+
+    runners_up = [r for r in result.candidates if result.winner is None or r is not result.winner]
+    runners_up_html = ""
+    if runners_up:
+        tr_rows = []
+        for r in runners_up[:4]:
+            short_model = html.escape(_model_name(r.model))
+            tr_rows.append(
+                f"<tr>"
+                f"<td class='mono'>{short_model}</td>"
+                f"<td>{html.escape(r.backend)}</td>"
+                f"<td class='mono'>{html.escape(_fmt_toks(r.tokens_per_second))}</td>"
+                f"<td class='mono'>{html.escape(_fmt_ms(r.p95_latency_ms))}</td>"
+                f"<td class='mono'>{html.escape(_fmt_mb(r.peak_vram_memory_mb))}</td>"
+                f"</tr>"
+            )
+        runners_up_html = (
+            f"<div class='rec-section-title'>Runners-up</div>"
+            f"<div class='compare-table-scroll'>"
+            f"<table class='data-table'>"
+            f"<thead><tr>"
+            f"<th>Model</th><th>Backend</th>"
+            f"<th>Throughput</th><th>p95 Latency</th><th>VRAM</th>"
+            f"</tr></thead>"
+            f"<tbody>{''.join(tr_rows)}</tbody>"
+            f"</table></div>"
+        )
+
+    # ── excluded summary ──────────────────────────────────────────────────────
+
+    excluded_html = ""
+    if result.excluded:
+        excluded_html = (
+            f"<div class='muted rec-excluded'>"
+            f"{len(result.excluded)} run(s) excluded by constraints"
+            f"</div>"
+        )
+
+    return (
+        f"<div id='detail-inner' class='compare-table-wrap'>\n"
+        f"<div class='detail-header'><div>"
+        f"<div class='detail-title'>Recommend</div>"
+        f"<div class='detail-meta muted'>"
+        f"Best run under your hardware &amp; quality constraints</div>"
+        f"</div></div>\n"
+        f"{winner_html}\n"
+        f"{runners_up_html}\n"
+        f"{excluded_html}\n"
         f"</div>\n"
     )
 
@@ -1569,6 +1778,26 @@ async def leaderboard_fragment() -> str:
     rows = _get_db().execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
     results = [_row_to_result(r) for r in rows]
     return _render_leaderboard(results)
+
+
+@app.get("/api/ui/recommend", response_class=HTMLResponse)
+async def recommend_fragment(
+    max_vram_mb: float | None = Query(default=None, description="Max peak VRAM (MB)"),
+    max_p95_ms: float | None = Query(default=None, description="Max p95 latency (ms)"),
+    max_ttft_ms: float | None = Query(default=None, description="Max TTFT p50 (ms)"),
+    min_sanity: float | None = Query(default=None, description="Min sanity pass rate (0–1)"),
+    min_quality: float | None = Query(default=None, description="Min task quality pass rate (0–1)"),
+) -> str:
+    rows = _get_db().execute("SELECT * FROM runs ORDER BY created_at DESC").fetchall()
+    results = [_row_to_result(r) for r in rows]
+    return _render_recommend_panel(
+        results,
+        max_vram_mb=max_vram_mb,
+        max_p95_ms=max_p95_ms,
+        max_ttft_ms=max_ttft_ms,
+        min_sanity=min_sanity,
+        min_quality=min_quality,
+    )
 
 
 # ── Dashboard ─────────────────────────────────────────────────────────────────

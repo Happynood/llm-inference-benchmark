@@ -67,8 +67,11 @@ uv sync --extra all-backends   # install everything at once
 
 `llm-bench serve` (or `make webui`) starts a local dashboard at **http://localhost:8080**.
 
-- **Leaderboard** — sidebar button showing the single best run for each key metric
+- **Leaderboard** — sidebar tab showing the single best run for each key metric
   (Throughput, p50/p95 Latency, TTFT, VRAM, Energy) at a glance.
+- **Recommend** — sidebar tab with a constraint form (max VRAM, max p95 latency, max TTFT,
+  min sanity/quality rate); click **Find Best Run** to get an instant recommendation from
+  all stored runs, with runners-up and excluded-run counts.
 - **Compare bar** — select two or more runs to reveal Table / Chart / Trend / Pareto / CSV
   buttons above the run list.
 - **Pareto chart** — interactive Plotly scatter at `/runs/{id}/pareto.html`; X/Y axis
