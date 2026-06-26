@@ -7,6 +7,8 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+## [1.8.0] - 2026-06-26
+
 ### Added
 
 - **`llm-bench report`**: new command that reads one or more benchmark CSV output files and
@@ -20,6 +22,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
   llm-bench report run1.csv run2.csv --output comparison.html
   llm-bench report *.csv --title "Llama-3.2 Quant Comparison"
   ```
+
+### Fixed
+
+- **Docker GPU image build**: `docker compose up webui-gpu` failed with
+  `libcuda.so.1 not found` during llama-cpp-python CUDA compilation.
+  Added `LIBRARY_PATH=/usr/local/cuda/lib64/stubs` to the `gpu` and
+  `webui-gpu` Dockerfile stages so the linker finds the CUDA driver stub
+  at build time (the real driver is provided by NVIDIA Container Toolkit
+  at runtime).
 
 ## [1.7.0] - 2026-06-26
 
