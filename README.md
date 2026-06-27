@@ -16,7 +16,7 @@ for the best configuration. Includes a built-in browser dashboard.
 ## Quick Start
 
 ```bash
-pip install llm-inference-benchmark
+pip install git+https://github.com/Happynood/llm-inference-benchmark.git
 llm-bench serve
 # Open http://localhost:8080
 ```
@@ -162,16 +162,32 @@ Why: lowest p95 among 1 candidate(s) passing all constraints; Pareto-optimal.
 
 ## Benchmark Results
 
-### Llama 3.2 3B Instruct — Q4\_K\_M vs Q8\_0 · RTX 3050 (4 GB)
+### 4-Model Comparison · RTX 3050 Laptop (4 GB) · 2026-06-27
 
-> llama.cpp backend, all 28 layers on GPU, 10 prompts per run.
+> 10 requests, 2 warmup, greedy decoding (`temperature=0.0`), `n_ctx=512`, `max_tokens=50`.
+> llama.cpp runs use `n_gpu_layers=99` (full GPU offload). transformers uses `float16` + CUDA.
 
-| Quantization | p50 (ms) | p95 (ms) | tok/s | VRAM (MiB) | Sanity |
-|---|---|---|---|---|---|
-| **Q4\_K\_M** | **904** | **915** | **55.3** | 2361 (58%) | 100% |
-| Q8\_0 | 1185 | 1187 | 42.2 | 3697 (90%) | 100% |
+| Model | Backend | p50 (ms) | p95 (ms) | tok/s | VRAM (MiB) | tok/J | Sanity |
+|---|---|---|---|---|---|---|---|
+| Llama-3.2-3B Q4\_K\_M | llama-cpp | 968 | **978** | 51.7 | 2361 | 1.22 | 100% |
+| Llama-3.2-3B Q8\_0 | llama-cpp | 1217 | 1296 | 40.4 | 3697 | 1.04 | 100% |
+| **gpt2-medium (345 M)** | **transformers** | **501** | **563** | **97.7** | **875** | **2.89** | **100%** |
+| Bonsai-8B | llama-cpp | 2229 | 2246 | 24.0 | 1499 | 0.89 | 100% |
 
-Q4\_K\_M is **1.31× faster** and uses **1.57× less VRAM**.
+![Metric comparison chart](docs/images/compare-chart.png)
+
+**Pareto analysis** (3 of 4 runs are optimal — no single run dominates all others):
+
+![Pareto table](docs/images/pareto-table.png)
+
+**Energy efficiency** — gpt2-medium leads at 2.89 tok/J; the smaller model fits more tokens
+per joule because it fully utilises GPU compute without filling the memory bandwidth:
+
+![Energy efficiency](docs/images/energy-efficiency.png)
+
+**Constraint-based recommendation** (`--max-vram-mb 1000 --max-p95-ms 2000 --min-sanity 1.0`):
+
+![CLI recommend output](docs/images/cli-recommend.png)
 
 ### n\_gpu\_layers Sweep — Llama 3.2 3B · RTX 3050
 
@@ -182,6 +198,12 @@ Q4\_K\_M is **1.31× faster** and uses **1.57× less VRAM**.
 | **28 / 28 (full)** | **984** | **51.4** | **2361** |
 
 Full offload is **3.1× faster** than CPU-only.
+
+### Dashboard
+
+![Dashboard runs list](docs/images/dashboard-runs.png)
+
+![Pareto scatter](docs/images/pareto-scatter.png)
 
 Harness validation (mock backend, no model download):
 
