@@ -58,10 +58,10 @@ llm-bench matrix --config configs/compare-all.yaml            # execute
 
 | Model | Backend | p50 (ms) | p95 (ms) | tok/s | VRAM (MiB) | tok/J | Sanity |
 |---|---|---|---|---|---|---|---|
-| Llama-3.2-3B Q4\_K\_M | llama-cpp | 968 | 978 | 51.7 | 2361 | 1.22 | 100% |
-| Llama-3.2-3B Q8\_0 | llama-cpp | 1217 | 1296 | 40.4 | 3697 | 1.04 | 100% |
-| **gpt2-medium** | **transformers** | **501** | **563** | **97.7** | **875** | **2.89** | **100%** |
-| Bonsai-8B | llama-cpp | 2229 | 2246 | 24.0 | 1499 | 0.89 | 100% |
+| Llama-3.2-3B Q4\_K\_M | llama-cpp | 929 | 940 | 53.9 | 2361 | 1.27 | 100% |
+| Llama-3.2-3B Q8\_0 | llama-cpp | 1194 | 1196 | 41.9 | 3697 | 1.05 | 100% |
+| **gpt2-medium** | **transformers** | **476** | **512** | **104.1** | **875** | **2.82** | **100%** |
+| Bonsai-8B | llama-cpp | 1281 | 1290 | 39.0 | 1499 | 0.98 | 100% |
 
 ![Metric comparison chart](../images/compare-chart.png)
 
