@@ -9,6 +9,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ### Added
 
+- **E2E test coverage for Datasets tab and Delete run**: seven new Playwright tests cover the
+  previously untested Datasets tab (button visibility, table loading, registry entries rendered,
+  dataset-select populated, Pull button present) and the Delete run flow (card removed from list,
+  detail panel cleared after deletion).  All tests run under `uv run pytest tests/e2e/test_ui.py`.
+
 - **`llm-bench sweep --html`**: new flag that writes a self-contained interactive HTML report
   alongside the sweep CSV.  The page contains a dual-axis Plotly chart (throughput on the left
   axis, p95 latency on the right) with one data point per concurrency level.  The knee point
