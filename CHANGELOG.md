@@ -7,6 +7,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.0.0/). Version
 
 ## [Unreleased]
 
+### Added
+
+- **`llm-bench sweep --html`**: new flag that writes a self-contained interactive HTML report
+  alongside the sweep CSV.  The page contains a dual-axis Plotly chart (throughput on the left
+  axis, p95 latency on the right) with one data point per concurrency level.  The knee point
+  (highest throughput level) is highlighted with a star marker and annotated in a summary card.
+  A full metrics table (concurrency, tok/s, RPS, p50/p95 latency, TTFT) is rendered below the
+  chart.  The file requires no server — open it directly in any browser or attach it to a PR.
+
+  ```bash
+  llm-bench sweep \
+    --config configs/example.yaml \
+    --concurrency-range 1,2,4,8 \
+    --html sweep_report.html
+  ```
+
 ## [1.8.1] - 2026-06-27
 
 ### Fixed

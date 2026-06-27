@@ -109,7 +109,7 @@ llm-bench diff      BASELINE CURRENT [--fail-on-regression PCT]  # per-metric % 
 llm-bench pareto    FILE [FILE...]                        # Pareto classification
 llm-bench recommend FILE [FILE...] [CONSTRAINTS]          # best config under constraints
 llm-bench matrix    --config MATRIX_YAML [--dry-run]     # multi-run sweep / parameter grid
-llm-bench sweep     --config YAML --concurrency-range 1,2,4,8   # throughput-vs-latency ramp
+llm-bench sweep     --config YAML --concurrency-range 1,2,4,8 [--html FILE]   # throughput-vs-latency ramp
 llm-bench pull      REPO_ID [--quant Q4_K_M]             # download GGUF / HF model
 llm-bench datasets  pull <name>                           # cache real-world prompt dataset
 llm-bench serve     [--host HOST] [--port PORT]           # Web UI server

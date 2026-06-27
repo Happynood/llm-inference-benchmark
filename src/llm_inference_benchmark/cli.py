@@ -1578,12 +1578,20 @@ def pipeline_cmd(
     show_default=True,
     help="Path for combined sweep CSV",
 )
+@click.option(
+    "--html",
+    "html_output",
+    default=None,
+    metavar="FILE",
+    help="Write an interactive HTML chart to FILE (e.g. sweep_report.html)",
+)
 def sweep_cmd(
     config_path: str,
     concurrency_range: str,
     max_p95_ms: float | None,
     requests_override: int | None,
     output_path: str,
+    html_output: str | None,
 ) -> None:
     """Ramp concurrency and emit a throughput-vs-latency curve.
 
@@ -1591,10 +1599,13 @@ def sweep_cmd(
     writing one combined CSV with a row per level.  Stops early when p95 latency
     exceeds --max-p95-ms; exits with code 1 in that case.
 
+    Pass --html to also export an interactive Plotly chart.
+
     Example:
 
         llm-bench sweep --config configs/example.yaml --concurrency-range 1,2,4,8
         llm-bench sweep --config configs/example.yaml --concurrency-range 1,2,4,8 --max-p95-ms 5000
+        llm-bench sweep --config configs/example.yaml --concurrency-range 1,2,4,8 --html sweep.html
     """
     try:
         levels = [int(x.strip()) for x in concurrency_range.split(",") if x.strip()]
@@ -1707,6 +1718,28 @@ def sweep_cmd(
         f"  rps={best_rps:.3f}"
         f"  p95={best_report.p95_latency_ms:.1f} ms"
     )
+
+    if html_output is not None:
+        from llm_inference_benchmark.sweep_report import SweepPoint, build_sweep_html
+
+        points = [
+            SweepPoint(
+                concurrency=concurrency,
+                tokens_per_second=report.tokens_per_second,
+                throughput_rps=throughput_rps,
+                p50_latency_ms=report.p50_latency_ms,
+                p95_latency_ms=report.p95_latency_ms,
+                p50_ttft_ms=report.p50_ttft_ms,
+                is_knee=(i == best_idx),
+            )
+            for i, (concurrency, throughput_rps, report) in enumerate(sweep_rows)
+        ]
+        model_label = base_cfg.model.split("/")[-1]
+        html_text = build_sweep_html(points, title=f"Concurrency Sweep — {model_label}")
+        html_path = Path(html_output)
+        html_path.parent.mkdir(parents=True, exist_ok=True)
+        html_path.write_text(html_text, encoding="utf-8")
+        click.echo(f"HTML report written to {html_path}")
 
     if threshold_breached:
         sys.exit(1)
