@@ -16,7 +16,7 @@ for the best configuration. Includes a built-in browser dashboard.
 ## Quick Start
 
 ```bash
-pip install git+https://github.com/Happynood/llm-inference-benchmark.git
+pip install "llm-inference-benchmark[server] @ git+https://github.com/Happynood/llm-inference-benchmark.git"
 llm-bench serve
 # Open http://localhost:8080
 ```
@@ -137,10 +137,9 @@ Full reference: **[docs/cli.md](docs/cli.md)**
 ### Constraint-based recommendation
 
 ```bash
-llm-bench recommend results/*.csv \
+llm-bench recommend results/quant-q4km.csv results/quant-q8.csv \
   --max-vram-mb 4096 \
   --max-p95-ms 1000 \
-  --max-ttft-ms 200 \
   --min-sanity 1.0
 ```
 
@@ -149,13 +148,16 @@ Recommendation
 ──────────────────────────────────────────
   Backend  : llama-cpp
   Model    : Llama-3.2-3B-Instruct-Q4_K_M.gguf
-  p95      : 915.86 ms
-  tok/s    : 55.5
-  TTFT p50 : 142.0 ms
+  p95      : 939.85 ms
+  tok/s    : 53.9
   VRAM     : 2361.0 MB
   Sanity   : 100.0%
 
 Why: lowest p95 among 1 candidate(s) passing all constraints; Pareto-optimal.
+
+Excluded (1)
+──────────────────────────────────────────
+  llama-cpp  Llama-3.2-3B-Instruct-Q8_0.gguf  →  p95 latency too high (1196.4 ms > 1000.0 ms)
 ```
 
 ---
