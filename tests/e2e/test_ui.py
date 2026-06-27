@@ -504,3 +504,100 @@ def test_recommend_tight_constraint_shows_no_qualifying_message(
     detail = page.locator("#run-detail")
     content = detail.inner_text()
     assert "qualifying" in content.lower() or "Recommend" in content
+
+
+# ── Datasets tab ───────────────────────────────────────────────────────────────
+
+
+def test_datasets_button_visible_in_sidebar(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    expect(page.locator("#tab-btn-datasets")).to_be_visible()
+    expect(page.locator("#tab-btn-datasets")).to_contain_text("Datasets")
+
+
+def test_datasets_tab_loads_table(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.locator("#tab-btn-datasets").click()
+    # HTMX loads /api/ui/datasets-table into #datasets-tbody; wait for real content
+    page.wait_for_function(
+        "() => {"
+        "  const el = document.getElementById('datasets-tbody');"
+        "  return el && !el.innerText.includes('Loading');"
+        "}",
+        timeout=8000,
+    )
+    expect(page.locator("#datasets-tbody")).to_be_visible()
+
+
+def test_datasets_table_shows_registry_entries(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.locator("#tab-btn-datasets").click()
+    page.wait_for_function(
+        "() => document.querySelector('#datasets-tbody .mono') !== null",
+        timeout=8000,
+    )
+    # At least one dataset name must appear (e.g., lmsys-chat)
+    names = page.locator("#datasets-tbody .mono")
+    assert names.count() > 0
+
+
+def test_datasets_select_populated_after_tab_open(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.locator("#tab-btn-datasets").click()
+    # loadDatasetNames() fires a fetch to /api/datasets and populates the select
+    page.wait_for_function(
+        "() => document.getElementById('dataset-select').options.length > 1",
+        timeout=8000,
+    )
+    count = page.eval_on_selector("#dataset-select", "el => el.options.length")
+    assert count > 1
+
+
+def test_datasets_pull_button_visible(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.locator("#tab-btn-datasets").click()
+    expect(page.locator("button[onclick='pullSelectedDataset()']")).to_be_visible()
+
+
+# ── Delete run ─────────────────────────────────────────────────────────────────
+
+
+def test_delete_run_removes_from_list(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.wait_for_selector(".run-card", timeout=8000)
+    initial_count = page.locator(".run-card").count()
+    assert initial_count >= 1
+
+    # Open detail panel for first run
+    page.locator(".run-card").first.click()
+    page.wait_for_selector("#detail-inner", timeout=8000)
+
+    # Accept the browser confirm dialog that deleteRun() shows
+    page.on("dialog", lambda d: d.accept())
+    page.locator("button:has-text('Delete')").first.click()
+
+    # HTMX reloads the run list; wait for card count to drop
+    page.wait_for_function(
+        f"() => document.querySelectorAll('.run-card').length < {initial_count}",
+        timeout=8000,
+    )
+    remaining = page.locator(".run-card").count()
+    assert remaining == initial_count - 1
+
+
+def test_delete_run_clears_detail_panel(page: Page, live_server: str) -> None:
+    page.goto(live_server)
+    page.wait_for_selector(".run-card", timeout=8000)
+
+    page.locator(".run-card").first.click()
+    page.wait_for_selector("#detail-inner", timeout=8000)
+
+    page.on("dialog", lambda d: d.accept())
+    page.locator("button:has-text('Delete')").first.click()
+
+    # After deletion the detail panel shows the "Run deleted." message
+    page.wait_for_function(
+        "() => document.getElementById('run-detail').innerText.includes('deleted')",
+        timeout=8000,
+    )
+    expect(page.locator("#run-detail")).to_contain_text("deleted")
