@@ -1,5 +1,9 @@
 # llm-inference-benchmark
 
+<p align="center">
+  <img src="docs/images/logo.png" alt="LLM Inference Benchmark" width="200"/>
+</p>
+
 [![CI](https://github.com/Happynood/llm-inference-benchmark/actions/workflows/ci.yml/badge.svg)](https://github.com/Happynood/llm-inference-benchmark/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/Happynood/llm-inference-benchmark?color=blue)](https://github.com/Happynood/llm-inference-benchmark/releases)
 [![Python](https://img.shields.io/badge/python-3.11%2B-blue)](https://www.python.org/downloads/)
